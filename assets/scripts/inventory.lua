@@ -1,75 +1,38 @@
 -- ---------------------------------------------------------------------------
--- inventory.lua — рюкзак, панель быстрого доступа и мастерская.
+-- inventory.lua — рюкзак, панель быстрого доступа и ручной крафт.
 --
--- Рюкзак — 36 ячеек; первые девять — панель внизу экрана (1–9 и колесо).
--- В ячейке — стопка {id, n}: блоки и материалы складываются до 64, инструменты
--- не складываются (у каждого свой износ). Подобранное сначала доливается в
--- уже начатые стопки того же предмета, потом занимает пустую ячейку.
+-- Рюкзак — 36 ячеек; первые девять — панель внизу экрана (1–9 и колесо),
+-- 37–40 — снаряжение. В ячейке — стопка {id, n}: блоки и материалы
+-- складываются до 64, инструменты не складываются (у каждого свой износ).
 --
--- Экран рюкзака (E): ЛКМ — взять/положить/поменять стопку, ПКМ — взять
--- половину или положить одну, Shift+ЛКМ — перекинуть между панелью и
--- рюкзаком. Справа — мастерская: рецепты, на которые хватает материалов
--- (часть требует верстака рядом); щелчок — сделать.
+-- Экран рюкзака (E): слева снаряжение и сам персонаж, справа сетка крафта
+-- 2×2; у верстака (ПКМ по нему) — сетка 3×3. Материалы игрок раскладывает
+-- сам, результат появляется в ячейке справа от стрелки. ЛКМ — взять/
+-- положить/поменять стопку, ПКМ — половину или одну, Shift+ЛКМ — перекинуть
+-- между панелью и рюкзаком (по результату — сделать сколько хватит).
 -- ---------------------------------------------------------------------------
 local B = require "blocks"
 local U = require "ui"
 local W = require "world"
+local R = require "crafting"
 
 local Inv = {}
 
 Inv.SIZE = 36
+Inv.ARMOR = 37                 -- 37..40 — снаряжение
 Inv.slots = {}
 Inv.selected = 1
 Inv.screenOpen = false
 Inv.held = nil                 -- стопка «в руке» на экране рюкзака
+Inv.grid = {}                  -- сетка крафта: 1..size*size
+Inv.gridSize = 2
 
 local hotbar = {}              -- ячейки панели
-local grid = {}                -- ячейки экрана рюкзака
-local recipeRows = {}
-local hudRoot, screenRoot, heldSlot, titleLabel, tipLabel, selFrame
-local SLOT, GAP = 46, 4
-
--- Рецепты мастерской: что нужно (имя -> число) и что получится.
-local RECIPES = {
-    {out = "planks", n = 4, need = {log = 1}},
-    {out = "birch_planks", n = 4, need = {birch_log = 1}},
-    {out = "stick", n = 4, need = {planks = 2}},
-    {out = "stick", n = 4, need = {birch_planks = 2}},
-    {out = "crafting_table", n = 1, need = {planks = 4}},
-    {out = "torch", n = 4, need = {coal = 1, stick = 1}},
-    {out = "furnace", n = 1, need = {cobblestone = 8}, table = true},
-    {out = "wood_pickaxe", n = 1, need = {planks = 3, stick = 2}, table = true},
-    {out = "wood_shovel", n = 1, need = {planks = 1, stick = 2}, table = true},
-    {out = "wood_axe", n = 1, need = {planks = 3, stick = 2}, table = true},
-    {out = "wood_sword", n = 1, need = {planks = 2, stick = 1}, table = true},
-    {out = "stone_pickaxe", n = 1, need = {cobblestone = 3, stick = 2}, table = true},
-    {out = "stone_shovel", n = 1, need = {cobblestone = 1, stick = 2}, table = true},
-    {out = "stone_axe", n = 1, need = {cobblestone = 3, stick = 2}, table = true},
-    {out = "stone_sword", n = 1, need = {cobblestone = 2, stick = 1}, table = true},
-    {out = "iron_pickaxe", n = 1, need = {iron_ingot = 3, stick = 2}, table = true},
-    {out = "iron_shovel", n = 1, need = {iron_ingot = 1, stick = 2}, table = true},
-    {out = "iron_axe", n = 1, need = {iron_ingot = 3, stick = 2}, table = true},
-    {out = "iron_sword", n = 1, need = {iron_ingot = 2, stick = 1}, table = true},
-    {out = "diamond_pickaxe", n = 1, need = {diamond = 3, stick = 2}, table = true},
-    {out = "diamond_shovel", n = 1, need = {diamond = 1, stick = 2}, table = true},
-    {out = "diamond_axe", n = 1, need = {diamond = 3, stick = 2}, table = true},
-    {out = "diamond_sword", n = 1, need = {diamond = 2, stick = 1}, table = true},
-    {out = "iron_ingot", n = 1, need = {iron_ore = 1, coal = 1}, furnace = true},
-    {out = "gold_ingot", n = 1, need = {gold_ore = 1, coal = 1}, furnace = true},
-    {out = "glass", n = 1, need = {sand = 1, coal = 1}, furnace = true},
-    {out = "stone", n = 1, need = {cobblestone = 1, coal = 1}, furnace = true},
-    {out = "stonebrick", n = 4, need = {stone = 4}, table = true},
-    {out = "sandstone", n = 1, need = {sand = 4}},
-    {out = "bookshelf", n = 1, need = {planks = 6}, table = true},
-    {out = "brick", n = 1, need = {clay = 1, coal = 1}, furnace = true},
-    {out = "glowstone", n = 1, need = {gold_ingot = 1, torch = 4}, table = true},
-    {out = "iron_block", n = 1, need = {iron_ingot = 9}, table = true},
-    {out = "gold_block", n = 1, need = {gold_ingot = 9}, table = true},
-    {out = "diamond_block", n = 1, need = {diamond = 9}, table = true},
-    {out = "coal_block", n = 1, need = {coal = 9}, table = true},
-}
-
--- --- Данные -----------------------------------------------------------------
+local regions = {}             -- всё, во что попадает мышь на экране рюкзака
+local hudRoot, screenRoot, heldSlot, titleLabel, selFrame, craftTitle
+local craftSlots, resultSlot, previewImg
+local SLOT, GAP = 40, 4
+local HSLOT = 46               -- ячейка панели на экране игры
 
 local function stackMax(id) return B.maxStack(id) end
 
@@ -159,14 +122,14 @@ end
 
 function Inv.serialize()
     local out = {}
-    for i = 1, Inv.SIZE do
+    for i = 1, Inv.SIZE + 4 do
         local s = Inv.slots[i]
         if s then out[tostring(i)] = {id = s.id, n = s.n, wear = s.wear} end
     end
     return out
 end
 
--- --- Мастерская ------------------------------------------------------------
+-- --- Крафт ----------------------------------------------------------------
 
 local function nearBlock(id)
     local P = require "player"
@@ -181,155 +144,211 @@ local function nearBlock(id)
     return false
 end
 
-local function canCraft(r, hasTable, hasFurnace)
-    if r.table and not hasTable then return false end
-    if r.furnace and not hasFurnace then return false end
-    for name, n in pairs(r.need) do
-        if Inv.count(B.byName[name].id) < n then return false end
+-- Что лежит в ячейке результата сейчас.
+function Inv.result()
+    local r = R.match(Inv.grid, {size = Inv.gridSize, furnace = Inv.gridSize == 3 and Inv.nearFurnace})
+    return r
+end
+
+-- Забрать результат: по одной штуке из каждой непустой клетки сетки.
+local function takeResult(r)
+    for i = 1, Inv.gridSize * Inv.gridSize do
+        local s = Inv.grid[i]
+        if s then
+            s.n = s.n - 1
+            if s.n <= 0 then Inv.grid[i] = nil end
+        end
     end
-    return true
+    local Act = require "interact"
+    Act.stats.crafted = (Act.stats.crafted or 0) + r.n
 end
 
-function Inv.craft(r)
-    for name, n in pairs(r.need) do Inv.take(B.byName[name].id, n) end
-    local left = Inv.add(B.byName[r.out].id, r.n)
-    if left > 0 then require("drops").spawnAtPlayer(B.byName[r.out].id, left) end
-end
-
-local function needText(r)
-    local parts = {}
-    for name, n in pairs(r.need) do parts[#parts + 1] = n .. " " .. B.byName[name].title end
-    table.sort(parts)
-    local where = r.furnace and "  [печь]" or (r.table and "  [верстак]" or "")
-    return table.concat(parts, ", ") .. where
+local function giveBack(stack)
+    if not stack then return end
+    local left = Inv.add(stack.id, stack.n)
+    if left > 0 then require("drops").spawnAtPlayer(stack.id, left) end
 end
 
 -- --- Экран -----------------------------------------------------------------
 
 function Inv.buildHud()
     hudRoot = U.screen("Hotbar", 5)
-    local total = 9 * SLOT + 8 * GAP
+    local total = 9 * HSLOT + 8 * GAP
     -- У нижнего якоря Position.y — отступ НИЖНЕГО края элемента от низа
     -- экрана (вверх), x — смещение центра от середины.
-    local rowY = 12
+    local rowY = 8
     Inv.rowY = rowY
-    local back = U.panel(hudRoot, "Hotbar Back", UIAnchor.BottomCenter, 0, rowY - 6, total + 12, SLOT + 12, U.INK)
+    Inv.hotbarWidth = total
+    U.panel(hudRoot, "Hotbar Back", UIAnchor.BottomCenter, 0, rowY - 4, total + 8, HSLOT + 8, U.INK)
     for i = 1, 9 do
-        local x = -total / 2 + (i - 1) * (SLOT + GAP) + SLOT / 2
-        hotbar[i] = U.slot(hudRoot, "Hotbar " .. i, UIAnchor.BottomCenter, x, rowY, SLOT)
+        local x = -total / 2 + (i - 1) * (HSLOT + GAP) + HSLOT / 2
+        hotbar[i] = U.slot(hudRoot, "Hotbar " .. i, UIAnchor.BottomCenter, x, rowY, HSLOT)
     end
-    local _, se = U.panel(hudRoot, "Hotbar Select", UIAnchor.BottomCenter, 0, rowY - 3, SLOT + 6, SLOT + 6, Vec4(0, 0, 0, 0))
+    local _, se = U.panel(hudRoot, "Hotbar Select", UIAnchor.BottomCenter, 0, rowY - 3, HSLOT + 6, HSLOT + 6, Vec4(0, 0, 0, 0))
     se.BorderThickness = 3
     se.BorderColor = U.SLOT_HI
     selFrame = se
-    local _, te = U.label(hudRoot, "Hotbar Title", UIAnchor.BottomCenter, 0, rowY + SLOT + 34, 400, 22, "", 1.3, true)
+    local _, te = U.label(hudRoot, "Hotbar Title", UIAnchor.BottomCenter, 0, rowY + HSLOT + 52, 400, 22, "", 1.3, true)
     titleLabel = te
     Inv.titleTimer = 0
     Inv.lastSelected = 0
 end
 
+local function addRegion(kind, index, x, y, s)
+    s.kind, s.index, s.cx, s.cy = kind, index, x, y
+    regions[#regions + 1] = s
+    return s
+end
+
 function Inv.buildScreen()
     screenRoot = U.screen("Backpack", 20)
-    local _, dim = U.panel(screenRoot, "Backpack Dim", UIAnchor.TopLeft, 0, 0, 10, 10, Vec4(0, 0, 0, 0.45))
+    local _, dim = U.panel(screenRoot, "Backpack Dim", UIAnchor.TopLeft, 0, 0, 10, 10, Vec4(0, 0, 0, 0.5))
     dim.Stretch = UIStretch.Both
-    local cols, rows = 9, 4
-    local gw = cols * SLOT + (cols - 1) * GAP
-    local gh = rows * SLOT + (rows - 1) * GAP + 14
-    U.panel(screenRoot, "Backpack Panel", UIAnchor.Center, -170, 0, gw + 28, gh + 70, U.INK)
-    local _, t = U.label(screenRoot, "Backpack Title", UIAnchor.Center, -170, -gh / 2 - 14, gw, 24, "Рюкзак", 1.5, true)
-    t.TextColor = U.TEXT
-    Inv.gridOrigin = {-170 - gw / 2 + SLOT / 2, -gh / 2 + SLOT / 2 + 12}
-    for r = 0, rows - 1 do
-        for c = 0, cols - 1 do
-            -- Нижний ряд экрана — это панель (ячейки 1–9), над ней — рюкзак.
-            local idx = r == rows - 1 and (c + 1) or (10 + r * 9 + c)
-            local x = Inv.gridOrigin[1] + c * (SLOT + GAP)
-            local y = Inv.gridOrigin[2] + r * (SLOT + GAP) + (r == rows - 1 and 14 or 0)
-            local s = U.slot(screenRoot, "Pack " .. idx, UIAnchor.Center, x, y, SLOT)
-            s.index = idx
-            s.cx, s.cy = x, y
-            grid[#grid + 1] = s
+    dim.Rounding = 0
+    local C = SLOT + GAP
+    local gw = 9 * C - GAP
+    local topH = 4 * C - GAP
+    local H = 18 + topH + 16 + 3 * C - GAP + 10 + SLOT + 18
+    local top = -H / 2 + 18
+    local left = -gw / 2
+    local _, pe = U.panel(screenRoot, "Backpack Panel", UIAnchor.Center, 0, 0, gw + 28, H, U.INK)
+    pe.BorderThickness = 1
+    pe.BorderColor = U.LINE
+
+    -- Снаряжение: столбик из четырёх ячеек.
+    for i = 0, 3 do
+        local x, y = left + SLOT / 2, top + i * C + SLOT / 2
+        local s = addRegion("inv", Inv.ARMOR + i, x, y, U.slot(screenRoot, "Armor " .. i, UIAnchor.Center, x, y, SLOT))
+        s.bge.Color = Vec4(0.11, 0.12, 0.15, 0.95)
+    end
+    -- Персонаж: картинка со съёмки модели (см. avatar.lua, Avatar.preview).
+    local pw = 2 * C + 18
+    local px = left + C + pw / 2 + 2
+    local _, pbe = U.panel(screenRoot, "Preview Back", UIAnchor.Center, px, top + topH / 2, pw, topH, Vec4(0, 0, 0, 0.55))
+    pbe.BorderThickness = 1
+    pbe.BorderColor = U.LINE
+    local pv, pve = U.base(screenRoot, "Preview", UIAnchor.Center, px, top + topH / 2, pw, topH)
+    pve.Type = UIKind.Image
+    pve.Color = Vec4(1, 1, 1, 1)
+    previewImg = pv
+
+    -- Крафт: сетка до 3×3 (лишние клетки прячутся в режиме 2×2), стрелка,
+    -- результат.
+    craftSlots = {}
+    -- Сетка начинается сразу за превью; стрелка и результат — у правого края.
+    local gx0 = left + 3 * C + 22
+    Inv.craftOrigin = {gx0, top + 14}
+    for r = 0, 2 do
+        for c = 0, 2 do
+            local i = r * 3 + c + 1
+            local x, y = gx0 + c * C + SLOT / 2, top + 14 + r * C + SLOT / 2
+            craftSlots[i] = addRegion("craft", i, x, y, U.slot(screenRoot, "Craft " .. i, UIAnchor.Center, x, y, SLOT))
         end
     end
-    -- Мастерская.
-    local mw, mh = 330, gh + 70
-    U.panel(screenRoot, "Workshop Panel", UIAnchor.Center, gw / 2 + 50, 0, mw, mh, U.INK)
-    local _, wt = U.label(screenRoot, "Workshop Title", UIAnchor.Center, gw / 2 + 50, -mh / 2 + 18, mw - 20, 24, "Мастерская", 1.5, true)
-    wt.TextColor = U.TEXT
-    for i = 1, 8 do
-        local y = -mh / 2 + 44 + (i - 1) * 32
-        local row = {}
-        row.x, row.y, row.w, row.h = gw / 2 + 50, y + 12, mw - 16, 30
-        row.bg, row.bge = U.panel(screenRoot, "Recipe " .. i, UIAnchor.Center, row.x, row.y, row.w, row.h, U.SLOT)
-        row.slot = U.slot(screenRoot, "Recipe Icon " .. i, UIAnchor.Center, row.x - row.w / 2 + 16, row.y, 28)
-        row.slot.bge.Color = Vec4(0, 0, 0, 0)
-        row.slot.bge.BorderThickness = 0
-        local _, le = U.label(screenRoot, "Recipe Text " .. i, UIAnchor.Center, row.x + 16, row.y - 6, row.w - 40, 14, "", 1.0)
-        local _, ne = U.label(screenRoot, "Recipe Need " .. i, UIAnchor.Center, row.x + 16, row.y + 7, row.w - 40, 14, "", 0.85)
-        ne.TextColor = U.MUTED
-        row.title, row.need = le, ne
-        recipeRows[i] = row
+    local _, ct = U.label(screenRoot, "Craft Title", UIAnchor.Center, gx0 + C, top - 4, 3 * C, 18, "Создание", 1.1, false)
+    ct.TextColor = U.MUTED
+    craftTitle = ct
+    local _, arrow = U.base(screenRoot, "Craft Arrow", UIAnchor.Center, gx0 + 3 * C + 12, top + 14 + C + SLOT / 2, 22, 22)
+    arrow.Type = UIKind.Icon
+    arrow.Icon = "play"
+    arrow.IconColor = U.MUTED
+    local rx, ry = left + gw - SLOT / 2, top + 14 + C + SLOT / 2
+    resultSlot = addRegion("result", 1, rx, ry, U.slot(screenRoot, "Craft Result", UIAnchor.Center, rx, ry, SLOT + 6))
+    resultSlot.size = SLOT + 6
+
+    -- Рюкзак 3×9 и панель.
+    local y0 = top + topH + 16
+    for r = 0, 2 do
+        for c = 0, 8 do
+            local idx = 10 + r * 9 + c
+            local x, y = left + c * C + SLOT / 2, y0 + r * C + SLOT / 2
+            addRegion("inv", idx, x, y, U.slot(screenRoot, "Pack " .. idx, UIAnchor.Center, x, y, SLOT))
+        end
     end
-    local _, te = U.label(screenRoot, "Backpack Tip", UIAnchor.Center, -170, gh / 2 + 22, gw, 18,
-        "ЛКМ — взять/положить   ПКМ — половину/одну   Shift+ЛКМ — перекинуть", 0.9, true)
-    te.TextColor = U.MUTED
-    tipLabel = te
+    for c = 0, 8 do
+        local x, y = left + c * C + SLOT / 2, y0 + 3 * C + 10 + SLOT / 2 - GAP
+        addRegion("inv", c + 1, x, y, U.slot(screenRoot, "Pack " .. (c + 1), UIAnchor.Center, x, y, SLOT))
+    end
     heldSlot = U.slot(screenRoot, "Held", UIAnchor.TopLeft, 0, 0, SLOT)
     heldSlot.bge.Color = Vec4(0, 0, 0, 0)
     heldSlot.bge.BorderThickness = 0
     U.show(screenRoot, false)
-    for _, s in ipairs(grid) do U.show(s.bg, false) end
 end
 
-function Inv.toggleScreen()
+-- size: 2 — рюкзак, 3 — верстак. nil — закрыть/открыть рюкзак.
+function Inv.toggleScreen(size)
     Inv.screenOpen = not Inv.screenOpen
     U.show(screenRoot, Inv.screenOpen)
     SetMouseCaptured(not Inv.screenOpen)
     input.ReleaseAll()
-    if not Inv.screenOpen and Inv.held then
-        local left = Inv.add(Inv.held.id, Inv.held.n)
-        if left > 0 then require("drops").spawnAtPlayer(Inv.held.id, left) end
+    if Inv.screenOpen then
+        Inv.gridSize = size or 2
+        Inv.nearFurnace = nearBlock(26)
+        for i, s in ipairs(craftSlots) do
+            local r, c = (i - 1) // 3, (i - 1) % 3
+            U.show(s.bg, r < Inv.gridSize and c < Inv.gridSize)
+        end
+        craftTitle.Text = Inv.gridSize == 3 and (Inv.nearFurnace and "Верстак и печь" or "Верстак") or "Создание"
+        local A = require "avatar"
+        if A.previewTexture then
+            SetUIImage(previewImg, "rt:" .. A.previewTexture, true)
+            A.setPreview(true)
+        end
+    else
+        for i = 1, 9 do giveBack(Inv.grid[i]); Inv.grid[i] = nil end
+        giveBack(Inv.held)
         Inv.held = nil
+        require("avatar").setPreview(false)
     end
-    Inv.recipeScroll = 0
 end
 
--- Ячейка рюкзака или строка мастерской под курсором (координаты от центра).
 local function hit(mx, my)
-    for _, s in ipairs(grid) do
-        if math.abs(mx - s.cx) <= SLOT / 2 and math.abs(my - s.cy) <= SLOT / 2 then return "slot", s.index end
-    end
-    for i, row in ipairs(recipeRows) do
-        if row.recipe and math.abs(mx - row.x) <= row.w / 2 and math.abs(my - row.y) <= row.h / 2 then
-            return "recipe", i
+    for _, s in ipairs(regions) do
+        local half = (s.size or SLOT) / 2
+        if math.abs(mx - s.cx) <= half and math.abs(my - s.cy) <= half then
+            if s.kind ~= "craft" then return s end
+            local r, c = (s.index - 1) // 3, (s.index - 1) % 3
+            if r < Inv.gridSize and c < Inv.gridSize then return s end
         end
     end
     return nil
 end
 
-local function clickSlot(idx, right, shift)
-    local s = Inv.slots[idx]
+-- Ячейка-хранилище по виду и номеру: рюкзак или сетка крафта.
+local function store(kind)
+    if kind == "craft" then return Inv.grid end
+    return Inv.slots
+end
+
+local function gridIndex(region)
+    if region.kind ~= "craft" then return region.index end
+    -- Сетка хранится плотно (size*size), а ячейки экрана — 3×3.
+    local r, c = (region.index - 1) // 3, (region.index - 1) % 3
+    return r * Inv.gridSize + c + 1
+end
+
+local function clickStore(t, idx, right, shift, kind)
+    local s = t[idx]
     local h = Inv.held
-    if shift and not right then
+    if shift and not right and kind == "inv" then
         if not s then return end
-        -- Перекинуть: из панели — в рюкзак, из рюкзака — в панель.
         local from, to = 10, Inv.SIZE
         if idx >= 10 then from, to = 1, 9 end
-        Inv.slots[idx] = nil
+        t[idx] = nil
         local n = s.n
         for pass = 1, 2 do
             for i = from, to do
-                local t = Inv.slots[i]
-                if pass == 1 and t and t.id == s.id and t.n < stackMax(s.id) then
-                    local k = math.min(n, stackMax(s.id) - t.n); t.n = t.n + k; n = n - k
-                elseif pass == 2 and not t and n > 0 then
+                local q = Inv.slots[i]
+                if pass == 1 and q and q.id == s.id and not q.wear and q.n < stackMax(s.id) then
+                    local k = math.min(n, stackMax(s.id) - q.n); q.n = q.n + k; n = n - k
+                elseif pass == 2 and not q and n > 0 then
                     Inv.slots[i] = {id = s.id, n = n, wear = s.wear}; n = 0
                 end
                 if n == 0 then return end
             end
         end
         s.n = n
-        Inv.slots[idx] = s
+        t[idx] = s
         return
     end
     if not right then
@@ -339,19 +358,19 @@ local function clickSlot(idx, right, shift)
             h.n = h.n - k
             if h.n == 0 then Inv.held = nil end
         else
-            Inv.slots[idx], Inv.held = h, s
+            t[idx], Inv.held = h, s
         end
     else
         if not h and s then
             local half = math.ceil(s.n / 2)
             Inv.held = {id = s.id, n = half, wear = s.wear}
             s.n = s.n - half
-            if s.n == 0 then Inv.slots[idx] = nil end
+            if s.n == 0 then t[idx] = nil end
         elseif h and not s then
-            Inv.slots[idx] = {id = h.id, n = 1, wear = h.wear}
+            t[idx] = {id = h.id, n = 1, wear = h.wear}
             h.n = h.n - 1
             if h.n == 0 then Inv.held = nil end
-        elseif h and s and s.id == h.id and s.n < stackMax(s.id) then
+        elseif h and s and s.id == h.id and not s.wear and s.n < stackMax(s.id) then
             s.n = s.n + 1
             h.n = h.n - 1
             if h.n == 0 then Inv.held = nil end
@@ -359,10 +378,29 @@ local function clickSlot(idx, right, shift)
     end
 end
 
+local function clickResult(shift)
+    local r = Inv.result()
+    if not r then return end
+    if shift then
+        -- Сколько хватит материалов и места: по одному результату за раз.
+        for _ = 1, 64 do
+            r = Inv.result()
+            if not r then break end
+            local left = Inv.add(r.out, r.n)
+            takeResult(r)
+            if left > 0 then require("drops").spawnAtPlayer(r.out, left); break end
+        end
+        return
+    end
+    local h = Inv.held
+    if h and (h.id ~= r.out or h.n + r.n > stackMax(r.out)) then return end
+    if h then h.n = h.n + r.n else Inv.held = newStack(r.out, r.n) end
+    takeResult(r)
+end
+
 function Inv.update(dt)
     for i = 1, 9 do U.setSlot(hotbar[i], Inv.slots[i]) end
-    local total = 9 * SLOT + 8 * GAP
-    selFrame.Position = Vec2(-total / 2 + (Inv.selected - 1) * (SLOT + GAP) + SLOT / 2, Inv.rowY - 3)
+    selFrame.Position = Vec2(-Inv.hotbarWidth / 2 + (Inv.selected - 1) * (HSLOT + GAP) + HSLOT / 2, Inv.rowY - 3)
     -- Название предмета над панелью — на пару секунд после смены ячейки.
     local cur = Inv.slots[Inv.selected]
     local curId = cur and cur.id or 0
@@ -375,48 +413,32 @@ function Inv.update(dt)
     titleLabel.TextColor = Vec4(1, 1, 1, math.min(1, Inv.titleTimer))
 
     if not Inv.screenOpen then return end
-    for _, s in ipairs(grid) do
-        U.show(s.bg, true)
-        U.setSlot(s, Inv.slots[s.index])
-    end
-    -- Мастерская: только то, что можно сделать сейчас.
-    local hasTable = nearBlock(25)
-    local hasFurnace = nearBlock(26)
-    local list = {}
-    for _, r in ipairs(RECIPES) do
-        if canCraft(r, hasTable, hasFurnace) then list[#list + 1] = r end
-    end
-    local wheel = GetScrollDelta()
-    Inv.recipeScroll = math.max(0, math.min(math.max(0, #list - #recipeRows), (Inv.recipeScroll or 0) - (wheel > 0 and 1 or (wheel < 0 and -1 or 0))))
-    for i, row in ipairs(recipeRows) do
-        local r = list[i + Inv.recipeScroll]
-        row.recipe = r
-        U.show(row.bg, r ~= nil)
-        if r then
-            local id = B.byName[r.out].id
-            U.setSlot(row.slot, {id = id, n = r.n})
-            row.title.Text = B.title(id) .. (r.n > 1 and (" ×" .. r.n) or "")
-            row.need.Text = needText(r)
-        else
-            U.setSlot(row.slot, nil)
-            row.title.Text = #list == 0 and i == 1 and "Не из чего делать" or ""
-            row.need.Text = ""
+    for _, s in ipairs(regions) do
+        if s.kind == "inv" then
+            U.setSlot(s, Inv.slots[s.index])
+        elseif s.kind == "craft" then
+            local r, c = (s.index - 1) // 3, (s.index - 1) % 3
+            if r < Inv.gridSize and c < Inv.gridSize then U.setSlot(s, Inv.grid[gridIndex(s)]) end
         end
     end
+    local r = Inv.result()
+    U.setSlot(resultSlot, r and {id = r.out, n = r.n} or nil)
 
-    local cur2 = UICursor()
+    local cursor = UICursor()
     local size = UIScreenSize()
-    local mx, my = cur2.x - size.x / 2, cur2.y - size.y / 2
+    local mx, my = cursor.x - size.x / 2, cursor.y - size.y / 2
     local left = Input.is_mouse_pressed("left")
     local right = Input.is_mouse_pressed("right")
     local shift = Input.is_key_down("LeftShift") or Input.is_key_down("Shift")
     if left or right then
-        local kind, idx = hit(mx, my)
-        if kind == "slot" then clickSlot(idx, right, shift)
-        elseif kind == "recipe" and left and recipeRows[idx].recipe then Inv.craft(recipeRows[idx].recipe)
-        elseif not kind and Inv.held then
+        local region = hit(mx, my)
+        if region and region.kind == "result" then
+            clickResult(shift)
+        elseif region then
+            clickStore(store(region.kind), gridIndex(region), right, shift, region.kind)
+        elseif Inv.held then
             -- Мимо окна — выбросить.
-            require("drops").throwFromPlayer(Inv.held.id, right and 1 or Inv.held.n)
+            require("drops").throwFromPlayer(Inv.held.id, right and 1 or Inv.held.n, Inv.held.wear)
             if right then
                 Inv.held.n = Inv.held.n - 1
                 if Inv.held.n == 0 then Inv.held = nil end
@@ -426,7 +448,7 @@ function Inv.update(dt)
         end
     end
     U.setSlot(heldSlot, Inv.held)
-    heldSlot.bge.Position = Vec2(cur2.x - SLOT / 2, cur2.y - SLOT / 2)
+    heldSlot.bge.Position = Vec2(cursor.x - SLOT / 2, cursor.y - SLOT / 2)
 end
 
 return Inv

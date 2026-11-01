@@ -19,6 +19,7 @@ local Hud    = require "hud"
 local Act    = require "interact"
 local Drops  = require "drops"
 local Avatar = require "avatar"
+local Hand   = require "hand"
 local Save   = require "save"
 local Auto   = require "autopilot"
 
@@ -127,6 +128,7 @@ local function startGame()
     Sky.init()
     Clouds.init(seed)
     Hud.init()
+    Hand.init(cameraObj)
     Avatar.init(playerObj)
     Drops.init()
     Act.init()
@@ -160,7 +162,8 @@ function OnUpdate(entity, dt)
                     Act.setBlock(x, y, z, B.byName.torch.id)
                 end
             end
-            if LaunchFlag("openinv") then Inv.toggleScreen() end
+            if LaunchFlag("openinv") then Inv.toggleScreen(LaunchFlag("opentable") and 3 or 2) end
+            if LaunchArg("slot") and LaunchArg("slot") ~= "" then Inv.select(tonumber(LaunchArg("slot"))) end
             local n = 0
             for _ in pairs(W.chunks) do n = n + 1 end
             log(string.format("SAGE Craft: мир готов, участков %d (генерация %.2f с, свет %.2f с, меши %.2f с)",
@@ -173,6 +176,10 @@ function OnUpdate(entity, dt)
 
     if WasActionPressed("Inventory") then Inv.toggleScreen() end
     if WasActionPressed("Pause") and Inv.screenOpen then Inv.toggleScreen() end
+    if Act.openTable then
+        Act.openTable = false
+        if not Inv.screenOpen then Inv.toggleScreen(3) end
+    end
     if WasActionPressed("View") then thirdPerson = (thirdPerson + 1) % 3 end
     if WasActionPressed("Debug") then Hud.toggleDebug() end
     if WasActionPressed("Fly") then P.flying = not P.flying; P.vel.y = 0 end
@@ -205,6 +212,9 @@ function OnUpdate(entity, dt)
     Sky.update(dt, P)
     Clouds.update(dt, P)
     Avatar.update(dt, P, thirdPerson ~= 0, Act.swing)
+    Avatar.updatePreview()
+    local held = Inv.current()
+    Hand.update(dt, thirdPerson == 0, Act.swing, P.walkDist, held and held.id or 0)
     placeCamera()
     Hud.update(dt)
     Inv.update(dt)

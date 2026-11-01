@@ -39,6 +39,7 @@ local function loadSkins()
 end
 
 local function applySkin()
+    if LaunchFlag("fileskin") then return end   -- проверка: материал из самого файла модели
     local s = skins[Avatar.skinIndex]
     if not s or not obj then return end
     local mat = "sagecraft_skin_" .. Avatar.skinIndex
@@ -51,19 +52,67 @@ local function applySkin()
         for i = 0, parts - 1 do SetSubmeshMaterial(obj, i, mat) end
     end
     SetMaterial(obj, mat)
+    require("hand").setMaterial(mat)
+    -- Превью в рюкзаке — свой материал: ровный свет, а не свет клетки.
+    material("sagecraft_skin_preview", {texture = s.name, nearest = true, cutoff = 0.05, double_sided = true, unlit = true})
+    if Avatar.previewObj then SetMaterial(Avatar.previewObj, "sagecraft_skin_preview") end
     Avatar.skinPath = s.path
+end
+
+-- Персонаж для рюкзака: копия модели вдали от мира и съёмка её в текстуру
+-- (AddRenderTexture). Снимается каждый кадр, только пока рюкзак открыт.
+local PREVIEW_AT = Vec3(0, -400, 0)
+Avatar.previewTexture = "sagecraft_preview"
+local previewCam
+local previewJoints = {}
+
+local function initPreview()
+    local o = SpawnObject("Preview Model")
+    o.Transform.Position = PREVIEW_AT
+    AddAnimatedModel(o, MODEL)
+    for _, name in ipairs({"Head", "Right Arm", "Left Arm"}) do previewJoints[name] = JointIndex(o, name) end
+    Avatar.previewObj = o
+    previewCam = SpawnObject("Preview Camera")
+    -- Модель смотрит на −Z: камера стоит перед ней.
+    previewCam.Transform.Position = Vec3(PREVIEW_AT.x, PREVIEW_AT.y + 1.05, PREVIEW_AT.z - 3.1)
+    AddRenderTexture(previewCam, {name = Avatar.previewTexture, width = 256, height = 384, fov = 38,
+                                  look = Vec3(PREVIEW_AT.x, PREVIEW_AT.y + 0.95, PREVIEW_AT.z),
+                                  studio = true, ambient = 0.9, continuous = false, clear = Vec4(0, 0, 0, 0)})
+end
+
+function Avatar.setPreview(on)
+    Avatar.previewOn = on
+    if previewCam then AddRenderTexture(previewCam, {continuous = on}) end
+end
+
+-- Превью смотрит на курсор: голова и тело поворачиваются за мышью.
+function Avatar.updatePreview()
+    if not Avatar.previewOn or not Avatar.previewObj then return end
+    local c, size = UICursor(), UIScreenSize()
+    local dx = (c.x - size.x / 2) / size.x
+    local dy = (c.y - size.y / 2) / size.y
+    local o = Avatar.previewObj
+    o.Transform.Rotation = Vec3(0, dx * 40, 0)
+    local j = previewJoints["Head"]
+    if j and j >= 0 then SetJointRotation(o, j, dy * 40, dx * 50, 0) end
+    local t = Time.total()
+    local ra, la = previewJoints["Right Arm"], previewJoints["Left Arm"]
+    if ra and ra >= 0 then SetJointRotation(o, ra, math.sin(t * 1.3) * 3, 0, 4) end
+    if la and la >= 0 then SetJointRotation(o, la, -math.sin(t * 1.3) * 3, 0, -4) end
 end
 
 function Avatar.init(playerObj)
     obj = SpawnObject("Player Model")
     obj:SetParent(playerObj)
     obj.Transform.Position = Vec3(0, 0, 0)
-    -- Модель смотрит на +Z, игрок — на −Z (так смотрит камера).
-    obj.Transform.Rotation = Vec3(0, 180, 0)
+    -- Лицо модели — на −Z (грань с лицом в развёртке), туда же смотрит
+    -- игрок и камера движка: поворачивать не нужно.
+    obj.Transform.Rotation = Vec3(0, 0, 0)
     AddAnimatedModel(obj, MODEL)
     for _, name in ipairs({"Head", "Body", "Right Arm", "Left Arm", "Right Leg", "Left Leg", "Waist"}) do
         joints[name] = JointIndex(obj, name)
     end
+    initPreview()
     loadSkins()
     local Save = require "save"
     local want = Save.data and Save.data.skin

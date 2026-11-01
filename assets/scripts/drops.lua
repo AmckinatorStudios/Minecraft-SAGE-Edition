@@ -75,6 +75,9 @@ local function iconMesh(id, size)
     return m
 end
 
+D.cubeMesh = function(id, size) return cubeMesh(id, size, 1, 0, 0) end
+D.iconMesh = iconMesh
+
 local function isCube(id)
     local d = B.byId[id]
     return d and d.isBlock and d.draw ~= "cross" and d.draw ~= "torch"

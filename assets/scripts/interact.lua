@@ -153,6 +153,7 @@ local function breakBlock(t)
     if ok then
         local drop = B.dropOf(id)
         if drop then Drops.spawn(drop, 1, t.x + 0.5, t.y + 0.5, t.z + 0.5) end
+        if B.byId[id].xp then require("hud").addXp(B.byId[id].xp) end
         local d = B.byId[id]
         if d.apple and math.random() < d.apple then Drops.spawn(B.byName.apple.id, 1, t.x + 0.5, t.y + 0.5, t.z + 0.5) end
         if d.flint and math.random() < d.flint then Drops.spawn(B.byName.flint.id, 1, t.x + 0.5, t.y + 0.5, t.z + 0.5) end
@@ -163,9 +164,19 @@ local function breakBlock(t)
 end
 
 local function place(t)
+    -- Верстак открывается ПКМ (с Shift — ставим блок рядом, как обычно).
+    if t.id == B.byName.crafting_table.id and not IsActionDown("Sneak") then
+        Act.openTable = true
+        return
+    end
     local held = Inv.current()
     if not held then return end
     local d = B.byId[held.id]
+    -- Еда: ПКМ — съесть.
+    if d.food then
+        if require("hud").eat(d.food) then Inv.useOne(); Act.swing = 1 end
+        return
+    end
     if not d or not d.isBlock then return end
     local x, y, z = t.x + t.nx, t.y + t.ny, t.z + t.nz
     -- В траву ставится поверх (трава заменяется).
