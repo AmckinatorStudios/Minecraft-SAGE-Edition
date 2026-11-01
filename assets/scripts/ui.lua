@@ -9,6 +9,12 @@ local A = require "atlas"
 
 local U = {}
 
+-- Лист оформления (рисует tools/make_gui.py) и шрифт. Пиксель листа — PX
+-- экранных пикселей: рамки остаются резкими при любом размере окна.
+U.SHEET = "assets/ui/gui.png"
+U.FONT = "assets/fonts/Minecraftia-Regular.ttf"
+U.PX = 3
+
 U.INK = Vec4(0.06, 0.07, 0.09, 0.82)
 U.SLOT = Vec4(0.16, 0.17, 0.20, 0.92)
 U.SLOT_HI = Vec4(0.95, 0.95, 0.98, 1)
@@ -38,36 +44,49 @@ function U.base(parent, name, anchor, x, y, w, h)
     return obj, e
 end
 
-function U.panel(parent, name, anchor, x, y, w, h, color)
+-- Панель из листа: кусок name (по умолчанию "panel") девятиной.
+function U.panel(parent, name, anchor, x, y, w, h, color, piece)
     local obj, e = U.base(parent, name, anchor, x, y, w, h)
-    e.Type = UIKind.Panel
-    e.Color = color or U.INK
-    e.Rounding = 3
-    e.TextColor = U.TEXT
+    e.Type = UIKind.Image
+    e.Color = color or Vec4(1, 1, 1, 1)
+    SetUISpriteNamed(obj, U.SHEET, piece or "panel", true)
+    e.PixelScale = U.PX
     return obj, e
 end
 
+-- Плоская заливка без картинки (затемнение, полосы).
+function U.fill(parent, name, anchor, x, y, w, h, color)
+    local obj, e = U.base(parent, name, anchor, x, y, w, h)
+    e.Type = UIKind.Panel
+    e.Color = color
+    e.Rounding = 0
+    return obj, e
+end
+
+-- Надпись шрифтом игры: без сглаживания, с тенью в пиксель шрифта.
 function U.label(parent, name, anchor, x, y, w, h, text, scale, centered)
     local obj, e = U.base(parent, name, anchor, x, y, w, h)
     e.Type = UIKind.Label
     e.Text = text or ""
-    e.TextScale = scale or 1.2
+    e.Font = U.FONT
+    e.FontFilter = "nearest"
+    e.FontPixelHeight = math.floor(8 * (scale or 1) + 0.5) * 2
     e.TextCentered = centered or false
     e.TextColor = U.TEXT
+    e.TextShadowOffset = Vec2(2, 2)
+    e.TextShadowColor = Vec4(0.16, 0.16, 0.16, 1)
     return obj, e
 end
 
 -- Ячейка предмета: подложка, иконка, число. Возвращает таблицу частей.
-function U.slot(parent, name, anchor, x, y, size)
-    local bg, bge = U.panel(parent, name, anchor, x, y, size, size, U.SLOT)
-    bge.BorderThickness = 1
-    bge.BorderColor = U.LINE
-    local ic, ice = U.base(bg, name .. " Icon", UIAnchor.Center, 0, 0, size - 10, size - 10)
+function U.slot(parent, name, anchor, x, y, size, piece)
+    local bg, bge = U.panel(parent, name, anchor, x, y, size, size, nil, piece or "slot")
+    local ic, ice = U.base(bg, name .. " Icon", UIAnchor.Center, 0, 0, size - 12, size - 12)
     ice.Type = UIKind.Image
     ice.Color = Vec4(1, 1, 1, 1)
     SetUIImage(ic, A.ICONS, true)
-    local cnt, cnte = U.label(bg, name .. " Count", UIAnchor.BottomRight, -3, -1, size - 4, 16, "", 1.05)
-    cnte.TextColor = U.TEXT
+    local cnt, cnte = U.label(bg, name .. " Count", UIAnchor.BottomRight, 1, -2, size, 18, "", 1, false)
+    cnte.TextCentered = false
     local s = {bg = bg, bge = bge, icon = ic, icone = ice, count = cnt, counte = cnte, shown = -1, size = size}
     return s
 end

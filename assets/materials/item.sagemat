@@ -1,0 +1,7 @@
+{
+  "cull": "back",
+  "vertexShader": "assets/shaders/chunk.vert",
+  "fragmentShader": "assets/shaders/chunk.frag",
+  "textures": {"uAtlas": "sagecraft_icons"},
+  "params": {}
+}

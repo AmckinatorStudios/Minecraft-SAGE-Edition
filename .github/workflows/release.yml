@@ -1,0 +1,50 @@
+# Выпуск SAGE Craft для Windows: свежий плеер SAGE Engine (из релиза движка
+# windows-latest) + проект игры одним архивом. Каждый пуш в main обновляет
+# релиз «latest» — ссылка на скачивание не меняется.
+name: Выпуск игры
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Плеер движка
+        run: |
+          curl -fsSL -o engine.zip \
+            https://github.com/AmckinatorStudios/SAGE-Engine/releases/download/windows-latest/SageEditor-Windows.zip
+          mkdir engine && unzip -q engine.zip -d engine
+          player=$(find engine -iname 'SagePlayer.exe' | head -1)
+          test -n "$player" || { echo "в релизе движка нет SagePlayer.exe"; exit 1; }
+          echo "PLAYER_DIR=$(dirname "$player")" >> "$GITHUB_ENV"
+
+      - name: Архив игры
+        run: |
+          out="SAGE Craft"
+          mkdir -p "$out"
+          cp -r "$PLAYER_DIR"/. "$out/"
+          mkdir -p "$out/game"
+          cp -r project.sageproj scenes assets "$out/game/"
+          cp README.md LICENSE-Faithful.txt "$out/"
+          printf '@echo off\r\ncd /d "%%~dp0"\r\nstart "" SagePlayer.exe game\r\n' > "$out/SAGE Craft.bat"
+          zip -qr SAGE-Craft-Windows.zip "$out"
+
+      - name: Релиз
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: SAGE Craft — последняя сборка для Windows
+          body: |
+            Распакуйте SAGE-Craft-Windows.zip и запустите «SAGE Craft.bat».
+            Собрано из ${{ github.sha }}. Плеер — SAGE Engine (windows-latest).
+            Текстуры — Classic Faithful 32x, faithfulpack.net (см. LICENSE-Faithful.txt).
+          files: SAGE-Craft-Windows.zip
+          make_latest: true

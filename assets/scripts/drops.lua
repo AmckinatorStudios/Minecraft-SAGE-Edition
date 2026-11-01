@@ -78,6 +78,22 @@ end
 D.cubeMesh = function(id, size) return cubeMesh(id, size, 1, 0, 0) end
 D.iconMesh = iconMesh
 
+-- Объёмный предмет: его иконка, выдавленная в толщину в пиксель исходной
+-- картинки (иконка — вдвое крупнее, поэтому depth = 2). Торцы — цветом своих
+-- пикселей. Свет — полный (uv2 = 15): яркость задаёт день и сторона грани.
+local extruded = {}
+function D.itemMesh(id, size)
+    local key = id .. ":" .. size
+    if extruded[key] then return extruded[key] end
+    local x, y, w, h = A.iconRect(id)
+    local m = extrude(A.iconCanvas, {x = x, y = y, w = w, h = h, depth = 2, cutoff = 0.1})
+    for i = 1, m.vertices do m.set_uv2(i, 15, 0) end
+    m.scale(size)
+    extruded[key] = m
+    return m
+end
+D.ITEM_MAT = "assets/materials/item.sagemat"
+
 local function isCube(id)
     local d = B.byId[id]
     return d and d.isBlock and d.draw ~= "cross" and d.draw ~= "torch"
@@ -90,10 +106,8 @@ local function spawnObject(id)
         meshCache[id].apply(o)
         SetMaterial(o, CHUNK_MAT)
     else
-        local key = "icon" .. id
-        meshCache[key] = meshCache[key] or iconMesh(id, 0.42)
-        meshCache[key].apply(o)
-        SetMaterial(o, ICON_MAT)
+        D.itemMesh(id, 0.42).apply(o)
+        SetMaterial(o, D.ITEM_MAT)
     end
     return o
 end

@@ -86,8 +86,8 @@ local function rebuildItem(id)
         Drops.cubeMesh(id, 0.22).apply(item)
         SetMaterial(item, CHUNK_MAT)
     else
-        Drops.iconMesh(id, 0.3).apply(item)
-        SetMaterial(item, ICON_MAT)
+        Drops.itemMesh(id, 0.3).apply(item)
+        SetMaterial(item, Drops.ITEM_MAT)
     end
 end
 

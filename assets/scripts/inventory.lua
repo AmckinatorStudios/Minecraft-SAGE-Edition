@@ -179,14 +179,11 @@ function Inv.buildHud()
     local rowY = 8
     Inv.rowY = rowY
     Inv.hotbarWidth = total
-    U.panel(hudRoot, "Hotbar Back", UIAnchor.BottomCenter, 0, rowY - 4, total + 8, HSLOT + 8, U.INK)
     for i = 1, 9 do
         local x = -total / 2 + (i - 1) * (HSLOT + GAP) + HSLOT / 2
-        hotbar[i] = U.slot(hudRoot, "Hotbar " .. i, UIAnchor.BottomCenter, x, rowY, HSLOT)
+        hotbar[i] = U.slot(hudRoot, "Hotbar " .. i, UIAnchor.BottomCenter, x, rowY, HSLOT, "hotbar_slot")
     end
-    local _, se = U.panel(hudRoot, "Hotbar Select", UIAnchor.BottomCenter, 0, rowY - 3, HSLOT + 6, HSLOT + 6, Vec4(0, 0, 0, 0))
-    se.BorderThickness = 3
-    se.BorderColor = U.SLOT_HI
+    local _, se = U.panel(hudRoot, "Hotbar Select", UIAnchor.BottomCenter, 0, rowY - 3, HSLOT + 6, HSLOT + 6, nil, "hotbar_select")
     selFrame = se
     local _, te = U.label(hudRoot, "Hotbar Title", UIAnchor.BottomCenter, 0, rowY + HSLOT + 52, 400, 22, "", 1.3, true)
     titleLabel = te
@@ -202,7 +199,7 @@ end
 
 function Inv.buildScreen()
     screenRoot = U.screen("Backpack", 20)
-    local _, dim = U.panel(screenRoot, "Backpack Dim", UIAnchor.TopLeft, 0, 0, 10, 10, Vec4(0, 0, 0, 0.5))
+    local _, dim = U.fill(screenRoot, "Backpack Dim", UIAnchor.TopLeft, 0, 0, 10, 10, Vec4(0, 0, 0, 0.5))
     dim.Stretch = UIStretch.Both
     dim.Rounding = 0
     local C = SLOT + GAP
@@ -211,22 +208,17 @@ function Inv.buildScreen()
     local H = 18 + topH + 16 + 3 * C - GAP + 10 + SLOT + 18
     local top = -H / 2 + 18
     local left = -gw / 2
-    local _, pe = U.panel(screenRoot, "Backpack Panel", UIAnchor.Center, 0, 0, gw + 28, H, U.INK)
-    pe.BorderThickness = 1
-    pe.BorderColor = U.LINE
+    U.panel(screenRoot, "Backpack Panel", UIAnchor.Center, 0, 0, gw + 28, H)
 
     -- Снаряжение: столбик из четырёх ячеек.
     for i = 0, 3 do
         local x, y = left + SLOT / 2, top + i * C + SLOT / 2
         local s = addRegion("inv", Inv.ARMOR + i, x, y, U.slot(screenRoot, "Armor " .. i, UIAnchor.Center, x, y, SLOT))
-        s.bge.Color = Vec4(0.11, 0.12, 0.15, 0.95)
     end
     -- Персонаж: картинка со съёмки модели (см. avatar.lua, Avatar.preview).
     local pw = 2 * C + 18
     local px = left + C + pw / 2 + 2
-    local _, pbe = U.panel(screenRoot, "Preview Back", UIAnchor.Center, px, top + topH / 2, pw, topH, Vec4(0, 0, 0, 0.55))
-    pbe.BorderThickness = 1
-    pbe.BorderColor = U.LINE
+    U.panel(screenRoot, "Preview Back", UIAnchor.Center, px, top + topH / 2, pw, topH, nil, "well")
     local pv, pve = U.base(screenRoot, "Preview", UIAnchor.Center, px, top + topH / 2, pw, topH)
     pve.Type = UIKind.Image
     pve.Color = Vec4(1, 1, 1, 1)
@@ -246,12 +238,10 @@ function Inv.buildScreen()
         end
     end
     local _, ct = U.label(screenRoot, "Craft Title", UIAnchor.Center, gx0 + C, top - 4, 3 * C, 18, "Создание", 1.1, false)
-    ct.TextColor = U.MUTED
+    ct.TextColor = Vec4(0.25, 0.24, 0.22, 1)
+    ct.TextShadowColor = Vec4(0, 0, 0, 0)
     craftTitle = ct
-    local _, arrow = U.base(screenRoot, "Craft Arrow", UIAnchor.Center, gx0 + 3 * C + 12, top + 14 + C + SLOT / 2, 22, 22)
-    arrow.Type = UIKind.Icon
-    arrow.Icon = "play"
-    arrow.IconColor = U.MUTED
+    U.panel(screenRoot, "Craft Arrow", UIAnchor.Center, gx0 + 3 * C + 14, top + 14 + C + SLOT / 2, 22 * 2, 15 * 2, nil, "arrow")
     local rx, ry = left + gw - SLOT / 2, top + 14 + C + SLOT / 2
     resultSlot = addRegion("result", 1, rx, ry, U.slot(screenRoot, "Craft Result", UIAnchor.Center, rx, ry, SLOT + 6))
     resultSlot.size = SLOT + 6
@@ -270,8 +260,7 @@ function Inv.buildScreen()
         addRegion("inv", c + 1, x, y, U.slot(screenRoot, "Pack " .. (c + 1), UIAnchor.Center, x, y, SLOT))
     end
     heldSlot = U.slot(screenRoot, "Held", UIAnchor.TopLeft, 0, 0, SLOT)
-    heldSlot.bge.Color = Vec4(0, 0, 0, 0)
-    heldSlot.bge.BorderThickness = 0
+    heldSlot.bge.Color = Vec4(1, 1, 1, 0)
     U.show(screenRoot, false)
 end
 

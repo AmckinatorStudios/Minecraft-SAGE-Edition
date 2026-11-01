@@ -79,10 +79,10 @@ function Hud.buildIcons()
         SetUIImage(f, SHEET, true)
         foods[i] = {obj = f, shown = -1}
     end
-    local _, xb = U.panel(root, "XP Back", UIAnchor.BottomCenter, 0, 62, W2, 5, Vec4(0.05, 0.06, 0.05, 0.85))
-    xb.Rounding = 1
-    local _, xf = U.panel(root, "XP Fill", UIAnchor.BottomCenter, 0, 62, W2, 5, Vec4(0.5, 0.9, 0.3, 1))
-    xf.Rounding = 1
+    local _, xb = U.panel(root, "XP Back", UIAnchor.BottomCenter, 0, 62, W2, 5 * 2, nil, "bar_back")
+    xb.PixelScale = 2
+    local _, xf = U.panel(root, "XP Fill", UIAnchor.BottomCenter, 0, 62, W2, 5 * 2, nil, "bar_fill")
+    xf.PixelScale = 2
     xpFill = xf
     local _, xl = U.label(root, "XP Level", UIAnchor.BottomCenter, 0, 64, 60, 18, "", 1.15, true)
     xl.TextColor = Vec4(0.6, 1, 0.4, 1)
@@ -125,13 +125,13 @@ local flashTimer = 0
 
 function Hud.init()
     root = U.screen("HUD", 4)
-    local _, a = U.panel(root, "Cross H", UIAnchor.Center, 0, 0, 18, 2, Vec4(1, 1, 1, 0.85))
-    local _, b = U.panel(root, "Cross V", UIAnchor.Center, 0, 0, 2, 18, Vec4(1, 1, 1, 0.85))
+    local _, a = U.fill(root, "Cross H", UIAnchor.Center, 0, 0, 18, 2, Vec4(1, 1, 1, 0.85))
+    local _, b = U.fill(root, "Cross V", UIAnchor.Center, 0, 0, 2, 18, Vec4(1, 1, 1, 0.85))
     a.Rounding, b.Rounding = 0, 0
     cross1, cross2 = a, b
 
     Hud.buildIcons()
-    local _, fl = U.panel(root, "Damage Flash", UIAnchor.TopLeft, 0, 0, 10, 10, Vec4(0.8, 0, 0, 0))
+    local _, fl = U.fill(root, "Damage Flash", UIAnchor.TopLeft, 0, 0, 10, 10, Vec4(0.8, 0, 0, 0))
     fl.Stretch = UIStretch.Both
     flash = fl
 
@@ -140,7 +140,7 @@ function Hud.init()
     debugLabel = de
 
     local lp = U.screen("Loading", 50)
-    local _, bg = U.panel(lp, "Loading Back", UIAnchor.TopLeft, 0, 0, 10, 10, Vec4(0.10, 0.11, 0.13, 1))
+    local _, bg = U.fill(lp, "Loading Back", UIAnchor.TopLeft, 0, 0, 10, 10, Vec4(0.10, 0.11, 0.13, 1))
     bg.Stretch = UIStretch.Both
     bg.Rounding = 0
     U.label(lp, "Loading Title", UIAnchor.Center, 0, -20, 500, 40, "SAGE Craft", 2.6, true)
@@ -194,7 +194,7 @@ function Hud.update(dt)
     setRow(hearts, Hud.health, 0)
     setRow(foods, Hud.food, 3)
     local need = 10 + Hud.level * 2
-    xpFill.Size = Vec2(math.max(1, Hud.xpWidth * Hud.xp / need), 5)
+    xpFill.Size = Vec2(math.max(1, Hud.xpWidth * Hud.xp / need), 10)
     xpFill.Position = Vec2(-Hud.xpWidth / 2 + Hud.xpWidth * Hud.xp / need / 2, 62)
     xpLabel.Text = Hud.level > 0 and tostring(Hud.level) or ""
     flashTimer = math.max(0, flashTimer - dt)

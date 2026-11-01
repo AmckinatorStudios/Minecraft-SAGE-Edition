@@ -179,6 +179,7 @@ function A.build()
     for i = 0, 9 do A.destroyTile[i] = tileFor(atlas, "destroy_stage_" .. i) end
     atlas.apply()
     icons.apply()
+    A.iconCanvas = icons
     A.iconSheetHeight = A.ICON * rows
 end
 
