@@ -53,14 +53,16 @@ function Auto.update(dt)
         t = 0
         stage = stage + 1
         if not SCRIPT[stage] then
-            local Inv = require "inventory"
             local W = require "world"
-            local n = 0
-            for i = 1, Inv.SIZE do if Inv.slots[i] then n = n + Inv.slots[i].n end end
+            local Act = require "interact"
             local chunks = 0
             for _ in pairs(W.chunks) do chunks = chunks + 1 end
-            log(string.format("AUTOPILOT: PASS участков=%d предметов=%d позиция=%.1f,%.1f,%.1f",
-                chunks, n, P.pos.x, P.pos.y, P.pos.z))
+            local st = Act.stats
+            -- Прогон считается пройденным, только если игра реально сделала
+            -- всё по разу: сломала, подобрала, поставила, и мир вокруг есть.
+            local ok = st.broken >= 1 and st.picked >= 1 and st.placed >= 1 and chunks > 0
+            log(string.format("AUTOPILOT: %s участков=%d сломано=%d подобрано=%d поставлено=%d позиция=%.1f,%.1f,%.1f",
+                ok and "PASS" or "FAIL", chunks, st.broken, st.picked, st.placed, P.pos.x, P.pos.y, P.pos.z))
             if LaunchFlag("quit") then game.Quit() end
             Auto.active = false
         end

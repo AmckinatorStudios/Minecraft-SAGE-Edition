@@ -23,6 +23,7 @@ local Act = {}
 
 Act.REACH = 5
 Act.swing = 0               -- 0..1 — фаза взмаха руки (её читает аватар)
+Act.stats = {broken = 0, placed = 0, picked = 0}
 local target
 local mining = nil          -- {x, y, z, t}
 local outline, crack
@@ -100,7 +101,10 @@ function Act.breakTime(id)
     if not d or d.hard < 0 then return math.huge, false end
     if d.hard == 0 then return 0.05, true end
     local held = Inv.current()
+    -- Инструмент — только предмет: у БЛОКА поле tool значит «чем его ломать»,
+    -- и блок в руке не должен считаться лопатой без уровня.
     local tool = held and B.byId[held.id]
+    if tool and tool.isBlock then tool = nil end
     local speed, tier = 1, 0
     if tool and tool.tool and tool.tool == d.tool then speed, tier = tool.speed, tool.tier end
     if tool and tool.tool == "sword" and (d.name == "leaves" or d.name == "birch_leaves") then speed = 1.5 end
@@ -135,6 +139,7 @@ end
 
 local function breakBlock(t)
     local id = t.id
+    Act.stats.broken = Act.stats.broken + 1
     local _, ok = Act.breakTime(id)
     Act.setBlock(t.x, t.y, t.z, 0)
     -- Растение над сломанным блоком падает вместе с опорой.
@@ -171,6 +176,7 @@ local function place(t)
     -- Растение и факел — только на твёрдую опору.
     if (d.draw == "cross" or d.draw == "torch") and not B.opaque[W.get(x, y - 1, z)] then return end
     if Act.setBlock(x, y, z, held.id) then
+        Act.stats.placed = Act.stats.placed + 1
         Inv.useOne()
         Act.swing = 1
         settle(x, y - 1, z)

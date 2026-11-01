@@ -160,11 +160,13 @@ function D.update(dt)
         local dx, dy, dz = px - e.x, py - e.y, pz - e.z
         local d2 = dx * dx + dy * dy + dz * dz
         local removed = false
-        if e.age > 0.6 and d2 < 3.0 then
+        -- Радиус притяжения больше роста: предмет из ямки под ногами (на
+        -- полтора-два блока ниже центра игрока) должен долетать сам.
+        if e.age > 0.6 and d2 < 7.5 then
             -- Притягиваются, а у самого игрока — в рюкзак.
             local d = math.sqrt(d2)
             e.x, e.y, e.z = e.x + dx / d * 7 * dt, e.y + dy / d * 7 * dt, e.z + dz / d * 7 * dt
-            if d < 0.7 then
+            if d < 0.9 then
                 local left
                 if e.wear then
                     left = Inv.add(e.id, e.n)
@@ -177,6 +179,7 @@ function D.update(dt)
                 else
                     left = Inv.add(e.id, e.n)
                 end
+                if left < e.n then require("interact").stats.picked = require("interact").stats.picked + (e.n - left) end
                 e.n = left
                 if left == 0 then removed = true end
             end
