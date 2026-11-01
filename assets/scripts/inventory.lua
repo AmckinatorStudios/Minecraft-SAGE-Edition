@@ -237,7 +237,7 @@ function Inv.buildScreen()
             craftSlots[i] = addRegion("craft", i, x, y, U.slot(screenRoot, "Craft " .. i, UIAnchor.Center, x, y, SLOT))
         end
     end
-    local _, ct = U.label(screenRoot, "Craft Title", UIAnchor.Center, gx0 + C, top - 4, 3 * C, 18, "Создание", 1.1, false)
+    local _, ct = U.label(screenRoot, "Craft Title", UIAnchor.Center, gx0 + C + 20, top - 4, 3 * C, 18, "Создание", 1, false)
     ct.TextColor = Vec4(0.25, 0.24, 0.22, 1)
     ct.TextShadowColor = Vec4(0, 0, 0, 0)
     craftTitle = ct
