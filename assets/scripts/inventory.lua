@@ -29,10 +29,7 @@ Inv.gridSize = 2
 
 local hotbar = {}              -- ячейки панели
 local regions = {}             -- всё, во что попадает мышь на экране рюкзака
-local hudRoot, screenRoot, heldSlot, titleLabel, selFrame, craftTitle
-local craftSlots, resultSlot, previewImg
-local SLOT, GAP = 40, 4
-local HSLOT = 46               -- ячейка панели на экране игры
+local hudRoot, screenRoot, heldSlot, titleLabel, selFrame
 
 local function stackMax(id) return B.maxStack(id) end
 
@@ -171,21 +168,27 @@ end
 
 -- --- Экран -----------------------------------------------------------------
 
+-- Раскладка окон набора текстур (в пикселях раскладки 256×256): где стоит
+-- 16×16 внутренность каждой ячейки.
+local LAYOUT = {
+    inventory = {armor = {8, 8}, craft = {98, 18}, result = {154, 28}, preview = {26, 8, 49, 70}},
+    table = {craft = {30, 17}, result = {124, 35}},
+    rows = 84, hotbar = 142, W = 176, H = 166,
+}
+
 function Inv.buildHud()
     hudRoot = U.screen("Hotbar", 5)
-    local total = 9 * HSLOT + 8 * GAP
-    -- У нижнего якоря Position.y — отступ НИЖНЕГО края элемента от низа
-    -- экрана (вверх), x — смещение центра от середины.
-    local rowY = 8
-    Inv.rowY = rowY
-    Inv.hotbarWidth = total
+    local S = U.HUD
+    Inv.rowY = 0
+    U.sprite(hudRoot, "Hotbar Back", UIAnchor.BottomCenter, 0, 0, 182 * S, 22 * S, "assets/ui/widgets.png", "hotbar")
     for i = 1, 9 do
-        local x = -total / 2 + (i - 1) * (HSLOT + GAP) + HSLOT / 2
-        hotbar[i] = U.slot(hudRoot, "Hotbar " .. i, UIAnchor.BottomCenter, x, rowY, HSLOT, "hotbar_slot")
+        local x = (-91 + 3 + (i - 1) * 20 + 8) * S
+        hotbar[i] = U.slot(hudRoot, "Hotbar " .. i, UIAnchor.BottomCenter, x, 3 * S, 16 * S)
     end
-    local _, se = U.panel(hudRoot, "Hotbar Select", UIAnchor.BottomCenter, 0, rowY - 3, HSLOT + 6, HSLOT + 6, nil, "hotbar_select")
+    local sel, se = U.sprite(hudRoot, "Hotbar Select", UIAnchor.BottomCenter, 0, -1 * S, 24 * S, 24 * S,
+                             "assets/ui/widgets.png", "hotbar_select")
     selFrame = se
-    local _, te = U.label(hudRoot, "Hotbar Title", UIAnchor.BottomCenter, 0, rowY + HSLOT + 52, 400, 22, "", 1.3, true)
+    local _, te = U.label(hudRoot, "Hotbar Title", UIAnchor.BottomCenter, 0, 22 * S + 46, 400, 22, "", 1, true)
     titleLabel = te
     Inv.titleTimer = 0
     Inv.lastSelected = 0
@@ -197,71 +200,70 @@ local function addRegion(kind, index, x, y, s)
     return s
 end
 
+-- Окно: картинка набора и ячейки на её клетках. which: "inventory" | "table".
+local windows = {}
+local function buildWindow(which)
+    local S = U.WIN
+    local root = SpawnObject("Window " .. which)
+    root:AddUI()
+    local w, h = LAYOUT.W * S, LAYOUT.H * S
+    local path = which == "table" and "assets/ui/crafting_table.png" or "assets/ui/inventory.png"
+    local win, _ = U.sprite(nil, "Window Image " .. which, UIAnchor.Center, 0, 0, w, h, path, "window")
+    win:SetParent(screenRoot)
+    -- Центр ячейки раскладки (x, y — левый верх 16×16) в координатах от
+    -- центра экрана, как у U.base с якорем Center.
+    local function at(x, y) return (x + 8 - LAYOUT.W / 2) * S, (y + 8 - LAYOUT.H / 2) * S end
+    local list = {win = win, slots = {}}
+    local function slot(kind, index, x, y)
+        local cx, cy = at(x, y)
+        local sl = U.slot(screenRoot, which .. " " .. kind .. " " .. index, UIAnchor.Center, cx, cy, 16 * S)
+        sl.window = which
+        addRegion(kind, index, cx, cy, sl)
+        list.slots[#list.slots + 1] = sl
+        return sl
+    end
+    for r = 0, 2 do
+        for c = 0, 8 do slot("inv", 10 + r * 9 + c, 8 + c * 18, LAYOUT.rows + r * 18) end
+    end
+    for c = 0, 8 do slot("inv", c + 1, 8 + c * 18, LAYOUT.hotbar) end
+    local L = which == "table" and LAYOUT.table or LAYOUT.inventory
+    local n = which == "table" and 3 or 2
+    for r = 0, n - 1 do
+        for c = 0, n - 1 do slot("craft", r * 3 + c + 1, L.craft[1] + c * 18, L.craft[2] + r * 18) end
+    end
+    local rs = slot("result", 1, L.result[1], L.result[2])
+    rs.size = 24 * S
+    list.result = rs
+    if which == "inventory" then
+        for i = 0, 3 do slot("inv", Inv.ARMOR + i, LAYOUT.inventory.armor[1], LAYOUT.inventory.armor[2] + i * 18) end
+        local p = LAYOUT.inventory.preview
+        local px, py = (p[1] + p[3] / 2 - LAYOUT.W / 2) * S, (p[2] + p[4] / 2 - LAYOUT.H / 2) * S
+        local pv, pve = U.base(screenRoot, "Preview", UIAnchor.Center, px, py, p[3] * S, p[4] * S)
+        pve.Type = UIKind.Image
+        pve.Color = Vec4(1, 1, 1, 1)
+        list.preview = pv
+    end
+    windows[which] = list
+end
+
 function Inv.buildScreen()
     screenRoot = U.screen("Backpack", 20)
-    local _, dim = U.fill(screenRoot, "Backpack Dim", UIAnchor.TopLeft, 0, 0, 10, 10, Vec4(0, 0, 0, 0.5))
+    local _, dim = U.fill(screenRoot, "Backpack Dim", UIAnchor.TopLeft, 0, 0, 10, 10, Vec4(0, 0, 0, 0.55))
     dim.Stretch = UIStretch.Both
-    dim.Rounding = 0
-    local C = SLOT + GAP
-    local gw = 9 * C - GAP
-    local topH = 4 * C - GAP
-    local H = 18 + topH + 16 + 3 * C - GAP + 10 + SLOT + 18
-    local top = -H / 2 + 18
-    local left = -gw / 2
-    U.panel(screenRoot, "Backpack Panel", UIAnchor.Center, 0, 0, gw + 28, H)
-
-    -- Снаряжение: столбик из четырёх ячеек.
-    for i = 0, 3 do
-        local x, y = left + SLOT / 2, top + i * C + SLOT / 2
-        local s = addRegion("inv", Inv.ARMOR + i, x, y, U.slot(screenRoot, "Armor " .. i, UIAnchor.Center, x, y, SLOT))
-    end
-    -- Персонаж: картинка со съёмки модели (см. avatar.lua, Avatar.preview).
-    local pw = 2 * C + 18
-    local px = left + C + pw / 2 + 2
-    U.panel(screenRoot, "Preview Back", UIAnchor.Center, px, top + topH / 2, pw, topH, nil, "well")
-    local pv, pve = U.base(screenRoot, "Preview", UIAnchor.Center, px, top + topH / 2, pw, topH)
-    pve.Type = UIKind.Image
-    pve.Color = Vec4(1, 1, 1, 1)
-    previewImg = pv
-
-    -- Крафт: сетка до 3×3 (лишние клетки прячутся в режиме 2×2), стрелка,
-    -- результат.
-    craftSlots = {}
-    -- Сетка начинается сразу за превью; стрелка и результат — у правого края.
-    local gx0 = left + 3 * C + 22
-    Inv.craftOrigin = {gx0, top + 14}
-    for r = 0, 2 do
-        for c = 0, 2 do
-            local i = r * 3 + c + 1
-            local x, y = gx0 + c * C + SLOT / 2, top + 14 + r * C + SLOT / 2
-            craftSlots[i] = addRegion("craft", i, x, y, U.slot(screenRoot, "Craft " .. i, UIAnchor.Center, x, y, SLOT))
-        end
-    end
-    local _, ct = U.label(screenRoot, "Craft Title", UIAnchor.Center, gx0 + C + 20, top - 4, 3 * C, 18, "Создание", 1, false)
-    ct.TextColor = Vec4(0.25, 0.24, 0.22, 1)
-    ct.TextShadowColor = Vec4(0, 0, 0, 0)
-    craftTitle = ct
-    U.panel(screenRoot, "Craft Arrow", UIAnchor.Center, gx0 + 3 * C + 14, top + 14 + C + SLOT / 2, 22 * 2, 15 * 2, nil, "arrow")
-    local rx, ry = left + gw - SLOT / 2, top + 14 + C + SLOT / 2
-    resultSlot = addRegion("result", 1, rx, ry, U.slot(screenRoot, "Craft Result", UIAnchor.Center, rx, ry, SLOT + 6))
-    resultSlot.size = SLOT + 6
-
-    -- Рюкзак 3×9 и панель.
-    local y0 = top + topH + 16
-    for r = 0, 2 do
-        for c = 0, 8 do
-            local idx = 10 + r * 9 + c
-            local x, y = left + c * C + SLOT / 2, y0 + r * C + SLOT / 2
-            addRegion("inv", idx, x, y, U.slot(screenRoot, "Pack " .. idx, UIAnchor.Center, x, y, SLOT))
-        end
-    end
-    for c = 0, 8 do
-        local x, y = left + c * C + SLOT / 2, y0 + 3 * C + 10 + SLOT / 2 - GAP
-        addRegion("inv", c + 1, x, y, U.slot(screenRoot, "Pack " .. (c + 1), UIAnchor.Center, x, y, SLOT))
-    end
-    heldSlot = U.slot(screenRoot, "Held", UIAnchor.TopLeft, 0, 0, SLOT)
-    heldSlot.bge.Color = Vec4(1, 1, 1, 0)
+    buildWindow("inventory")
+    buildWindow("table")
+    heldSlot = U.slot(screenRoot, "Held", UIAnchor.TopLeft, 0, 0, 16 * U.WIN)
     U.show(screenRoot, false)
+end
+
+local function showWindow(which)
+    for name, w in pairs(windows) do
+        local on = name == which
+        U.show(w.win, on)
+        for _, s in ipairs(w.slots) do U.show(s.bg, on) end
+        if w.preview then U.show(w.preview, on) end
+    end
+    Inv.window = which
 end
 
 -- size: 2 — рюкзак, 3 — верстак. nil — закрыть/открыть рюкзак.
@@ -273,15 +275,11 @@ function Inv.toggleScreen(size)
     if Inv.screenOpen then
         Inv.gridSize = size or 2
         Inv.nearFurnace = nearBlock(26)
-        for i, s in ipairs(craftSlots) do
-            local r, c = (i - 1) // 3, (i - 1) % 3
-            U.show(s.bg, r < Inv.gridSize and c < Inv.gridSize)
-        end
-        craftTitle.Text = Inv.gridSize == 3 and (Inv.nearFurnace and "Верстак и печь" or "Верстак") or "Создание"
+        showWindow(Inv.gridSize == 3 and "table" or "inventory")
         local A = require "avatar"
-        if A.previewTexture then
-            SetUIImage(previewImg, "rt:" .. A.previewTexture, true)
-            A.setPreview(true)
+        if A.previewTexture and windows.inventory.preview then
+            SetUIImage(windows.inventory.preview, "rt:" .. A.previewTexture, true)
+            A.setPreview(Inv.gridSize == 2)
         end
     else
         for i = 1, 9 do giveBack(Inv.grid[i]); Inv.grid[i] = nil end
@@ -293,11 +291,9 @@ end
 
 local function hit(mx, my)
     for _, s in ipairs(regions) do
-        local half = (s.size or SLOT) / 2
-        if math.abs(mx - s.cx) <= half and math.abs(my - s.cy) <= half then
-            if s.kind ~= "craft" then return s end
-            local r, c = (s.index - 1) // 3, (s.index - 1) % 3
-            if r < Inv.gridSize and c < Inv.gridSize then return s end
+        if s.window == Inv.window then
+            local half = (s.size or 16 * U.WIN) / 2
+            if math.abs(mx - s.cx) <= half and math.abs(my - s.cy) <= half then return s end
         end
     end
     return nil
@@ -389,7 +385,7 @@ end
 
 function Inv.update(dt)
     for i = 1, 9 do U.setSlot(hotbar[i], Inv.slots[i]) end
-    selFrame.Position = Vec2(-Inv.hotbarWidth / 2 + (Inv.selected - 1) * (HSLOT + GAP) + HSLOT / 2, Inv.rowY - 3)
+    selFrame.Position = Vec2((-91 - 1 + (Inv.selected - 1) * 20 + 12) * U.HUD, -1 * U.HUD)
     -- Название предмета над панелью — на пару секунд после смены ячейки.
     local cur = Inv.slots[Inv.selected]
     local curId = cur and cur.id or 0
@@ -403,15 +399,13 @@ function Inv.update(dt)
 
     if not Inv.screenOpen then return end
     for _, s in ipairs(regions) do
-        if s.kind == "inv" then
-            U.setSlot(s, Inv.slots[s.index])
-        elseif s.kind == "craft" then
-            local r, c = (s.index - 1) // 3, (s.index - 1) % 3
-            if r < Inv.gridSize and c < Inv.gridSize then U.setSlot(s, Inv.grid[gridIndex(s)]) end
+        if s.window == Inv.window then
+            if s.kind == "inv" then U.setSlot(s, Inv.slots[s.index])
+            elseif s.kind == "craft" then U.setSlot(s, Inv.grid[gridIndex(s)]) end
         end
     end
     local r = Inv.result()
-    U.setSlot(resultSlot, r and {id = r.out, n = r.n} or nil)
+    U.setSlot(windows[Inv.window].result, r and {id = r.out, n = r.n} or nil)
 
     local cursor = UICursor()
     local size = UIScreenSize()
@@ -437,7 +431,7 @@ function Inv.update(dt)
         end
     end
     U.setSlot(heldSlot, Inv.held)
-    heldSlot.bge.Position = Vec2(cursor.x - SLOT / 2, cursor.y - SLOT / 2)
+    heldSlot.bge.Position = Vec2(cursor.x - 8 * U.WIN, cursor.y - 8 * U.WIN)
 end
 
 return Inv

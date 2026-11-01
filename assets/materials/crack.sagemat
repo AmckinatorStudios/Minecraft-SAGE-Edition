@@ -1,0 +1,8 @@
+{
+  "cull": "back",
+  "opacity": 0.99,
+  "vertexShader": "assets/shaders/chunk.vert",
+  "fragmentShader": "assets/shaders/crack.frag",
+  "textures": {"uAtlas": "sagecraft_atlas"},
+  "params": {}
+}

@@ -8,98 +8,51 @@ local Hud = {}
 
 local root, cross1, cross2, loadPanel, debugLabel, flash
 local hearts, foods, xpFill, xpLabel = {}, {}, nil, nil
+local ICONS = "assets/ui/icons.png"
 Hud.health = 20
 Hud.food = 20
 Hud.xp, Hud.level = 0, 0
-local SHEET = "sagecraft_hud"
-local ICON = 18
 
--- Значки здоровья и сытости — свой пиксель-арт 9×9, нарисованный кодом
--- (буквы узора: # — цвет, o — контур, h — блик). Три вида: полный, половина,
--- пустой; половина — левая часть цветом, правая пустой.
-local HEART = {
-    ".oo...oo.",
-    "o##o.o##o",
-    "o#h#o###o",
-    "o#######o",
-    ".o#####o.",
-    "..o###o..",
-    "...o#o...",
-    "....o....",
-    ".........",
-}
-local FOOD = {
-    "...oo....",
-    "..o##o...",
-    ".o#h##o..",
-    "o######o.",
-    "o######o.",
-    ".o####o..",
-    "..oooo...",
-    "...o.....",
-    "...o.....",
-}
-
-local function drawIcon(tex, cell, pattern, fill, part)
-    local ox = cell * 16
-    for y = 1, 9 do
-        local row = pattern[y]
-        for x = 1, 9 do
-            local ch = row:sub(x, x)
-            local c = Vec4(0, 0, 0, 0)
-            local empty = part == "empty" or (part == "half" and x > 5)
-            if ch == "o" then c = Vec4(0.08, 0.04, 0.04, 1)
-            elseif ch == "#" then c = empty and Vec4(0.22, 0.2, 0.22, 1) or Vec4(fill[1], fill[2], fill[3], 1)
-            elseif ch == "h" then c = empty and Vec4(0.3, 0.28, 0.3, 1) or Vec4(1, 0.9, 0.9, 1) end
-            -- Строки холста — снизу вверх: верх узора кладётся в верхние строки.
-            tex.set(ox + 3 + x, 14 - y, c)
-        end
-    end
-end
-
+-- Сердца и еда — значки набора текстур (icons.png): пустая ячейка снизу и
+-- полный/половинный значок поверх.
 function Hud.buildIcons()
-    local tex = texture(SHEET, 96, 16)
-    tex.nearest = true
-    tex.fill(function() return Vec4(0, 0, 0, 0) end)
-    local red, gold = {0.86, 0.12, 0.14}, {0.78, 0.48, 0.16}
-    drawIcon(tex, 0, HEART, red, "full"); drawIcon(tex, 1, HEART, red, "half"); drawIcon(tex, 2, HEART, red, "empty")
-    drawIcon(tex, 3, FOOD, gold, "full"); drawIcon(tex, 4, FOOD, gold, "half"); drawIcon(tex, 5, FOOD, gold, "empty")
-    tex.apply()
-    local Inv = require "inventory"
-    local W2 = 9 * 46 + 8 * 4
+    local S = U.HUD
+    local half = 91 * S
     for i = 1, 10 do
-        local h, he = U.base(root, "Heart " .. i, UIAnchor.BottomCenter, -W2 / 2 + (i - 1) * (ICON - 1) + ICON / 2, 70, ICON, ICON)
-        he.Type = UIKind.Image
-        he.Color = Vec4(1, 1, 1, 1)
-        SetUIImage(h, SHEET, true)
-        hearts[i] = {obj = h, shown = -1}
-        local f, fe = U.base(root, "Food " .. i, UIAnchor.BottomCenter, W2 / 2 - (i - 1) * (ICON - 1) - ICON / 2, 70, ICON, ICON)
-        fe.Type = UIKind.Image
-        fe.Color = Vec4(1, 1, 1, 1)
-        SetUIImage(f, SHEET, true)
-        foods[i] = {obj = f, shown = -1}
+        local hx = -half + (i - 1) * 8 * S + 4.5 * S
+        local fx = half - (i - 1) * 8 * S - 4.5 * S
+        local y = 22 * S + 6 * S
+        U.sprite(root, "Heart Back " .. i, UIAnchor.BottomCenter, hx, y, 9 * S, 9 * S, ICONS, "heart_empty")
+        local h = U.sprite(root, "Heart " .. i, UIAnchor.BottomCenter, hx, y, 9 * S, 9 * S, ICONS, "heart_full")
+        hearts[i] = {obj = h, shown = ""}
+        U.sprite(root, "Food Back " .. i, UIAnchor.BottomCenter, fx, y, 9 * S, 9 * S, ICONS, "food_empty")
+        local f = U.sprite(root, "Food " .. i, UIAnchor.BottomCenter, fx, y, 9 * S, 9 * S, ICONS, "food_full")
+        foods[i] = {obj = f, shown = ""}
     end
-    local _, xb = U.panel(root, "XP Back", UIAnchor.BottomCenter, 0, 62, W2, 5 * 2, nil, "bar_back")
-    xb.PixelScale = 2
-    local _, xf = U.panel(root, "XP Fill", UIAnchor.BottomCenter, 0, 62, W2, 5 * 2, nil, "bar_fill")
-    xf.PixelScale = 2
+    U.sprite(root, "XP Back", UIAnchor.BottomCenter, 0, 22 * S + 1 * S, 182 * S, 5 * S, ICONS, "xp_back")
+    local xfo, xf = U.sprite(root, "XP Fill", UIAnchor.BottomCenter, 0, 22 * S + 1 * S, 182 * S, 5 * S, ICONS, "xp_fill")
     xpFill = xf
-    local _, xl = U.label(root, "XP Level", UIAnchor.BottomCenter, 0, 64, 60, 18, "", 1.15, true)
-    xl.TextColor = Vec4(0.6, 1, 0.4, 1)
+    Hud.xpFillObj = xfo
+    local _, xl = U.label(root, "XP Level", UIAnchor.BottomCenter, 0, 22 * S + 4 * S, 60, 18, "", 1, true)
+    xl.TextColor = Vec4(0.5, 1, 0.13, 1)
     xpLabel = xl
-    Hud.xpWidth = W2
+    Hud.xpWidth = 182 * S
 end
 
--- Значок ряда i (1..10) при значении value (0..20): полный, половина, пустой.
-local function setRow(row, value, base)
+-- Значок ряда i (1..10) при значении value (0..20): полный, половина, нет.
+local function setRow(row, value, prefix)
     for i = 1, 10 do
         local v = value - (i - 1) * 2
-        local cell = v >= 2 and 0 or (v == 1 and 1 or 2)
+        local piece = v >= 2 and "_full" or (v == 1 and "_half" or "")
         local it = row[i]
-        if it.shown ~= cell then
-            it.shown = cell
-            -- Спрайт — в пикселях от левого верхнего угла листа.
-            SetUISprite(it.obj, (base + cell) * 16 + 3, 2, 11, 11)
+        if it.shown ~= piece then
+            it.shown = piece
+            local e = it.obj:GetUI()
+            if piece == "" then e.Visible = false
+            else
+                e.Visible = true
+                SetUISpriteNamed(it.obj, ICONS, prefix .. piece, true)
+            end
         end
     end
 end
@@ -125,10 +78,7 @@ local flashTimer = 0
 
 function Hud.init()
     root = U.screen("HUD", 4)
-    local _, a = U.fill(root, "Cross H", UIAnchor.Center, 0, 0, 18, 2, Vec4(1, 1, 1, 0.85))
-    local _, b = U.fill(root, "Cross V", UIAnchor.Center, 0, 0, 2, 18, Vec4(1, 1, 1, 0.85))
-    a.Rounding, b.Rounding = 0, 0
-    cross1, cross2 = a, b
+    U.sprite(root, "Crosshair", UIAnchor.Center, 0, 0, 15 * U.HUD, 15 * U.HUD, ICONS, "crosshair")
 
     Hud.buildIcons()
     local _, fl = U.fill(root, "Damage Flash", UIAnchor.TopLeft, 0, 0, 10, 10, Vec4(0.8, 0, 0, 0))
@@ -191,11 +141,15 @@ function Hud.update(dt)
         if Hud.food >= 18 and Hud.health < 20 then Hud.health = Hud.health + 1
         elseif Hud.food == 0 and Hud.health > 1 then Hud.damage(1) end
     end
-    setRow(hearts, Hud.health, 0)
-    setRow(foods, Hud.food, 3)
+    setRow(hearts, Hud.health, "heart")
+    setRow(foods, Hud.food, "food")
     local need = 10 + Hud.level * 2
-    xpFill.Size = Vec2(math.max(1, Hud.xpWidth * Hud.xp / need), 10)
-    xpFill.Position = Vec2(-Hud.xpWidth / 2 + Hud.xpWidth * Hud.xp / need / 2, 62)
+    -- Заливка — кусок картинки той же ширины, что доля опыта.
+    local frac = Hud.xp / need
+    local w = math.max(1, math.floor(182 * frac))
+    xpFill.Size = Vec2(w * U.HUD, 5 * U.HUD)
+    xpFill.Position = Vec2((-182 + w) / 2 * U.HUD, 22 * U.HUD + 1 * U.HUD)
+    SetUISprite(Hud.xpFillObj, 0, 138, w * 2, 10)
     xpLabel.Text = Hud.level > 0 and tostring(Hud.level) or ""
     flashTimer = math.max(0, flashTimer - dt)
     flash.Color = Vec4(0.8, 0, 0, flashTimer)

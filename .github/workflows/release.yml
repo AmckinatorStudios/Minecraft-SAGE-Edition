@@ -31,10 +31,10 @@ jobs:
           out="SAGE Craft"
           mkdir -p "$out"
           cp -r "$PLAYER_DIR"/. "$out/"
-          mkdir -p "$out/game"
-          cp -r project.sageproj scenes assets "$out/game/"
+          # Проект — рядом с плеером, как у «File > Build Game»: двойной щелчок
+          # по SagePlayer.exe сразу запускает игру.
+          cp -r project.sageproj scenes assets "$out/"
           cp README.md LICENSE-Faithful.txt "$out/"
-          printf '@echo off\r\ncd /d "%%~dp0"\r\nstart "" SagePlayer.exe game\r\n' > "$out/SAGE Craft.bat"
           zip -qr SAGE-Craft-Windows.zip "$out"
 
       - name: Релиз
@@ -43,7 +43,7 @@ jobs:
           tag_name: latest
           name: SAGE Craft — последняя сборка для Windows
           body: |
-            Распакуйте SAGE-Craft-Windows.zip и запустите «SAGE Craft.bat».
+            Распакуйте SAGE-Craft-Windows.zip в обычную папку (не запускайте из архива) и запустите SagePlayer.exe.
             Собрано из ${{ github.sha }}. Плеер — SAGE Engine (windows-latest).
             Текстуры — Classic Faithful 32x, faithfulpack.net (см. LICENSE-Faithful.txt).
           files: SAGE-Craft-Windows.zip

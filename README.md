@@ -35,6 +35,13 @@
 ./build/runtime/SagePlayer /путь/к/Minecraft-SAGE-Edition
 ```
 
+Готовая сборка для Windows — в релизе `latest`: распакуйте архив в обычную
+папку и запустите `SagePlayer.exe` (проект лежит рядом с ним).
+
+```bash
+# запуск из исходников
+```
+
 Параметры: `--seed=42`, `--view=6` (дальность в участках), `--fresh=1`
 (новый мир), `--time=0.5` (время суток 0..1), `--skin=путь.png`,
 `--autopilot=1 --quit=1` (прогон без рук, итог — строка `AUTOPILOT` в логе).
@@ -88,11 +95,12 @@
 
 ## Авторы и лицензии
 
-- Текстуры блоков, предметов, солнца и луны — **Classic Faithful 32x
+- Текстуры блоков, предметов, интерфейса (`assets/ui`), солнца и луны — **Classic Faithful 32x
   (1.7.10)**, автор — команда Faithful (Vattic's Original Faithful, Evorp и
   другие), <https://faithfulpack.net>. Используются по лицензии Faithful
   (`LICENSE-Faithful.txt`) с указанием авторства; файлы — в
   `assets/textures/blocks`, `assets/textures/items`,
-  `assets/textures/environment`.
+  `assets/textures/environment`, `assets/ui`.
+- Шрифт Minecraftia — Andrew Tyler (www.AndrewTyler.net), `assets/fonts`.
 - Модель игрока и скин по умолчанию — от автора проекта.
 - Код игры — AmckinatorStudios.

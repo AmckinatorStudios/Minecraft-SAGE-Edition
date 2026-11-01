@@ -1,0 +1,22 @@
+{
+  "sprites": [
+    {
+      "name": "hotbar",
+      "rect": [
+        0,
+        0,
+        364,
+        44
+      ]
+    },
+    {
+      "name": "hotbar_select",
+      "rect": [
+        0,
+        44,
+        48,
+        48
+      ]
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+{
+  "sprites": [
+    {
+      "name": "crosshair",
+      "rect": [
+        0,
+        0,
+        30,
+        30
+      ]
+    },
+    {
+      "name": "heart_empty",
+      "rect": [
+        32,
+        0,
+        18,
+        18
+      ]
+    },
+    {
+      "name": "heart_full",
+      "rect": [
+        104,
+        0,
+        18,
+        18
+      ]
+    },
+    {
+      "name": "heart_half",
+      "rect": [
+        122,
+        0,
+        18,
+        18
+      ]
+    },
+    {
+      "name": "food_empty",
+      "rect": [
+        32,
+        54,
+        18,
+        18
+      ]
+    },
+    {
+      "name": "food_full",
+      "rect": [
+        104,
+        54,
+        18,
+        18
+      ]
+    },
+    {
+      "name": "food_half",
+      "rect": [
+        122,
+        54,
+        18,
+        18
+      ]
+    },
+    {
+      "name": "xp_back",
+      "rect": [
+        0,
+        128,
+        364,
+        10
+      ]
+    },
+    {
+      "name": "xp_fill",
+      "rect": [
+        0,
+        138,
+        364,
+        10
+      ]
+    }
+  ]
+}

@@ -9,11 +9,11 @@ local A = require "atlas"
 
 local U = {}
 
--- Лист оформления (рисует tools/make_gui.py) и шрифт. Пиксель листа — PX
--- экранных пикселей: рамки остаются резкими при любом размере окна.
-U.SHEET = "assets/ui/gui.png"
+-- Шрифт и масштаб: окна интерфейса (картинки набора текстур) рисуются
+-- в WIN экранных пикселей на пиксель раскладки 256×256, панель — в HUD.
 U.FONT = "assets/fonts/Minecraftia-Regular.ttf"
-U.PX = 3
+U.WIN = 3
+U.HUD = 2
 
 U.INK = Vec4(0.06, 0.07, 0.09, 0.82)
 U.SLOT = Vec4(0.16, 0.17, 0.20, 0.92)
@@ -44,13 +44,12 @@ function U.base(parent, name, anchor, x, y, w, h)
     return obj, e
 end
 
--- Панель из листа: кусок name (по умолчанию "panel") девятиной.
-function U.panel(parent, name, anchor, x, y, w, h, color, piece)
+-- Картинка из листа: кусок name картинки path (описание — path.sagesheet).
+function U.sprite(parent, name, anchor, x, y, w, h, path, piece)
     local obj, e = U.base(parent, name, anchor, x, y, w, h)
     e.Type = UIKind.Image
-    e.Color = color or Vec4(1, 1, 1, 1)
-    SetUISpriteNamed(obj, U.SHEET, piece or "panel", true)
-    e.PixelScale = U.PX
+    e.Color = Vec4(1, 1, 1, 1)
+    SetUISpriteNamed(obj, path, piece, true)
     return obj, e
 end
 
@@ -79,14 +78,16 @@ function U.label(parent, name, anchor, x, y, w, h, text, scale, centered)
 end
 
 -- Ячейка предмета: подложка, иконка, число. Возвращает таблицу частей.
-function U.slot(parent, name, anchor, x, y, size, piece)
-    local bg, bge = U.panel(parent, name, anchor, x, y, size, size, nil, piece or "slot")
-    local ic, ice = U.base(bg, name .. " Icon", UIAnchor.Center, 0, 0, size - 12, size - 12)
+-- Ячейка предмета: невидимая основа (рамку рисует картинка окна), иконка, число.
+function U.slot(parent, name, anchor, x, y, size)
+    local bg, bge = U.base(parent, name, anchor, x, y, size, size)
+    bge.Type = UIKind.Panel
+    bge.Color = Vec4(1, 1, 1, 0)
+    local ic, ice = U.base(bg, name .. " Icon", UIAnchor.Center, 0, 0, size, size)
     ice.Type = UIKind.Image
     ice.Color = Vec4(1, 1, 1, 1)
     SetUIImage(ic, A.ICONS, true)
-    local cnt, cnte = U.label(bg, name .. " Count", UIAnchor.BottomRight, 1, -2, size, 18, "", 1, false)
-    cnte.TextCentered = false
+    local cnt, cnte = U.label(bg, name .. " Count", UIAnchor.BottomRight, -2, -4, size + 8, 18, "", 1, false)
     local s = {bg = bg, bge = bge, icon = ic, icone = ice, count = cnt, counte = cnte, shown = -1, size = size}
     return s
 end

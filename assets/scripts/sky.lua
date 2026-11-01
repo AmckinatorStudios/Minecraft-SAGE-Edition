@@ -81,7 +81,7 @@ function Sky.update(dt, P)
     SetMaterialParam(MAT_SKY, "uGlowAmount", glow * 0.85)
     SetMaterialParam(MAT_SKY, "uSunDir", Vec3(sdx, sdy, sdz))
     SetMaterialParam(MAT_SKY, "uStars", math.max(0, 1 - day * 1.6))
-    for _, m in ipairs({MAT_CHUNK, MAT_WATER, MAT_CLOUD, "assets/materials/item.sagemat"}) do
+    for _, m in ipairs({MAT_CHUNK, MAT_WATER, MAT_CLOUD, "assets/materials/item.sagemat", "assets/materials/crack.sagemat"}) do
         SetMaterialParam(m, "uDaylight", Sky.daylight)
         SetMaterialParam(m, "uFogColor", v3(Sky.fog))
         SetMaterialParam(m, "uFogStart", view * 0.62)

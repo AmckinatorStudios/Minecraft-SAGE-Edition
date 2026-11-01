@@ -91,7 +91,7 @@ function Act.init()
     crack = SpawnObject("Block Crack")
     for s = 0, 9 do crackMeshes[s] = crackMesh(s) end
     crackMeshes[0].apply(crack)
-    SetMaterial(crack, "assets/materials/chunk.sagemat")
+    SetMaterial(crack, "assets/materials/crack.sagemat")
     crack.Transform.Position = Vec3(0, -100, 0)
 end
 
@@ -220,7 +220,7 @@ function Act.update(dt, actions)
         if stage ~= mining.stage then
             mining.stage = stage
             crackMeshes[stage].apply(crack)
-            SetMaterial(crack, "assets/materials/chunk.sagemat")
+            SetMaterial(crack, "assets/materials/crack.sagemat")
         end
         crack.Transform.Position = Vec3(target.x, target.y, target.z)
         if mining.t >= need then
