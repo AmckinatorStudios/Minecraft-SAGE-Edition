@@ -1,0 +1,8 @@
+{
+  "cull": "none",
+  "opacity": 0.72,
+  "vertexShader": "assets/shaders/chunk.vert",
+  "fragmentShader": "assets/shaders/chunk.frag",
+  "textures": {"uAtlas": "sagecraft_atlas"},
+  "params": {"uWave": 1.0, "uTint": [0.5, 0.62, 0.9]}
+}

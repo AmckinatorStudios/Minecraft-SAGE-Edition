@@ -1,0 +1,7 @@
+{
+  "cull": "back",
+  "opacity": 0.8,
+  "vertexShader": "assets/shaders/clouds.vert",
+  "fragmentShader": "assets/shaders/clouds.frag",
+  "params": {}
+}

@@ -1,0 +1,8 @@
+# Кэш и база ассетов редактора, сохранения и сборки
+.sage/
+*.sagecache
+saves/
+dist/
+build/
+.sage-cache/
+sage-crash-*.txt
