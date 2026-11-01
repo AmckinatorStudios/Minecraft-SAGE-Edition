@@ -203,6 +203,12 @@ function Act.update(dt, actions)
     breakCooldown = math.max(0, breakCooldown - dt)
     Act.swing = math.max(0, Act.swing - dt * 3.5)
 
+    if Act.forceCrack and target then
+        -- Отладка снимков: показать трещину этой стадии на блоке под прицелом.
+        crackMeshes[Act.forceCrack].apply(crack)
+        SetMaterial(crack, "assets/materials/crack.sagemat")
+        crack.Transform.Position = Vec3(target.x, target.y, target.z)
+    end
     if target then
         outline.Transform.Position = Vec3(target.x, target.y, target.z)
     else

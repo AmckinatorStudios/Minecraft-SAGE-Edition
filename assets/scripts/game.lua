@@ -121,7 +121,7 @@ local function startGame()
     P.yaw = tonumber(LaunchArg("yaw") or "") or P.yaw
     P.pitch = tonumber(LaunchArg("pitch") or "") or P.pitch
     if LaunchFlag("kit") then
-        for _, n in ipairs({"torch", "glowstone", "planks", "glass", "stone_pickaxe", "cobblestone", "log", "brick", "iron_pickaxe"}) do
+        for _, n in ipairs({"torch", "glowstone", "planks", "diamond_sword", "stone_pickaxe", "cobblestone", "log", "stick", "iron_pickaxe"}) do
             Inv.add(B.byName[n].id, B.byName[n].stack)
         end
     end
@@ -163,6 +163,12 @@ function OnUpdate(entity, dt)
                 end
             end
             if LaunchFlag("openinv") then Inv.toggleScreen(LaunchFlag("opentable") and 3 or 2) end
+            -- Для снимков: рецепт кирки в сетке верстака и трещина нужной стадии.
+            if LaunchFlag("craftdemo") then
+                local pl, st = B.byName.planks.id, B.byName.stick.id
+                Inv.grid = {{id = pl, n = 1}, {id = pl, n = 1}, {id = pl, n = 1}, nil, {id = st, n = 1}, nil, nil, {id = st, n = 1}}
+            end
+            if LaunchArg("crack") and LaunchArg("crack") ~= "" then Act.forceCrack = tonumber(LaunchArg("crack")) end
             if LaunchArg("slot") and LaunchArg("slot") ~= "" then Inv.select(tonumber(LaunchArg("slot"))) end
             local n = 0
             for _ in pairs(W.chunks) do n = n + 1 end
