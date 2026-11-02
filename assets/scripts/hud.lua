@@ -165,7 +165,7 @@ function Hud.update(dt)
         debugLabel.Text = string.format(
             "SAGE Craft   %.0f кадр/с\nXYZ: %.2f / %.2f / %.2f\nБлок: %d %d %d   участок %d %d\n" ..
             "Свет: небо %d, блоки %d   день %.2f\nВзгляд: %.1f / %.1f\nУчастков %d, секций %d, дальность %d\nВремя суток %.3f",
-            fps, P.pos.x, P.pos.y, P.pos.z, bx, by, bz, bx >> 4, bz >> 4,
+            fps, P.pos.x, P.pos.y, P.pos.z, bx, by, bz, bx // 16, bz // 16,
             W.sky(bx, by + 1, bz), W.blockLight(bx, by + 1, bz), Sky.daylight,
             P.yaw, P.pitch, n, secs, C.radius, Sky.time)
     end

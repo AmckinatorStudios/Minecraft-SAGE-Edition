@@ -8,6 +8,10 @@ local S = {}
 
 local SLOT = "world"
 local SAVE_EVERY = 30
+-- Версия генерации мира. Правки и место игрока имеют смысл только поверх
+-- ТОГО ЖЕ мира: сменилась генерация (деревья, ключи участков) — мир из
+-- сохранения строится заново, а рюкзак, время и скин остаются.
+S.GEN = 2
 local timer = 0
 
 function S.load()
@@ -23,6 +27,10 @@ function S.load()
         edits[tonumber(k)] = e
     end
     data.edits = edits
+    if data.gen ~= S.GEN then
+        log("SAGE Craft: сохранение от прежней генерации мира — мир строится заново, рюкзак сохранён")
+        data.edits, data.player, data.seed = {}, nil, nil
+    end
     S.data = data
     return data
 end
@@ -41,6 +49,7 @@ function S.write()
         edits[tostring(k)] = e
     end
     SaveGame(SLOT, {
+        gen = S.GEN,
         seed = G.seed,
         edits = edits,
         inventory = Inv.serialize(),

@@ -92,14 +92,10 @@ function Sky.update(dt, P)
     local ex, ey, ez = P.eye()
     dome.Transform.Position = Vec3(ex, ey, ez)
     local d = 180
-    -- Квад светила лежит в плоскости XZ лицом вниз; поворачиваем его так,
-    -- чтобы он смотрел на камеру с направления солнца.
-    local angle = math.deg(a)
+    -- Светила — билборды (sprite.vert): смотрят на камеру сами, поворот не нужен.
     sun.Transform.Position = Vec3(ex + sdx * d, ey + sdy * d, ez + sdz * d)
-    sun.Transform.Rotation = Vec3(0, 0, angle - 90)
     sun.Transform.Scale = Vec3(20, 20, 20)
     moon.Transform.Position = Vec3(ex - sdx * d, ey - sdy * d, ez - sdz * d)
-    moon.Transform.Rotation = Vec3(0, 0, angle + 90)
     moon.Transform.Scale = Vec3(14, 14, 14)
 
     -- Фаза луны меняется раз в сутки: лист 4×2 кадра.

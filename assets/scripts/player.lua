@@ -157,6 +157,17 @@ function P.eye()
     return P.pos.x, P.pos.y + (P.sneaking and P.EYE_SNEAK or P.EYE), P.pos.z
 end
 
+-- Обзор мышью. Договорённость движка (docs/scripting.md, GetMouseDelta):
+-- dx > 0 — мышь вправо, dy > 0 — мышь ОТ СЕБЯ (вверх). Здесь: рыскание
+-- растёт против часовой (вид сверху), наклон > 0 — взгляд вверх (lookDir().y
+-- = sin(наклона)). Значит, мышь вправо — yaw уменьшается, мышь от себя —
+-- pitch растёт. Раньше здесь стоял минус у dy — обзор был перевёрнут.
+-- Самопроверка автопилота сверяет знаки (Auto.checkLook).
+function P.look(dx, dy, sens)
+    P.yaw = (P.yaw - dx * sens) % 360
+    P.pitch = math.max(-89.9, math.min(89.9, P.pitch + dy * sens))
+end
+
 function P.lookDir()
     local yr, pr = math.rad(P.yaw), math.rad(P.pitch)
     return -math.sin(yr) * math.cos(pr), math.sin(pr), -math.cos(yr) * math.cos(pr)

@@ -48,9 +48,12 @@ local function shape(hv, rv, cv, tv, wv)
     return math.floor(h), biome
 end
 
--- Высота поверхности и климат точки — без участка: ими же ищется спавн.
+-- Высота поверхности и климат точки — без участка: ими ищется спавн и корень
+-- дерева соседа. Шум берётся в ТОЙ ЖЕ плоскости y = 0, что и сетка участка
+-- (n.grid(bx, 0, bz, ...)): двумерный n(x, z) — другое поле, и точка
+-- расходилась с рельефом — спавн оказывался в толще земли или в кроне.
 function G.column(x, z)
-    return shape(hills(x, z), ridges.raw(x, z), continent(x, z), temp(x, z), wet(x, z))
+    return shape(hills(x, 0, z), ridges.raw(x, 0, z), continent(x, 0, z), temp(x, 0, z), wet(x, 0, z))
 end
 
 -- Хэш клетки 0..1: руда, деревья, трава — не по шуму, а по хэшу, чтобы
@@ -77,28 +80,80 @@ local function getLocal(c, x, y, z)
     return s[x + z * 16 + (y & 15) * 256 + 1] & W.ID_MASK
 end
 
--- Дерево целиком внутри участка (корень отступает от края на 2) — так дерево
--- никогда не режется границей участка и не зависит от порядка генерации.
-local function tree(c, x, y, z, birch)
-    local h = 4 + math.floor(rnd(c.cx * 16 + x, y, c.cz * 16 + z, 5) * 3)
+-- ДЕРЕВЬЯ — по мировой сетке, а не по участку. Клетка сетки TREE_CELL×TREE_CELL
+-- даёт не больше одного дерева, ствол сдвинут внутри неё на 0..TREE_JITTER:
+-- соседние стволы стоят не ближе TREE_CELL - TREE_JITTER = 6 клеток, а
+-- крона радиуса 2 занимает 5 — между кронами всегда есть просвет, лес не
+-- слипается в сплошной полог. Решение
+-- «есть ли дерево и какое» зависит только от зерна и точки, поэтому каждый
+-- участок сам дорисовывает свою часть дерева соседа: граница участка дерево
+-- не режет, порядок генерации ни на что не влияет.
+local TREE_CELL, TREE_JITTER, CROWN = 8, 2, 2
+G.TREE_CELL = TREE_CELL
+
+-- Срезала ли пещера клетку (x, y, z) столба высоты h — та же формула, что в
+-- generate, но для одной точки (дерево соседа не видит его сетку шумов).
+local function carved(x, y, z, h)
+    if y <= 4 or y >= h - 1 + (h > SEA + 2 and 2 or -3) then return false end
+    local a, b = caveA.raw(x, y, z), caveB.raw(x, y, z)
+    return a * a + b * b < 0.012
+end
+
+-- Дерево клетки сетки (gx, gz): x, y корня (первая клетка ствола), z, высота
+-- ствола, берёза ли. nil — в этой клетке дерева нет.
+function G.treeIn(gx, gz)
+    local x = gx * TREE_CELL + math.floor(rnd(gx, 0, gz, 12) * (TREE_JITTER + 1))
+    local z = gz * TREE_CELL + math.floor(rnd(gx, 1, gz, 12) * (TREE_JITTER + 1))
+    local h, b = G.column(x, z)
+    if h > W.HEIGHT - 8 then h = W.HEIGHT - 8 end
+    -- Только на дёрне: не пляж (h <= SEA + 1 — песок), не пустыня, не снег.
+    if b == "desert" or b == "snow" or h <= SEA + 1 or h + 10 >= W.HEIGHT then return nil end
+    local chance = b == "forest" and 0.85 or 0.2
+    if rnd(gx, 2, gz, 13) >= chance then return nil end
+    if carved(x, h, z, h) or carved(x, h - 1, z, h) then return nil end
+    local birch = b == "forest" and rnd(gx, 3, gz, 6) < 0.3
+    local trunk = (birch and 5 or 4) + math.floor(rnd(gx, 4, gz, 5) * 3)
+    return x, h + 1, z, trunk, birch
+end
+
+-- Есть ли ствол ближе r клеток к точке (x, z) — спавн не ставит игрока в крону.
+function G.treeNear(x, z, r)
+    for gx = (x - r - TREE_JITTER) // TREE_CELL, (x + r) // TREE_CELL do
+        for gz = (z - r - TREE_JITTER) // TREE_CELL, (z + r) // TREE_CELL do
+            local tx, _, tz = G.treeIn(gx, gz)
+            if tx and math.abs(tx - x) <= r and math.abs(tz - z) <= r then return true end
+        end
+    end
+    return false
+end
+
+-- Часть дерева, попавшая в участок c (мировые координаты дерева).
+local function tree(c, x, y, z, h, birch)
+    local bx, bz = c.cx * 16, c.cz * 16
     local log, leaves = birch and BLOG or LOG, birch and BLEAVES or LEAVES
-    for dy = h - 3, h do
-        local rad = dy >= h - 1 and 1 or 2
+    local function inside(wx, wz) return wx >= bx and wx < bx + 16 and wz >= bz and wz < bz + 16 end
+    -- Крона: два широких слоя (углы — через раз), над ними узкий и «крест»
+    -- на макушке. Листва только в пустоту: не съедает рельеф и соседей.
+    for dy = h - 2, h + 1 do
+        local rad = dy >= h and 1 or 2
         for dx = -rad, rad do
             for dz = -rad, rad do
+                local wx, wy, wz = x + dx, y + dy, z + dz
                 local corner = math.abs(dx) == rad and math.abs(dz) == rad
-                if not corner or rnd(c.cx * 16 + x + dx, y + dy, c.cz * 16 + z + dz, 9) < 0.45 then
-                    if dy < h or (dx == 0 or dz == 0) then
-                        if y + dy < W.HEIGHT and getLocal(c, x + dx, y + dy, z + dz) == AIR then
-                            put(c, x + dx, y + dy, z + dz, leaves)
-                        end
-                    end
+                local keep
+                if dy == h + 1 then keep = dx == 0 or dz == 0
+                elseif corner then keep = rnd(wx, wy, wz, 9) < (rad == 2 and 0.4 or 0.25)
+                else keep = true end
+                if keep and wy < W.HEIGHT and inside(wx, wz) and getLocal(c, wx - bx, wy, wz - bz) == AIR then
+                    put(c, wx - bx, wy, wz - bz, leaves)
                 end
             end
         end
     end
-    for dy = 0, h - 1 do put(c, x, y + dy, z, log) end
-    put(c, x, y - 1, z, DIRT)
+    if inside(x, z) then
+        for dy = 0, h - 1 do put(c, x - bx, y + dy, z - bz, log) end
+        put(c, x - bx, y - 1, z - bz, DIRT)
+    end
 end
 
 function G.generate(c)
@@ -140,6 +195,10 @@ function G.generate(c)
             if b == "snow" then top = SNOW end
             if h < SEA - 3 then top, filler = (rnd(x, 0, z, 3) < 0.3) and CLAY or GRAVEL, DIRT end
             local fillDepth = 3 + math.floor(DT[lx + lz * 16 + 1] * 1.5 + 1.5)
+            -- Секция под рукой на 16 клеток высоты: искать её на каждую клетку
+            -- (put) стоило генерации заметной доли времени.
+            local sec, secY = nil, -1
+            local col = lx + lz * 16 + 1
             for y = 0, math.max(h, SEA) do
                 local id
                 if y == 0 or (y < 4 and rnd(x, y, z, 1) < (4 - y) / 4) then id = BEDROCK
@@ -164,29 +223,40 @@ function G.generate(c)
                     elseif r < 0.0222 and y < 16 then id = DIAMOND
                     elseif r < 0.03 and y < 80 then id = GRAVEL end
                 end
-                if id ~= AIR then put(c, lx, y, lz, id) end
+                if id ~= AIR then
+                    if (y >> 4) ~= secY then secY = y >> 4; sec = W.section(c, secY, true) end
+                    local i = col + (y & 15) * 256
+                    sec[i] = (sec[i] & ~W.ID_MASK) | id
+                end
             end
         end
     end
 
-    -- Растения и деревья — после рельефа: им нужен уже готовый верх.
-    for lz = 2, 13 do
-        for lx = 2, 13 do
+    -- Деревья — все клетки сетки, чья крона задевает участок (свои и соседей).
+    local reach = CROWN + TREE_JITTER
+    for gx = (bx - reach) // TREE_CELL, (bx + 15 + CROWN) // TREE_CELL do
+        for gz = (bz - reach) // TREE_CELL, (bz + 15 + CROWN) // TREE_CELL do
+            local x, y, z, h, birch = G.treeIn(gx, gz)
+            if x and x + CROWN >= bx and x - CROWN < bx + 16 and z + CROWN >= bz and z - CROWN < bz + 16 then
+                tree(c, x, y, z, h, birch)
+            end
+        end
+    end
+
+    -- Трава, цветы, кактусы — по всему участку, до самого края: иначе по
+    -- границам участков тянулись голые полосы.
+    for lz = 0, 15 do
+        for lx = 0, 15 do
             local x, z = bx + lx, bz + lz
             local h, b = heights[lx + lz * 16], biomes[lx + lz * 16]
             local ground = getLocal(c, lx, h, lz)
-            local r = rnd(x, h, z, 4)
-            if ground == GRASS and h > SEA then
-                local density = b == "forest" and 0.022 or 0.004
-                if r < density and h + 8 < W.HEIGHT then
-                    tree(c, lx, h + 1, lz, b == "forest" and rnd(x, 0, z, 6) < 0.3)
-                elseif getLocal(c, lx, h + 1, lz) == AIR then
-                    local g = rnd(x, h + 1, z, 7)
-                    if g < 0.14 then put(c, lx, h + 1, lz, TALLGRASS)
-                    elseif g < 0.155 then put(c, lx, h + 1, lz, ROSE)
-                    elseif g < 0.17 then put(c, lx, h + 1, lz, DANDELION) end
-                end
-            elseif ground == SAND and b == "desert" and h > SEA + 1 and r < 0.006 then
+            if ground == GRASS and h > SEA and h + 1 < W.HEIGHT and getLocal(c, lx, h + 1, lz) == AIR then
+                local g = rnd(x, h + 1, z, 7)
+                local grass = b == "forest" and 0.2 or 0.14
+                if g < grass then put(c, lx, h + 1, lz, TALLGRASS)
+                elseif g < grass + 0.015 then put(c, lx, h + 1, lz, ROSE)
+                elseif g < grass + 0.03 then put(c, lx, h + 1, lz, DANDELION) end
+            elseif ground == SAND and b == "desert" and h > SEA + 1 and rnd(x, h, z, 4) < 0.006 then
                 for dy = 1, 1 + math.floor(rnd(x, 1, z, 8) * 3) do put(c, lx, h + dy, lz, CACTUS) end
             end
         end
@@ -194,12 +264,87 @@ function G.generate(c)
     c.generated = true
 end
 
--- Точка спавна: ближайший к нулю сухой столб над уровнем моря.
+-- Самопроверка генерации (--gencheck): участки вокруг нуля строятся заново и
+-- проверяется то, что ломалось. 1) Высота столба по точке = высоте по сетке
+-- (на этом держатся спавн и деревья соседей), и мир по мировым координатам
+-- читает ту же клетку, что участок, — и при отрицательных координатах. 2) Ствол каждого дерева стоит
+-- целиком, а крона есть и по ту сторону границы участка. 3) Стволы не ближе
+-- TREE_CELL - TREE_JITTER клеток — кроны не слипаются. 4) Трава доходит до края участка.
+function G.selfCheck()
+    local R = 5
+    local cells = {}
+    for cx = -R, R do
+        for cz = -R, R do
+            local c = W.newChunk(cx, cz)
+            G.generate(c)
+        end
+    end
+    local heightBad, worldBad, n = 0, 0, 0
+    local borderGrass, innerGrass = 0, 0
+    for cx = -R, R do
+        for cz = -R, R do
+            local c = W.chunk(cx, cz)
+            for lz = 0, 15 do
+                for lx = 0, 15 do
+                    local x, z = cx * 16 + lx, cz * 16 + lz
+                    local h = G.column(x, z)
+                    if h > W.HEIGHT - 8 then h = W.HEIGHT - 8 end
+                    n = n + 1
+                    local g = getLocal(c, lx, h + 1, lz) == TALLGRASS
+                    -- Мир по мировым координатам = участок (отрицательные тоже).
+                    if W.get(x, h, z) ~= getLocal(c, lx, h, lz) then worldBad = worldBad + 1 end
+                    if getLocal(c, lx, h, lz) == AIR and getLocal(c, lx, h - 1, lz) == AIR and h > SEA + 3 then
+                        -- столб, срезанный пещерой, высоту не проверяет
+                    elseif getLocal(c, lx, h + 1, lz) == STONE or getLocal(c, lx, h + 1, lz) == GRASS then
+                        heightBad = heightBad + 1
+                    end
+                    if g then
+                        if lx < 2 or lx > 13 or lz < 2 or lz > 13 then borderGrass = borderGrass + 1
+                        else innerGrass = innerGrass + 1 end
+                    end
+                end
+            end
+        end
+    end
+    local trees, broken, crossed, cut, close = {}, 0, 0, 0, 0
+    local lo, hi = -R * 16 // TREE_CELL + 1, (R * 16 + 15) // TREE_CELL - 1
+    for gx = lo, hi do
+        for gz = lo, hi do
+            local x, y, z, h, birch = G.treeIn(gx, gz)
+            if x then
+                trees[#trees + 1] = {x, z}
+                local log = birch and BLOG or LOG
+                for dy = 0, h - 1 do
+                    if W.get(x, y + dy, z) ~= log then broken = broken + 1; break end
+                end
+                -- Крона по ту сторону границы участка.
+                local lx = x & 15
+                local side = lx >= 14 and 1 or (lx <= 1 and -1 or 0)
+                if side ~= 0 then
+                    if W.get(x + side * 2, y + h - 1, z) ~= AIR then crossed = crossed + 1 else cut = cut + 1 end
+                end
+            end
+        end
+    end
+    for i = 1, #trees do
+        for j = i + 1, #trees do
+            local dx, dz = trees[i][1] - trees[j][1], trees[i][2] - trees[j][2]
+            if math.max(math.abs(dx), math.abs(dz)) < TREE_CELL - TREE_JITTER then close = close + 1 end
+        end
+    end
+    local ok = heightBad == 0 and worldBad == 0 and broken == 0 and cut == 0 and crossed > 0 and close == 0 and borderGrass > 0 and #trees > 0
+    return string.format("GENCHECK: %s столбов=%d высота_мимо=%d мир_мимо=%d деревьев=%d сломано=%d тесно=%d через_границу=%d срезано=%d трава_у_края=%d трава_внутри=%d",
+        ok and "PASS" or "FAIL", n, heightBad, worldBad, #trees, broken, close, crossed, cut, borderGrass, innerGrass)
+end
+
+-- Точка спавна: ближайший к нулю сухой столб над уровнем моря, не под деревом.
 function G.spawnPoint()
     for r = 0, 400, 8 do
         for _, p in ipairs({{r, 0}, {-r, 0}, {0, r}, {0, -r}, {r, r}, {-r, -r}}) do
             local h, b = G.column(p[1], p[2])
-            if h > SEA + 1 and b ~= "desert" then return p[1] + 0.5, h + 1, p[2] + 0.5 end
+            if h > SEA + 1 and b ~= "desert" and not G.treeNear(p[1], p[2], 3) then
+                return p[1] + 0.5, h + 1, p[2] + 0.5
+            end
         end
     end
     return 0.5, SEA + 10, 0.5

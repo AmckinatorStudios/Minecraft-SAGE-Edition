@@ -69,7 +69,7 @@ local floor = math.floor
 function W.raw(x, y, z)
     if y < 0 then return 10 end
     if y >= W.HEIGHT then return 15 << SKY_SHIFT end
-    local cx, cz = x >> 4, z >> 4
+    local cx, cz = x // 16, z // 16
     local c = W.chunks[ckey(cx, cz)]
     if not c then return nil end
     local s = c.sec[y >> 4]
@@ -88,7 +88,7 @@ function W.unpack(v) return v & ID_MASK, (v >> SKY_SHIFT) & 15, (v >> BLK_SHIFT)
 -- Записать клетку целиком (без света: свет пересчитывает light.lua).
 function W.setRaw(x, y, z, v)
     if y < 0 or y >= W.HEIGHT then return false end
-    local c = W.chunks[ckey(x >> 4, z >> 4)]
+    local c = W.chunks[ckey(x // 16, z // 16)]
     if not c then return false end
     local s = W.section(c, y >> 4, true)
     s[(x & 15) + (z & 15) * 16 + (y & 15) * 256 + 1] = v
@@ -121,7 +121,7 @@ end
 
 -- Пометить секцию (и соседей, если клетка на её границе) на пересборку меша.
 function W.markDirty(x, y, z)
-    local cx, cz, sy = x >> 4, z >> 4, y >> 4
+    local cx, cz, sy = x // 16, z // 16, y >> 4
     local lx, ly, lz = x & 15, y & 15, z & 15
     local function mark(a, b, c)
         if b < 0 or b >= W.SECTIONS then return end
@@ -140,7 +140,7 @@ end
 -- Высота самого верхнего непрозрачного для света блока столба (для неба и
 -- спавна). -1 — столб пуст.
 function W.surface(x, z)
-    local c = W.chunks[ckey(x >> 4, z >> 4)]
+    local c = W.chunks[ckey(x // 16, z // 16)]
     if not c then return -1 end
     for y = (c.top + 1) * 16 - 1, 0, -1 do
         local id = W.get(x, y, z)

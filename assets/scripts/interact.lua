@@ -237,7 +237,8 @@ function Act.update(dt, actions)
         end
     else
         mining = nil
-        crack.Transform.Position = Vec3(0, -100, 0)
+        -- Принудительная стадия (снимки) держится на блоке и без удара.
+        if not (Act.forceCrack and target) then crack.Transform.Position = Vec3(0, -100, 0) end
     end
 
     if placing and target and placeCooldown == 0 then

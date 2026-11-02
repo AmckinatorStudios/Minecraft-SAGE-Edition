@@ -87,7 +87,12 @@ function U.slot(parent, name, anchor, x, y, size)
     ice.Type = UIKind.Image
     ice.Color = Vec4(1, 1, 1, 1)
     SetUIImage(ic, A.ICONS, true)
-    local cnt, cnte = U.label(bg, name .. " Count", UIAnchor.BottomRight, -2, -4, size + 8, 18, "", 1, false)
+    -- Число — в правом нижнем углу САМОЙ ячейки, выровнено по её краю: рамка
+    -- шире ячейки с текстом от левого края уводила его на соседнюю ячейку.
+    local cnt, cnte = U.label(bg, name .. " Count", UIAnchor.Center, 0, 0, size, size, "", 1, false)
+    cnte.TextAlign = "end"
+    cnte.TextVAlign = "end"
+    cnte.PadX = 0
     local s = {bg = bg, bge = bge, icon = ic, icone = ice, count = cnt, counte = cnte, shown = -1, size = size}
     return s
 end

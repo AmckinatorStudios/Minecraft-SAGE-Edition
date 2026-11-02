@@ -49,7 +49,7 @@ end
 
 -- Запомнить правку игрока (её и только её пишет сохранение).
 function C.recordEdit(x, y, z, id)
-    local key = W.ckey(x >> 4, z >> 4)
+    local key = W.ckey(x // 16, z // 16)
     local e = C.edits[key]
     if not e then e = {}; C.edits[key] = e end
     e[(x & 15) + (z & 15) * 16 + y * 256] = id
@@ -82,11 +82,20 @@ function C.buildSection(cx, sy, cz)
     W.dirty[W.skey(cx, sy, cz)] = nil
 end
 
-local function buildChunk(c)
-    for sy = 0, W.SECTIONS - 1 do
+-- Меш участка — по секции за раз: целиком участок строится десятки
+-- миллисекунд, и при ходьбе каждый новый участок был заметным рывком кадра.
+-- true — участок готов.
+local function buildChunkStep(c, overBudget)
+    local sy = c.nextSec or 0
+    while sy < W.SECTIONS do
         if c.sec[sy] then C.buildSection(c.cx, sy, c.cz) end
+        sy = sy + 1
+        c.nextSec = sy
+        if sy < W.SECTIONS and overBudget() then return false end
     end
     c.built = true
+    c.nextSec = nil
+    return true
 end
 
 local function unloadChunk(c)
@@ -116,10 +125,13 @@ end
 -- budget — миллисекунды (nil — без ограничения: загрузка до старта игры).
 function C.update(px, pz, budget)
     local r = C.radius
-    if #order == 0 or C._r ~= r then buildOrder(r + 2); C._r = r end
-    local pcx, pcz = math.floor(px) >> 4, math.floor(pz) >> 4
+    if #order == 0 or C._r ~= r then buildOrder(r + 2); C._r = r; C._settled = nil end
+    local pcx, pcz = math.floor(px) // 16, math.floor(pz) // 16
     local t0 = now()
     local busy = false
+    -- Мир вокруг уже готов, игрок в том же участке и правок нет — обходить
+    -- сотни участков ради «делать нечего» каждый кадр незачем.
+    if C._settled == W.ckey(pcx, pcz) and next(W.dirty) == nil then return false end
     local function overBudget()
         return budget and (now() - t0) * 1000 > budget
     end
@@ -158,10 +170,10 @@ function C.update(px, pz, budget)
             local c = W.chunk(cx, cz)
             if c and c.lit and not c.built and neighborsReady(cx, cz, "lit") then
                 local t = now()
-                buildChunk(c)
+                local done = buildChunkStep(c, overBudget)
                 C.stats.mesh = C.stats.mesh + (now() - t)
                 busy = true
-                if overBudget() then return true end
+                if not done or overBudget() then return true end
             end
         end
     end
@@ -172,7 +184,12 @@ function C.update(px, pz, budget)
         local ck = key // 16
         local cx, cz = ck // 65536 - 32768, ck % 65536 - 32768
         local c = W.chunk(cx, cz)
-        if c and c.built then C.buildSection(cx, sy, cz) else W.dirty[key] = nil end
+        if c and c.built then
+            C.buildSection(cx, sy, cz)
+            C.stats.rebuilt = (C.stats.rebuilt or 0) + 1
+        else
+            W.dirty[key] = nil
+        end
     end
     -- Выгрузка далёких: правки игрока сохранены в C.edits и вернутся.
     local far = (r + 4) * (r + 4)
@@ -180,10 +197,12 @@ function C.update(px, pz, budget)
         local dx, dz = c.cx - pcx, c.cz - pcz
         if dx * dx + dz * dz > far then unloadChunk(c) end
     end
+    C._settled = (not busy) and W.ckey(pcx, pcz) or nil
     return busy
 end
 
 function C.clear()
+    C._settled = nil
     for _, c in pairs(W.chunks) do unloadChunk(c) end
     W.chunks = {}
     W.dirty = {}
