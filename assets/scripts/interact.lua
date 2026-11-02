@@ -131,19 +131,20 @@ function Act.breakTime(id)
     return math.max(0.05, t), ok
 end
 
--- Падение песка и гравия: всё, что висит над пустотой, опускается.
+-- Песок и гравий над пустотой падают: каждый блок столба над (x, y, z)
+-- становится падающим телом (falling.lua) — снизу вверх, и столб летит вниз
+-- целиком, как в Minecraft.
 local function settle(x, y, z)
+    local Fall = require "falling"
+    if not Fall.passable(W.get(x, y, z)) then return end
     for yy = y + 1, W.HEIGHT - 1 do
         local id = W.get(x, yy, z)
         if not (B.byId[id] and B.byId[id].falls) then break end
-        local below = yy - 1
-        while below > 0 and (W.get(x, below - 1, z) == 0 or B.drawKind[W.get(x, below - 1, z)] == 4) do below = below - 1 end
-        if W.get(x, below, z) == 0 or B.drawKind[W.get(x, below, z)] == 4 then
-            Act.setBlock(x, yy, z, 0)
-            Act.setBlock(x, below, z, id)
-        end
+        Act.setBlock(x, yy, z, 0)
+        Fall.spawn(id, x, yy, z)
     end
 end
+Act.settle = settle
 
 -- Поставить блок в мир: клетка, свет, пересборка, запись правки.
 function Act.setBlock(x, y, z, id)
