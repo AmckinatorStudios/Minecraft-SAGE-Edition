@@ -104,6 +104,11 @@ function Hud.init()
     loadPanel = lp
 end
 
+-- Прятать полоски и прицел, пока открыто главное меню.
+function Hud.setVisible(on)
+    if root then U.show(root, on) end
+end
+
 function Hud.loading(on)
     if loadPanel then U.show(loadPanel, on) end
 end

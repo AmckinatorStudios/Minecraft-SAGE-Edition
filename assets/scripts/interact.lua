@@ -158,6 +158,8 @@ local function breakBlock(t)
     local id = t.id
     Act.stats.broken = Act.stats.broken + 1
     local _, ok = Act.breakTime(id)
+    -- Содержимое печи — на землю, как в Minecraft.
+    if require("furnace").isFurnace(id) then require("furnace").broken(t.x, t.y, t.z) end
     Act.setBlock(t.x, t.y, t.z, 0)
     -- Растение над сломанным блоком падает вместе с опорой.
     local above = W.get(t.x, t.y + 1, t.z)
@@ -181,7 +183,11 @@ local function breakBlock(t)
 end
 
 local function place(t)
-    -- Верстак открывается ПКМ (с Shift — ставим блок рядом, как обычно).
+    -- Печь и верстак открываются ПКМ (с Shift — ставим блок рядом, как обычно).
+    if require("furnace").isFurnace(t.id) and not IsActionDown("Sneak") then
+        Act.openFurnace = {x = t.x, y = t.y, z = t.z}
+        return
+    end
     if t.id == B.byName.crafting_table.id and not IsActionDown("Sneak") then
         Act.openTable = true
         return

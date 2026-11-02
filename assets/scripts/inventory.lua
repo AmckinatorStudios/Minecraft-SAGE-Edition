@@ -128,22 +128,9 @@ end
 
 -- --- Крафт ----------------------------------------------------------------
 
-local function nearBlock(id)
-    local P = require "player"
-    local px, py, pz = math.floor(P.pos.x), math.floor(P.pos.y), math.floor(P.pos.z)
-    for dy = -2, 3 do
-        for dz = -4, 4 do
-            for dx = -4, 4 do
-                if W.get(px + dx, py + dy, pz + dz) == id then return true end
-            end
-        end
-    end
-    return false
-end
-
 -- Что лежит в ячейке результата сейчас.
 function Inv.result()
-    local r = R.match(Inv.grid, {size = Inv.gridSize, furnace = Inv.gridSize == 3 and Inv.nearFurnace})
+    local r = R.match(Inv.grid, {size = Inv.gridSize})
     return r
 end
 
@@ -176,6 +163,10 @@ end
 local LAYOUT = {
     inventory = {armor = {8, 8}, craft = {88, 26}, result = {144, 36}, preview = {26, 8, 49, 70}},
     table = {craft = {30, 17}, result = {124, 35}},
+    -- Печь (1.7): вход, топливо, результат; огонь и стрелка — куски справа
+    -- той же картинки, ложатся на свои места окна по мере горения и плавки.
+    furnace = {input = {56, 17}, fuel = {56, 53}, result = {116, 35}, flame = {56, 36, 14, 14},
+               arrow = {79, 34, 24, 17}, flameSrc = {176, 0}, arrowSrc = {176, 14}},
     rows = 84, hotbar = 142, W = 176, H = 166,
 }
 
@@ -202,6 +193,10 @@ function Inv.checkLayout()
         if L.armor then for i = 0, 3 do probe(img, L.armor[1], L.armor[2] + i * 18) end end
     end
     return miss
+end
+
+function Inv.setHudVisible(on)
+    if hudRoot then U.show(hudRoot, on) end
 end
 
 function Inv.buildHud()
@@ -235,7 +230,8 @@ local function buildWindow(which)
     local root = SpawnObject("Window " .. which)
     root:AddUI()
     local w, h = LAYOUT.W * S, LAYOUT.H * S
-    local path = which == "table" and "assets/ui/crafting_table.png" or "assets/ui/inventory.png"
+    local path = ({table = "assets/ui/crafting_table.png", furnace = "assets/ui/furnace.png"})[which]
+        or "assets/ui/inventory.png"
     local win, _ = U.sprite(nil, "Window Image " .. which, UIAnchor.Center, 0, 0, w, h, path, "window")
     win:SetParent(screenRoot)
     -- Центр ячейки раскладки (x, y — левый верх 16×16) в координатах от
@@ -254,6 +250,26 @@ local function buildWindow(which)
         for c = 0, 8 do slot("inv", 10 + r * 9 + c, 8 + c * 18, LAYOUT.rows + r * 18) end
     end
     for c = 0, 8 do slot("inv", c + 1, 8 + c * 18, LAYOUT.hotbar) end
+    if which == "furnace" then
+        local L = LAYOUT.furnace
+        slot("furnace", 1, L.input[1], L.input[2])
+        slot("furnace", 2, L.fuel[1], L.fuel[2])
+        slot("furnace", 3, L.result[1], L.result[2]).size = 24 * S
+        -- Полосы: элемент с левым верхним углом на месте полосы; видимая
+        -- часть задаётся куском картинки (Inv.update).
+        local function bar(name, r)
+            local o, e = U.base(screenRoot, "Furnace " .. name, UIAnchor.Center, 0, 0, r[3] * S, r[4] * S)
+            e.Type = UIKind.Image
+            e.Color = Vec4(1, 1, 1, 1)
+            SetUIImage(o, path, true)
+            list.slots[#list.slots + 1] = {bg = o}
+            return {obj = o, e = e, x = r[1], y = r[2], w = r[3], h = r[4]}
+        end
+        list.flame = bar("Flame", L.flame)
+        list.arrow = bar("Arrow", L.arrow)
+        windows[which] = list
+        return
+    end
     local L = which == "table" and LAYOUT.table or LAYOUT.inventory
     local n = which == "table" and 3 or 2
     for r = 0, n - 1 do
@@ -280,6 +296,7 @@ function Inv.buildScreen()
     dim.Stretch = UIStretch.Both
     buildWindow("inventory")
     buildWindow("table")
+    buildWindow("furnace")
     heldSlot = U.slot(screenRoot, "Held", UIAnchor.TopLeft, 0, 0, 16 * U.WIN)
     U.show(screenRoot, false)
 end
@@ -295,14 +312,17 @@ local function showWindow(which)
 end
 
 -- size: 2 — рюкзак, 3 — верстак. nil — закрыть/открыть рюкзак.
+-- Печь — Inv.openFurnace.
 function Inv.toggleScreen(size)
     Inv.screenOpen = not Inv.screenOpen
     U.show(screenRoot, Inv.screenOpen)
     SetMouseCaptured(not Inv.screenOpen)
     input.ReleaseAll()
-    if Inv.screenOpen then
+    if Inv.screenOpen and Inv.furnace then
+        Inv.gridSize = 2
+        showWindow("furnace")
+    elseif Inv.screenOpen then
         Inv.gridSize = size or 2
-        Inv.nearFurnace = nearBlock(26)
         showWindow(Inv.gridSize == 3 and "table" or "inventory")
         local A = require "avatar"
         if A.previewTexture and windows.inventory.preview then
@@ -313,8 +333,16 @@ function Inv.toggleScreen(size)
         for i = 1, 9 do giveBack(Inv.grid[i]); Inv.grid[i] = nil end
         giveBack(Inv.held)
         Inv.held = nil
+        Inv.furnace = nil
         require("avatar").setPreview(false)
     end
+end
+
+-- Окно печи f (furnace.lua): её ячейки и полосы огня и плавки.
+function Inv.openFurnace(f)
+    if Inv.screenOpen then return end
+    Inv.furnace = f
+    Inv.toggleScreen()
 end
 
 local function hit(mx, my)
@@ -330,7 +358,50 @@ end
 -- Ячейка-хранилище по виду и номеру: рюкзак или сетка крафта.
 local function store(kind)
     if kind == "craft" then return Inv.grid end
+    if kind == "furnace" then return Inv.furnace.slots end
     return Inv.slots
+end
+
+-- Shift+ЛКМ из рюкзака при открытой печи: что плавится — во вход, топливо —
+-- в нижнюю ячейку (как в Minecraft). true — предмет ушёл (весь или часть).
+local function shiftIntoFurnace(t, idx)
+    local s = t[idx]
+    local fs = Inv.furnace.slots
+    local to = R.SMELT[s.id] and 1 or (R.FUEL[s.id] and 2) or nil
+    if not to then return false end
+    local q = fs[to]
+    if not q then
+        fs[to] = s
+        t[idx] = nil
+    elseif q.id == s.id and not q.wear then
+        local k = math.min(s.n, stackMax(s.id) - q.n)
+        q.n = q.n + k
+        s.n = s.n - k
+        if s.n == 0 then t[idx] = nil end
+    end
+    return true
+end
+
+-- Результат печи только забирают: положить в него ничего нельзя.
+local function clickFurnaceOut(right, shift)
+    local fs = Inv.furnace.slots
+    local s = fs[3]
+    if not s then return end
+    local h = Inv.held
+    if shift then
+        local left = Inv.add(s.id, s.n)
+        if left == 0 then fs[3] = nil else s.n = left end
+    elseif not h then
+        local n = right and math.ceil(s.n / 2) or s.n
+        Inv.held = newStack(s.id, n)
+        s.n = s.n - n
+        if s.n == 0 then fs[3] = nil end
+    elseif h.id == s.id then
+        local k = math.min(s.n, stackMax(s.id) - h.n)
+        h.n = h.n + k
+        s.n = s.n - k
+        if s.n == 0 then fs[3] = nil end
+    end
 end
 
 local function gridIndex(region)
@@ -343,8 +414,16 @@ end
 local function clickStore(t, idx, right, shift, kind)
     local s = t[idx]
     local h = Inv.held
+    if shift and not right and kind == "furnace" then
+        if s then
+            local left = Inv.add(s.id, s.n)
+            if left == 0 then t[idx] = nil else s.n = left end
+        end
+        return
+    end
     if shift and not right and kind == "inv" then
         if not s then return end
+        if Inv.window == "furnace" and shiftIntoFurnace(t, idx) then return end
         local from, to = 10, Inv.SIZE
         if idx >= 10 then from, to = 1, 9 end
         t[idx] = nil
@@ -411,6 +490,34 @@ local function clickResult(shift)
     takeResult(r)
 end
 
+-- Полосы печи: огонь сгорает сверху вниз (видна нижняя часть), стрелка
+-- растёт слева направо. Кусок картинки — в пикселях её листа (512 = 2×256).
+function Inv.updateFurnaceBars()
+    local w = windows.furnace
+    local flame, cook = require("furnace").progress(Inv.furnace)
+    local S, K = U.WIN, 2
+    local L = LAYOUT.furnace
+    local function place(bar, x, y, bw, bh)
+        bar.e.Size = Vec2(bw * S, bh * S)
+        bar.e.Position = Vec2((x + bw / 2 - LAYOUT.W / 2) * S, (y + bh / 2 - LAYOUT.H / 2) * S)
+    end
+    -- Огонь: высота 1..14 по оставшемуся топливу (0 — не горит, не видно).
+    local fh = flame > 0 and math.max(1, math.ceil(flame * w.flame.h)) or 0
+    U.show(w.flame.obj, fh > 0)
+    if fh > 0 then
+        local top = w.flame.h - fh
+        SetUISprite(w.flame.obj, L.flameSrc[1] * K, (L.flameSrc[2] + top) * K, w.flame.w * K, fh * K)
+        place(w.flame, w.flame.x, w.flame.y + top, w.flame.w, fh)
+    end
+    local aw = math.floor(cook * (w.arrow.w + 1))
+    U.show(w.arrow.obj, aw > 0)
+    if aw > 0 then
+        aw = math.min(aw, w.arrow.w)
+        SetUISprite(w.arrow.obj, L.arrowSrc[1] * K, L.arrowSrc[2] * K, aw * K, w.arrow.h * K)
+        place(w.arrow, w.arrow.x, w.arrow.y, aw, w.arrow.h)
+    end
+end
+
 function Inv.update(dt)
     for i = 1, 9 do U.setSlot(hotbar[i], Inv.slots[i]) end
     selFrame.Position = Vec2((-91 - 1 + (Inv.selected - 1) * 20 + 12) * U.HUD, -1 * U.HUD)
@@ -429,11 +536,16 @@ function Inv.update(dt)
     for _, s in ipairs(regions) do
         if s.window == Inv.window then
             if s.kind == "inv" then U.setSlot(s, Inv.slots[s.index])
-            elseif s.kind == "craft" then U.setSlot(s, Inv.grid[gridIndex(s)]) end
+            elseif s.kind == "craft" then U.setSlot(s, Inv.grid[gridIndex(s)])
+            elseif s.kind == "furnace" then U.setSlot(s, Inv.furnace.slots[s.index]) end
         end
     end
-    local r = Inv.result()
-    U.setSlot(windows[Inv.window].result, r and {id = r.out, n = r.n} or nil)
+    if Inv.window == "furnace" then
+        Inv.updateFurnaceBars()
+    else
+        local r = Inv.result()
+        U.setSlot(windows[Inv.window].result, r and {id = r.out, n = r.n} or nil)
+    end
 
     local cursor = UICursor()
     local size = UIScreenSize()
@@ -445,6 +557,8 @@ function Inv.update(dt)
         local region = hit(mx, my)
         if region and region.kind == "result" then
             clickResult(shift)
+        elseif region and region.kind == "furnace" and region.index == 3 then
+            clickFurnaceOut(right, shift)
         elseif region then
             clickStore(store(region.kind), gridIndex(region), right, shift, region.kind)
         elseif Inv.held then

@@ -66,6 +66,9 @@ local defs = {
     {id = 44, name = "iron_block",   title = "Железный блок",     tex = "iron_block", hard = 5.0, tool = "pickaxe", need = 2},
     {id = 45, name = "gold_block",   title = "Золотой блок",      tex = "gold_block", hard = 3.0, tool = "pickaxe", need = 3},
     {id = 46, name = "diamond_block", title = "Алмазный блок",    tex = "diamond_block", hard = 5.0, tool = "pickaxe", need = 3},
+    -- Горящая печь: та же печь, пока в ней огонь (furnace.lua меняет блок
+    -- туда и обратно). Светит и роняет обычную печь.
+    {id = 47, name = "lit_furnace",  title = "Печь",              top = "furnace_top", side = "furnace_side", front = "furnace_front_on", bottom = "furnace_top", hard = 3.5, tool = "pickaxe", need = 1, light = 13, drop = "furnace"},
 }
 
 -- Предметы, которые не ставятся в мир. Номера — с 256, чтобы не пересечься с

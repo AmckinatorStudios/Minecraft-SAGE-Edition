@@ -1,0 +1,7 @@
+{
+  "sprites": [
+    {"name": "window", "rect": [0, 0, 352, 332]},
+    {"name": "flame", "rect": [352, 0, 28, 28]},
+    {"name": "arrow", "rect": [352, 28, 48, 34]}
+  ]
+}

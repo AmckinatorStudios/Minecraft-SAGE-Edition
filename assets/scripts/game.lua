@@ -22,6 +22,8 @@ local Avatar = require "avatar"
 local Hand   = require "hand"
 local Save   = require "save"
 local Auto   = require "autopilot"
+local Furn   = require "furnace"
+local Menu   = require "menu"
 
 local playerObj, cameraObj
 local started = false
@@ -119,6 +121,22 @@ local function startGame()
             for d = 0, 10 do if W.blockLight(x, y + d, z) ~= 14 - d then bad = bad + 1 end end
             log(string.format("LIGHTCHECK: %s мимо=%d (на 6 клеток выше факела %d)",
                 bad == 0 and "PASS" or "FAIL", bad, W.blockLight(x, y + 6, z)))
+            -- Печь: 2 руды и уголь — два слитка через 20 с; пока огонь —
+            -- горящая печь, уголь (80 с) прогорел — снова обычная.
+            local fx, fy, fz = 4, W.surface(4, 4) + 1, 4
+            Act.setBlock(fx, fy, fz, B.byName.furnace.id)
+            local f = Furn.at(fx, fy, fz)
+            f.slots[1] = {id = B.byName.iron_ore.id, n = 2}
+            f.slots[2] = {id = B.byName.coal.id, n = 1}
+            Furn.update(0.5)
+            local litOk = W.get(fx, fy, fz) == B.byName.lit_furnace.id
+            for _ = 1, 50 do Furn.update(0.5) end
+            local out = f.slots[3]
+            local smeltOk = out and out.id == B.byName.iron_ingot.id and out.n == 2 and not f.slots[1] and not f.slots[2]
+            for _ = 1, 140 do Furn.update(0.5) end
+            local outOk = W.get(fx, fy, fz) == B.byName.furnace.id
+            log(string.format("FURNACECHECK: %s горит=%s слитков=%d погасла=%s",
+                (litOk and smeltOk and outOk) and "PASS" or "FAIL", tostring(litOk), out and out.n or 0, tostring(outOk)))
         end
         W.chunks = {}
         local miss = Inv.checkLayout()
@@ -127,6 +145,7 @@ local function startGame()
     A.build()
     Inv.init(loaded and loaded.inventory)
     C.edits = loaded and loaded.edits or {}
+    Furn.load(loaded and loaded.furnaces)
     C.radius = tonumber(LaunchArg("view") or "") or C.radius
 
     local sx, sy, sz = G.spawnPoint()
@@ -149,6 +168,7 @@ local function startGame()
     Sky.init()
     Clouds.init(seed)
     Hud.init()
+    Menu.init()
     Hand.init(cameraObj)
     Avatar.init(playerObj)
     Drops.init()
@@ -214,6 +234,24 @@ function OnUpdate(entity, dt)
                 Drops.spawn(B.byName.stone_pickaxe.id, 1, x + dz * 0.5, P.pos.y + 0.6, z - dx * 0.5, 0, 0, 0)
             end
             if LaunchArg("slot") and LaunchArg("slot") ~= "" then Inv.select(tonumber(LaunchArg("slot"))) end
+            -- Для снимков: печь рядом — руда плавится, уголь горит, окно открыто.
+            if LaunchFlag("furnacedemo") then
+                local dx, _, dz = P.lookDir()
+                local x, z = math.floor(P.pos.x + dx * 2.5), math.floor(P.pos.z + dz * 2.5)
+                local y = W.surface(x, z) + 1
+                Act.setBlock(x, y, z, B.byName.furnace.id)
+                local f = Furn.at(x, y, z)
+                f.slots[1] = {id = B.byName.iron_ore.id, n = 5}
+                f.slots[2] = {id = B.byName.coal.id, n = 3}
+                f.slots[3] = {id = B.byName.iron_ingot.id, n = 2}
+                f.burn, f.burnMax, f.cook = 50, 80, 6
+                Inv.openFurnace(f)
+            end
+            -- Главное меню — после загрузки, поверх живого мира. Прогоны и
+            -- снимки (у них своя цель) его пропускают.
+            local snapshot = LaunchFlag("openinv") or LaunchFlag("craftdemo") or LaunchFlag("dropdemo")
+                or LaunchFlag("furnacedemo") or (LaunchArg("crack") or "") ~= ""
+            if not (Auto.active or LaunchFlag("nomenu") or snapshot) then Menu.open() end
             local n = 0
             for _ in pairs(W.chunks) do n = n + 1 end
             log(string.format("SAGE Craft: мир готов, участков %d (генерация %.2f с, свет %.2f с, меши %.2f с)",
@@ -224,11 +262,35 @@ function OnUpdate(entity, dt)
         return
     end
 
+    if Menu.active then
+        -- За меню — мир с медленно вращающейся камерой; игра стоит.
+        Menu.update(dt)
+        P.yaw = (P.yaw + dt * 3) % 360
+        P.pitch = 8
+        C.update(P.pos.x, P.pos.z, C.budgetMs)
+        Furn.update(dt)
+        Sky.update(dt, P)
+        Clouds.update(dt, P)
+        Hand.update(dt, false, 0, P.walkDist, 0)
+        -- Вид глазами: голову персонажа спрятать, иначе камера смотрит
+        -- изнутри неё (во время загрузки аватар ещё не обновлялся).
+        Avatar.update(dt, P, false, 0)
+        placeCamera()
+        return
+    end
+
     if WasActionPressed("Inventory") then Inv.toggleScreen() end
-    if WasActionPressed("Pause") and Inv.screenOpen then Inv.toggleScreen() end
+    if WasActionPressed("Pause") then
+        if Inv.screenOpen then Inv.toggleScreen() else Menu.open() end
+    end
     if Act.openTable then
         Act.openTable = false
         if not Inv.screenOpen then Inv.toggleScreen(3) end
+    end
+    if Act.openFurnace then
+        local p = Act.openFurnace
+        Act.openFurnace = nil
+        Inv.openFurnace(Furn.at(p.x, p.y, p.z))
     end
     if WasActionPressed("View") then thirdPerson = (thirdPerson + 1) % 3 end
     if WasActionPressed("Debug") then Hud.toggleDebug() end
@@ -256,6 +318,7 @@ function OnUpdate(entity, dt)
 
     if not Inv.screenOpen then Act.update(dt, Auto.active and Auto.actions() or nil) end
     Drops.update(dt)
+    Furn.update(dt)
     Sky.update(dt, P)
     Clouds.update(dt, P)
     Avatar.update(dt, P, thirdPerson ~= 0, Act.swing)

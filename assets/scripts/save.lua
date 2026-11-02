@@ -29,7 +29,7 @@ function S.load()
     data.edits = edits
     if data.gen ~= S.GEN then
         log("SAGE Craft: сохранение от прежней генерации мира — мир строится заново, рюкзак сохранён")
-        data.edits, data.player, data.seed = {}, nil, nil
+        data.edits, data.player, data.seed, data.furnaces = {}, nil, nil, nil
     end
     S.data = data
     return data
@@ -53,6 +53,7 @@ function S.write()
         seed = G.seed,
         edits = edits,
         inventory = Inv.serialize(),
+        furnaces = require("furnace").serialize(),
         player = {x = P.pos.x, y = P.pos.y, z = P.pos.z, yaw = P.yaw, pitch = P.pitch},
         time = Sky.time,
         skin = Avatar.skinPath,
