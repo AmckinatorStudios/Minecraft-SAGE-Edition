@@ -104,7 +104,12 @@ local function startGame()
     if loaded and loaded.seed then seed = loaded.seed end
     G.init(seed)
     -- Проверка генерации без игры: --gencheck (итог — строка GENCHECK в логе).
-    if LaunchFlag("gencheck") then log(G.selfCheck()); W.chunks = {} end
+    if LaunchFlag("gencheck") then
+        log(G.selfCheck())
+        W.chunks = {}
+        local miss = Inv.checkLayout()
+        log(string.format("UICHECK: %s клеток_мимо=%d", miss == 0 and "PASS" or "FAIL", miss))
+    end
     A.build()
     Inv.init(loaded and loaded.inventory)
     C.edits = loaded and loaded.edits or {}

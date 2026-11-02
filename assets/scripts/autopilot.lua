@@ -50,8 +50,10 @@ local SCRIPT = {
     {1.5, {forward = 1, strafe = 0}, {}},
     -- Назад из ямы: в клетку, где стоит сам игрок, блок не ставится.
     {1.2, {forward = -1, strafe = 0, jump = true}, {}},
-    {0.1, {forward = 0, strafe = 0}, {look = -60}},
-    {0.3, {forward = 0, strafe = 0}, {place = true}},
+    -- Ставить — на землю в паре шагов: взгляд круто вниз попадает в клетку,
+    -- которую занимает сам игрок, и блок туда не ставится.
+    {0.1, {forward = 0, strafe = 0}, {look = -40}},
+    {0.6, {forward = 0, strafe = 0}, {place = true}},
     {2.0, {forward = -1, strafe = 0}, {}},
 }
 
