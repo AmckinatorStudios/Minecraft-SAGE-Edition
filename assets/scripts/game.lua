@@ -103,6 +103,8 @@ local function startGame()
     local loaded = Save.load()
     if loaded and loaded.seed then seed = loaded.seed end
     G.init(seed)
+    -- Проверка генерации без игры: --gencheck (итог — строка GENCHECK в логе).
+    if LaunchFlag("gencheck") then log(G.selfCheck()); W.chunks = {} end
     A.build()
     Inv.init(loaded and loaded.inventory)
     C.edits = loaded and loaded.edits or {}
@@ -139,10 +141,26 @@ end
 function OnStart(entity)
 end
 
+-- Запуск не удался — одна понятная ошибка, а не поток следствий: без
+-- интерфейса и рук каждый кадр падал бы на nil в другом модуле, а движок
+-- снимал бы скрипт целиком, не сказав причины.
+local failed = false
+
 function OnUpdate(entity, dt)
+    if failed then return end
     if not started then
         started = true
-        startGame()
+        local ok, err = pcall(startGame)
+        if not ok then
+            failed = true
+            local hint = ""
+            if tostring(err):find("attempt to call a nil value") then
+                hint = " Плеер старше игры: нужна функция движка, которой в нём нет —"
+                    .. " скачайте свежий выпуск SAGE Craft или соберите плеер из main SAGE Engine."
+            end
+            logError("SAGE Craft не запустился: " .. tostring(err) .. "." .. hint)
+            return
+        end
     end
     dt = math.min(dt, 0.1)
 
@@ -197,10 +215,7 @@ function OnUpdate(entity, dt)
     else
         inp = Auto.active and Auto.input(dt) or readInput()
         local look = GetMouseDelta()
-        if IsMouseCaptured() then
-            P.yaw = (P.yaw - look.x * MOUSE_SENS) % 360
-            P.pitch = math.max(-89.9, math.min(89.9, P.pitch - look.y * MOUSE_SENS))
-        end
+        if IsMouseCaptured() then P.look(look.x, look.y, MOUSE_SENS) end
         for i = 1, 9 do
             if WasActionPressed("Slot " .. i) then Inv.select(i) end
         end

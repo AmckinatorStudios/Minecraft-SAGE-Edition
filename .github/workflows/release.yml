@@ -1,11 +1,23 @@
-# Выпуск SAGE Craft для Windows: свежий плеер SAGE Engine (из релиза движка
-# windows-latest) + проект игры одним архивом. Каждый пуш в main обновляет
-# релиз «latest» — ссылка на скачивание не меняется.
+# Выпуск SAGE Craft для Windows — СОБРАННАЯ ИГРА: исполняемый файл и
+# game.sagepak (проект упакован и зашифрован), без исходников проекта. Исходники
+# — это сам репозиторий (кнопка «Download ZIP» / архив исходников у релиза).
+# Собирает tools/sage_build движка — та же упаковка, что «File > Build Game»
+# в редакторе. Каждый пуш в main обновляет релиз «latest»: ссылка не меняется.
+#
+# ПЛЕЕР — НЕ СТАРШЕ ДВИЖКА, КОТОРЫЙ НУЖЕН ИГРЕ. Релиз движка собирается ~25
+# минут после пуша в его main; выпуск игры, запущенный в это окно, раньше
+# брал ПРЕЖНИЙ плеер — без новых функций, и игра падала при старте (так
+# пропали интерфейс, управление и небо). Теперь выпуск ждёт, пока
+# windows-latest догонит main движка, и не берёт плеер, в котором нет коммита
+# из engine-min.txt (его поднимают, когда игре нужно новое из движка).
+# По расписанию выпуск пересобирается, если движок обновился, а игра — нет.
 name: Выпуск игры
 
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: '17 */6 * * *'
   workflow_dispatch:
 
 permissions:
@@ -13,38 +25,77 @@ permissions:
 
 jobs:
   package:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
 
-      - name: Плеер движка
+      - name: Свежий релиз движка
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          engine=AmckinatorStudios/SAGE-Engine
+          need=$(tr -d '[:space:]' < engine-min.txt)
+          ok=""
+          for i in $(seq 1 60); do
+            main=$(gh api repos/$engine/commits/main --jq .sha)
+            built=$(gh api repos/$engine/git/refs/tags/windows-latest --jq .object.sha)
+            # behind/diverged — в собранном плеере нет нужного игре коммита.
+            has=$(gh api repos/$engine/compare/$need...$built --jq .status)
+            if [ "$built" = "$main" ] && { [ "$has" = "ahead" ] || [ "$has" = "identical" ]; }; then
+              echo "ENGINE_SHA=$built" >> "$GITHUB_ENV"
+              echo "движок $built — свежий"
+              ok=1
+              break
+            fi
+            echo "ждём релиз движка: собран $built, main $main, нужный коммит: $has"
+            sleep 60
+          done
+          test -n "$ok" || { echo "::error::релиз движка не догнал main за час"; exit 1; }
+
+      - name: Пропустить, если выпуск уже с этим движком
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          body=$(gh api repos/${{ github.repository }}/releases/tags/latest --jq .body 2>/dev/null || true)
+          if echo "$body" | grep -q "$ENGINE_SHA" && echo "$body" | grep -q "${{ github.sha }}"; then
+            echo "SKIP=1" >> "$GITHUB_ENV"
+          fi
+
+      - name: Сборка игры
+        if: env.SKIP != '1'
         run: |
           curl -fsSL -o engine.zip \
             https://github.com/AmckinatorStudios/SAGE-Engine/releases/download/windows-latest/SageEditor-Windows.zip
           mkdir engine && unzip -q engine.zip -d engine
-          player=$(find engine -iname 'SagePlayer.exe' | head -1)
-          test -n "$player" || { echo "в релизе движка нет SagePlayer.exe"; exit 1; }
-          echo "PLAYER_DIR=$(dirname "$player")" >> "$GITHUB_ENV"
-
-      - name: Архив игры
-        run: |
-          out="SAGE Craft"
-          mkdir -p "$out"
-          cp -r "$PLAYER_DIR"/. "$out/"
-          # Проект — рядом с плеером, как у «File > Build Game»: двойной щелчок
-          # по SagePlayer.exe сразу запускает игру.
-          cp -r project.sageproj scenes assets "$out/"
-          cp README.md LICENSE-Faithful.txt "$out/"
-          zip -qr SAGE-Craft-Windows.zip "$out"
+          tool=$(find engine -iname 'sage_build.exe' | head -1)
+          player=$(find engine -ipath '*runtime*' -iname 'SagePlayer.exe' | head -1)
+          test -n "$tool" || { echo "::error::в релизе движка нет sage_build.exe"; exit 1; }
+          test -n "$player" || { echo "::error::в релизе движка нет SagePlayer.exe"; exit 1; }
+          "$tool" --project . --player "$player" --out out
+          game="out/SAGE Craft"
+          test -f "$game/game.sagepak" || { echo "::error::нет game.sagepak"; exit 1; }
+          test -f "$game/SAGE Craft.exe" || { echo "::error::нет SAGE Craft.exe"; exit 1; }
+          # Лицензия набора текстур обязана ехать с игрой.
+          cp LICENSE-Faithful.txt "$game/"
+          printf '%s\r\n' "SAGE Craft — запустите «SAGE Craft.exe»." \
+            "Управление и описание: https://github.com/${{ github.repository }}" \
+            "Текстуры — Classic Faithful 32x (см. LICENSE-Faithful.txt)." > "$game/README.txt"
+          ls -la "$game"
+          (cd out && 7z a -tzip ../SAGE-Craft-Windows.zip "SAGE Craft" >/dev/null)
 
       - name: Релиз
+        if: env.SKIP != '1'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
           name: SAGE Craft — последняя сборка для Windows
           body: |
-            Распакуйте SAGE-Craft-Windows.zip в обычную папку (не запускайте из архива) и запустите SagePlayer.exe.
-            Собрано из ${{ github.sha }}. Плеер — SAGE Engine (windows-latest).
+            Распакуйте SAGE-Craft-Windows.zip и запустите «SAGE Craft.exe». Это собранная игра (game.sagepak), исходники проекта — сам репозиторий.
+            Собрано из ${{ github.sha }}. Движок SAGE Engine ${{ env.ENGINE_SHA }} (windows-latest).
             Текстуры — Classic Faithful 32x, faithfulpack.net (см. LICENSE-Faithful.txt).
           files: SAGE-Craft-Windows.zip
           make_latest: true

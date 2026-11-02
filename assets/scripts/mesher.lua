@@ -66,6 +66,21 @@ end
 
 local AO = {0.45, 0.62, 0.8, 1.0}
 
+-- Смещения в окне (см. widx) одним числом: соседа клетки ищем сложением
+-- индексов, а не вызовом функции с тремя координатами — это внутренний цикл
+-- мешера, он идёт по каждой видимой грани.
+local PADc = 18
+local function delta(dx, dy, dz) return dx + dz * PADc + dy * PADc * PADc end
+for _, f in ipairs(FACES) do
+    f.dn = delta(f.n[1], f.n[2], f.n[3])
+    f.dnb = {}
+    for k = 1, 4 do
+        local nb = f.nb[k]
+        f.dnb[k] = {delta(nb[1][1], nb[1][2], nb[1][3]), delta(nb[2][1], nb[2][2], nb[2][3]),
+                    delta(nb[3][1], nb[3][2], nb[3][3])}
+    end
+end
+
 -- Окно 18×18×18 вокруг секции: клетки самой секции и слой соседей. Читать
 -- соседей через мир на каждой грани было бы втрое дороже — здесь одна
 -- выборка на клетку.
@@ -100,20 +115,20 @@ local function batch()
     return {position = {}, normal = {}, uv = {}, uv2 = {}, index = {}, n = 0}
 end
 
-local function addQuad(b, ox, oy, oz, corners, nrm, uvs, lights, tile, flip)
+local function addQuad(b, ox, oy, oz, corners, nrm, uvs, L, tile, flip)
     local pos, nor, uv, uv2, idx = b.position, b.normal, b.uv, b.uv2, b.index
     local base = b.n
     local tu, tv, ts = A.tileOrigin(tile)
+    local nx, ny, nz = nrm[1], nrm[2], nrm[3]
     for k = 1, 4 do
         local p = corners[k]
         local pi = (base + k - 1) * 3
         pos[pi + 1] = ox + p[1]; pos[pi + 2] = oy + p[2]; pos[pi + 3] = oz + p[3]
-        nor[pi + 1] = nrm[1]; nor[pi + 2] = nrm[2]; nor[pi + 3] = nrm[3]
+        nor[pi + 1] = nx; nor[pi + 2] = ny; nor[pi + 3] = nz
         local ui = (base + k - 1) * 2
         local q = uvs[k]
         uv[ui + 1] = tu + q[1] * ts; uv[ui + 2] = tv + q[2] * ts
-        local l = lights[k]
-        uv2[ui + 1] = l[1]; uv2[ui + 2] = l[2]
+        uv2[ui + 1] = L[k * 2 - 1]; uv2[ui + 2] = L[k * 2]
     end
     local ii = #idx
     -- Диагональ квада — та, вдоль которой свет меняется меньше: иначе на
@@ -131,33 +146,30 @@ end
 local function cellLight(v) return (v >> SKY) & 15, (v >> BLK) & 15 end
 
 -- Свет четырёх углов грани: среднее по прозрачным из четырёх клеток и
--- затенение угла.
-local function cornerLights(f, x, y, z)
-    local fx, fy, fz = x + f.n[1], y + f.n[2], z + f.n[3]
-    local front = win[widx(fx, fy, fz)]
-    local s0, b0 = cellLight(front)
-    local out = {}
-    local aoSum = {}
+-- затенение угла. Пишется в общий буфер LB (небо, блоки — по углам подряд):
+-- новая таблица на каждую грань стоила бы мешеру сборщика мусора больше,
+-- чем сам подсчёт.
+local LB = {0, 0, 0, 0, 0, 0, 0, 0}
+local function cornerLights(f, wi)
+    local fi = wi + f.dn
+    local front = win[fi]
+    local s0, b0 = (front >> SKY) & 15, (front >> BLK) & 15
+    local dnb = f.dnb
     for k = 1, 4 do
-        local nb = f.nb[k]
-        local e1, e2, cn = nb[1], nb[2], nb[3]
-        local v1 = win[widx(fx + e1[1], fy + e1[2], fz + e1[3])]
-        local v2 = win[widx(fx + e2[1], fy + e2[2], fz + e2[3])]
-        local vc = win[widx(fx + cn[1], fy + cn[2], fz + cn[3])]
+        local d = dnb[k]
+        local v1, v2, vc = win[fi + d[1]], win[fi + d[2]], win[fi + d[3]]
         local o1, o2, oc = opaque[v1 & ID_MASK], opaque[v2 & ID_MASK], opaque[vc & ID_MASK]
         local sky, blk, n = s0, b0, 1
-        if not o1 then local a, b = cellLight(v1); sky = sky + a; blk = blk + b; n = n + 1 end
-        if not o2 then local a, b = cellLight(v2); sky = sky + a; blk = blk + b; n = n + 1 end
-        if not oc and not (o1 and o2) then local a, b = cellLight(vc); sky = sky + a; blk = blk + b; n = n + 1 end
-        local level
-        if o1 and o2 then level = 0
-        else level = 3 - ((o1 and 1 or 0) + (o2 and 1 or 0) + (oc and 1 or 0)) end
-        local ao = AO[level + 1]
-        out[k] = {sky / n * ao, blk / n * ao}
-        aoSum[k] = out[k][1] + out[k][2]
+        if not o1 then sky = sky + ((v1 >> SKY) & 15); blk = blk + ((v1 >> BLK) & 15); n = n + 1 end
+        if not o2 then sky = sky + ((v2 >> SKY) & 15); blk = blk + ((v2 >> BLK) & 15); n = n + 1 end
+        if not oc and not (o1 and o2) then sky = sky + ((vc >> SKY) & 15); blk = blk + ((vc >> BLK) & 15); n = n + 1 end
+        local ao
+        if o1 and o2 then ao = AO[1]
+        else ao = AO[4 - ((o1 and 1 or 0) + (o2 and 1 or 0) + (oc and 1 or 0))] end
+        LB[k * 2 - 1] = sky / n * ao
+        LB[k * 2] = blk / n * ao
     end
-    local flip = aoSum[1] + aoSum[3] < aoSum[2] + aoSum[4]
-    return out, flip
+    return LB[1] + LB[2] + LB[5] + LB[6] < LB[3] + LB[4] + LB[7] + LB[8]
 end
 
 -- Должна ли грань блока id рисоваться против соседа nid.
@@ -183,9 +195,15 @@ local CROSS_UV = {{0, 0}, {1, 0}, {1, 1}, {0, 1}}
 -- Факел — столбик 2/16 × 10/16, текстура — его середина.
 local T0, T1, TH = 7 / 16, 9 / 16, 10 / 16
 
-local function emitCross(b, x, y, z, v, tile)
+local LT = {0, 0, 0, 0, 0, 0, 0, 0}
+local function flatLight(v)
     local s, l = cellLight(v)
-    local lt = {{s, l}, {s, l}, {s, l}, {s, l}}
+    for k = 1, 4 do LT[k * 2 - 1] = s; LT[k * 2] = l end
+    return LT
+end
+
+local function emitCross(b, x, y, z, v, tile)
+    local lt = flatLight(v)
     for _, q in ipairs(CROSS) do
         addQuad(b, x, y, z, q, {0, 1, 0}, CROSS_UV, lt, tile, false)
         -- Обратная сторона — своими треугольниками: материал с отсечением
@@ -195,8 +213,7 @@ local function emitCross(b, x, y, z, v, tile)
 end
 
 local function emitTorch(b, x, y, z, v, tile)
-    local s, l = cellLight(v)
-    local lt = {{s, l}, {s, l}, {s, l}, {s, l}}
+    local lt = flatLight(v)
     for fi = 1, 6 do
         local f = FACES[fi]
         if fi ~= 2 then
@@ -240,16 +257,19 @@ function M.build(cx, sy, cz)
                     elseif kind ~= 0 then
                         local b = kind == 4 and liquid or solid
                         local inset = B.byId[id].inset
+                        local wi = rowBase + x + 1
                         for fi = 1, 6 do
                             local f = FACES[fi]
-                            local nv = win[widx(x + f.n[1], y + f.n[2], z + f.n[3])]
-                            local nid = nv & ID_MASK
-                            local show = faceVisible(id, kind, nid)
+                            local nid = win[wi + f.dn] & ID_MASK
+                            local show
+                            if nid == 0 then show = true
+                            elseif opaque[nid] then show = false
+                            else show = faceVisible(id, kind, nid) end
                             if inset and fi > 2 then show = true end
                             if show then
-                                local lights, flip = cornerLights(f, x, y, z)
+                                local flip = cornerLights(f, wi)
                                 local corners = f.c
-                                if kind == 4 and fi == 1 and (win[widx(x, y + 1, z)] & ID_MASK) ~= id then
+                                if kind == 4 and fi == 1 and (win[wi + FACES[1].dn] & ID_MASK) ~= id then
                                     -- Гладь чуть ниже края блока — так вода читается водой.
                                     corners = {}
                                     for k = 1, 4 do local p = f.c[k]; corners[k] = {p[1], 0.875, p[3]} end
@@ -264,7 +284,7 @@ function M.build(cx, sy, cz)
                                         corners[k] = q
                                     end
                                 end
-                                addQuad(b, x, y, z, corners, f.n, f.uv, lights, tiles[f.tile], flip)
+                                addQuad(b, x, y, z, corners, f.n, f.uv, LB, tiles[f.tile], flip)
                             end
                         end
                     end
