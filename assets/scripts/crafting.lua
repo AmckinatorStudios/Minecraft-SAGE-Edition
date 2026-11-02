@@ -7,8 +7,8 @@
 -- зеркальном виде — тоже. Бесформенный рецепт (shapeless) смотрит только на
 -- набор предметов.
 --
--- size = 3 — только на верстаке; size = 2 — и в рюкзаке. Рецепты печи
--- (furnace = true) работают на верстаке, если рядом стоит печь.
+-- size = 3 — только на верстаке; size = 2 — и в рюкзаке. Переплавка — не
+-- рецепт сетки, а печь (furnace.lua): R.SMELT и R.FUEL ниже.
 -- ---------------------------------------------------------------------------
 local B = require "blocks"
 
@@ -66,10 +66,20 @@ for _, t in ipairs(TIERS) do
     shaped(t.prefix .. "_sword", 1, {"M", "M", "S"}, {M = t.mat, S = "stick"})
 end
 
--- Переплавка — у печи: руда (или песок, глина, булыжник) над углём.
-for ore, out in pairs({iron_ore = "iron_ingot", gold_ore = "gold_ingot", sand = "glass",
-                       cobblestone = "stone", clay = "brick"}) do
-    shaped(out, 1, {"O", "C"}, {O = ore, C = "coal"}, {furnace = true})
+-- Переплавка в печи: что положили сверху -> что выйдет справа.
+R.SMELT = {}
+for from, to in pairs({iron_ore = "iron_ingot", gold_ore = "gold_ingot", sand = "glass",
+                       cobblestone = "stone", clay = "brick", log = "coal", birch_log = "coal"}) do
+    R.SMELT[id(from)] = id(to)
+end
+
+-- Топливо: сколько секунд горит одна штука (как в Minecraft: уголь — 80 с,
+-- то есть восемь переплавок по 10 с; дерево — 15 с, палка — 5 с).
+R.FUEL = {}
+for name, sec in pairs({coal = 80, coal_block = 800, log = 15, birch_log = 15, planks = 15,
+                        birch_planks = 15, stick = 5, crafting_table = 15, bookshelf = 15,
+                        wood_pickaxe = 10, wood_axe = 10, wood_shovel = 10, wood_sword = 10}) do
+    if B.byName[name] then R.FUEL[id(name)] = sec end
 end
 
 -- Раскладка сетки -> обрезанная таблица строк имён (или nil — пусто).
@@ -136,12 +146,12 @@ local function shapelessMatches(r, grid, size)
     return count == #r.items
 end
 
--- Что получится из раскладки. ctx = {size = 2|3, furnace = bool}.
+-- Что получится из раскладки. ctx = {size = 2|3}.
 function R.match(grid, ctx)
     local cells = trim(grid, ctx.size)
     if not cells then return nil end
     for _, r in ipairs(list) do
-        if r.size <= ctx.size and (not r.furnace or ctx.furnace) then
+        if r.size <= ctx.size then
             if r.rows then
                 if shapeMatches(r, cells, false) or shapeMatches(r, cells, true) then return r end
             elseif shapelessMatches(r, grid, ctx.size) then
