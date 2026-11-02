@@ -28,7 +28,7 @@ function S.load()
     end
     data.edits = edits
     if data.gen ~= S.GEN then
-        log("SAGE Craft: сохранение от прежней генерации мира — мир строится заново, рюкзак сохранён")
+        log("SAGE Craft: save is from an older world generation — rebuilding the world, inventory kept")
         data.edits, data.player, data.seed, data.furnaces = {}, nil, nil, nil
     end
     S.data = data

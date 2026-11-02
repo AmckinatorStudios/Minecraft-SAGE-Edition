@@ -124,7 +124,7 @@ function Avatar.nextSkin()
     if #skins == 0 then return end
     Avatar.skinIndex = Avatar.skinIndex % #skins + 1
     applySkin()
-    log("Скин: " .. skins[Avatar.skinIndex].path)
+    log("Skin: " .. skins[Avatar.skinIndex].path)
 end
 
 local function rot(name, x, y, z)

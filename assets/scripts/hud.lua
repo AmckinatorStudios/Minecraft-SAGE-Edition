@@ -99,7 +99,7 @@ function Hud.init()
     bg.Stretch = UIStretch.Both
     bg.Rounding = 0
     U.label(lp, "Loading Title", UIAnchor.Center, 0, -20, 500, 40, "SAGE Craft", 2.6, true)
-    local _, sub = U.label(lp, "Loading Text", UIAnchor.Center, 0, 24, 500, 24, "Строим мир…", 1.3, true)
+    local _, sub = U.label(lp, "Loading Text", UIAnchor.Center, 0, 24, 500, 24, "Generating world…", 1.3, true)
     sub.TextColor = U.MUTED
     loadPanel = lp
 end
@@ -176,8 +176,8 @@ function Hud.update(dt)
         for _ in pairs(C.objects) do secs = secs + 1 end
         local bx, by, bz = math.floor(P.pos.x), math.floor(P.pos.y), math.floor(P.pos.z)
         debugLabel.Text = string.format(
-            "SAGE Craft   %.0f кадр/с\nXYZ: %.2f / %.2f / %.2f\nБлок: %d %d %d   участок %d %d\n" ..
-            "Свет: небо %d, блоки %d   день %.2f\nВзгляд: %.1f / %.1f\nУчастков %d, секций %d, дальность %d\nВремя суток %.3f",
+            "SAGE Craft   %.0f fps\nXYZ: %.2f / %.2f / %.2f\nBlock: %d %d %d   chunk %d %d\n" ..
+            "Light: sky %d, block %d   day %.2f\nFacing: %.1f / %.1f\nChunks %d, sections %d, view %d\nTime of day %.3f",
             fps, P.pos.x, P.pos.y, P.pos.z, bx, by, bz, bx // 16, bz // 16,
             W.sky(bx, by + 1, bz), W.blockLight(bx, by + 1, bz), Sky.daylight,
             P.yaw, P.pitch, n, secs, C.radius, Sky.time)
