@@ -40,6 +40,10 @@ end
 
 -- Сценарий: {секунды, ввод, действия}.
 local SCRIPT = {
+    -- Бег: одно нажатие Ctrl, дальше только «вперёд» — бег держится сам.
+    {0.1, {forward = 1, strafe = 0, sprintPressed = true}, {}},
+    {1.2, {forward = 1, strafe = 0}, {sprintCheck = true}},
+    {0.3, {forward = 0, strafe = 0}, {stopCheck = true}},
     {2.0, {forward = 1, strafe = 0}, {}},
     {1.0, {forward = 1, strafe = 0, jump = true}, {}},
     {1.5, {forward = 0, strafe = 1}, {}},
@@ -77,6 +81,17 @@ function Auto.update(dt)
     Auto.frames = (Auto.frames or 0) + 1
     Auto.time = (Auto.time or 0) + dt
     if s and s[3].look and t == 0 then P.pitch = s[3].look end
+    -- Конец этапа бега: бег включён без зажатого Ctrl, скорость — 5.612 (или
+    -- игрок в воде либо упёрся в стену — тогда бег честно сбит, это не ошибка).
+    if s and s[3].sprintCheck and t + dt >= s[1] then
+        local sp = math.sqrt(P.vel.x * P.vel.x + P.vel.z * P.vel.z)
+        Auto.sprintSpeed = sp
+        Auto.sprintOk = (P.sprinting and math.abs(sp - 5.612) < 0.15)
+            or (not P.sprinting and (P.inWater or P.blocked))
+    end
+    if s and s[3].stopCheck and t + dt >= s[1] then
+        Auto.stopOk = not P.sprinting
+    end
     t = t + dt
     if s and t >= s[1] then
         t = 0
@@ -93,9 +108,10 @@ function Auto.update(dt)
             -- поменяться, а экран — нет (так было при отрицательных координатах).
             local rebuilt = require("chunks").stats.rebuilt or 0
             local ok = st.broken >= 1 and st.picked >= 1 and st.placed >= 1 and chunks > 0 and Auto.lookOk
+                and Auto.sprintOk and Auto.stopOk
                 and rebuilt >= st.broken + st.placed
-            log(string.format("AUTOPILOT: %s участков=%d сломано=%d подобрано=%d поставлено=%d пересобрано=%d кадров_в_с=%.0f обзор=%s позиция=%.1f,%.1f,%.1f",
-                ok and "PASS" or "FAIL", chunks, st.broken, st.picked, st.placed, rebuilt, Auto.frames / math.max(Auto.time, 0.001), Auto.lookOk and "верно" or "ПЕРЕВЁРНУТ", P.pos.x, P.pos.y, P.pos.z))
+            log(string.format("AUTOPILOT: %s участков=%d сломано=%d подобрано=%d поставлено=%d пересобрано=%d кадров_в_с=%.0f бег=%.2f обзор=%s позиция=%.1f,%.1f,%.1f",
+                ok and "PASS" or "FAIL", chunks, st.broken, st.picked, st.placed, rebuilt, Auto.frames / math.max(Auto.time, 0.001), Auto.sprintSpeed or 0, Auto.lookOk and "верно" or "ПЕРЕВЁРНУТ", P.pos.x, P.pos.y, P.pos.z))
             if LaunchFlag("quit") then game.Quit() end
             Auto.active = false
         end

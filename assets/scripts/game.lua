@@ -24,6 +24,7 @@ local Save   = require "save"
 local Auto   = require "autopilot"
 local Furn   = require "furnace"
 local Menu   = require "menu"
+local Fall   = require "falling"
 
 local playerObj, cameraObj
 local started = false
@@ -61,7 +62,7 @@ local function readInput()
     inp.jump = IsActionDown("Jump")
     inp.sneak = IsActionDown("Sneak")
     inp.descend = inp.sneak
-    inp.sprint = IsActionDown("Sprint")
+    inp.sprintPressed = WasActionPressed("Sprint")
     return inp
 end
 
@@ -105,6 +106,7 @@ local function startGame()
     local loaded = Save.load()
     if loaded and loaded.seed then seed = loaded.seed end
     G.init(seed)
+    A.build()
     -- Проверка генерации без игры: --gencheck (итог — строка GENCHECK в логе).
     if LaunchFlag("gencheck") then
         log(G.selfCheck())
@@ -137,12 +139,30 @@ local function startGame()
             local outOk = W.get(fx, fy, fz) == B.byName.furnace.id
             log(string.format("FURNACECHECK: %s горит=%s слитков=%d погасла=%s",
                 (litOk and smeltOk and outOk) and "PASS" or "FAIL", tostring(litOk), out and out.n or 0, tostring(outOk)))
+            -- Падение: столб из двух песков в 6 клетках над землёй (под ним
+            -- пусто) летит вниз телом и ложится на землю; за первые 5 тиков —
+            -- ровно столько, сколько даёт физика Minecraft (разгон, не скачок).
+            local sx, sz = 12, 12
+            local ground = W.surface(sx, sz)
+            local top = ground + 7
+            local sand = B.byName.sand.id
+            Act.setBlock(sx, top, sz, sand)
+            Act.setBlock(sx, top + 1, sz, sand)
+            Act.settle(sx, top - 1, sz)
+            local inFlight = Fall.count() == 2 and W.get(sx, top, sz) == 0
+            local expect, vy = 0, 0
+            for _ = 1, 5 do vy = (vy - 0.04) * 0.98; expect = expect + vy end
+            for _ = 1, 5 do Fall.update(0.05) end
+            local smooth = inFlight and Fall.count() == 2
+            for _ = 1, 200 do Fall.update(0.05) end
+            local landed = Fall.count() == 0 and W.get(sx, ground + 1, sz) == sand and W.get(sx, ground + 2, sz) == sand
+            log(string.format("FALLCHECK: %s в_полёте=%s за_5_тиков=%.3f лёг=%s",
+                (inFlight and smooth and landed) and "PASS" or "FAIL", tostring(inFlight), expect, tostring(landed)))
         end
         W.chunks = {}
         local miss = Inv.checkLayout()
         log(string.format("UICHECK: %s клеток_мимо=%d", miss == 0 and "PASS" or "FAIL", miss))
     end
-    A.build()
     Inv.init(loaded and loaded.inventory)
     C.edits = loaded and loaded.edits or {}
     Furn.load(loaded and loaded.furnaces)
@@ -268,6 +288,7 @@ function OnUpdate(entity, dt)
         P.yaw = (P.yaw + dt * 3) % 360
         P.pitch = 8
         C.update(P.pos.x, P.pos.z, C.budgetMs)
+        Fall.update(dt)
         Furn.update(dt)
         Sky.update(dt, P)
         Clouds.update(dt, P)
@@ -318,6 +339,7 @@ function OnUpdate(entity, dt)
 
     if not Inv.screenOpen then Act.update(dt, Auto.active and Auto.actions() or nil) end
     Drops.update(dt)
+    Fall.update(dt)
     Furn.update(dt)
     Sky.update(dt, P)
     Clouds.update(dt, P)

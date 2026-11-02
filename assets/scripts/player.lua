@@ -27,7 +27,9 @@ P.fallStart = nil
 
 local GRAVITY = 32
 local JUMP = 9.0
-local WALK, SPRINT, SNEAK, FLY = 4.3, 5.6, 1.3, 10.9
+-- Скорости Minecraft, блоков в секунду: шаг 4.317, бег 5.612, присед
+-- 1.31, полёт 10.92.
+local WALK, SPRINT, SNEAK, FLY = 4.317, 5.612, 1.31, 10.92
 local solid = B.solid
 
 local function blocked(x, y, z)
@@ -79,18 +81,25 @@ end
 
 local function liquidAt(x, y, z) return B.drawKind[W.get(math.floor(x), math.floor(y), math.floor(z))] == 4 end
 
--- input: forward, strafe (−1..1), jump, sneak, sprint (bool); dt — шаг.
+-- input: forward, strafe (−1..1), jump, sneak, sprintPressed (нажали Ctrl
+-- в этом кадре); dt — шаг.
+--
+-- Бег — как в Minecraft: Ctrl НАЖИМАЮТ, а не держат. Нажатие при движении
+-- вперёд включает бег, и он держится сам, пока игрок идёт вперёд; сбивают его
+-- остановка (отпустили «вперёд»), присед и упор в стену.
 -- Возвращает высоту падения, если игрок только что приземлился (для урона).
 function P.update(input, dt)
     local p, v = P.pos, P.vel
     P.inWater = liquidAt(p.x, p.y + 0.4, p.z)
     P.headInWater = liquidAt(p.x, p.y + (P.sneaking and P.EYE_SNEAK or P.EYE), p.z)
     P.sneaking = input.sneak and not P.flying
-    P.sprinting = input.sprint and input.forward > 0 and not P.sneaking
+    if input.sprintPressed and input.forward > 0 then P.sprinting = true end
+    -- В воде не бегают (как в Minecraft 1.7): плывут шагом.
+    if input.forward <= 0 or P.sneaking or (P.inWater and not P.flying) then P.sprinting = false end
 
     local speed = P.flying and FLY or (P.sneaking and SNEAK or (P.sprinting and SPRINT or WALK))
     if P.inWater and not P.flying then speed = speed * 0.55 end
-    if P.flying and input.sprint then speed = speed * 2 end
+    if P.flying and P.sprinting then speed = speed * 2 end
 
     local sy, cy = math.sin(math.rad(P.yaw)), math.cos(math.rad(P.yaw))
     -- Вперёд — к −Z при yaw = 0 (так смотрит камера движка).
@@ -130,13 +139,17 @@ function P.update(input, dt)
     else
         P.onGround = false
     end
+    local blocked = false
     if not moveAxis("x", v.x * dt) then
         -- Шаг на блок вверх в воде (выбраться на берег).
-        if P.inWater and moveAxis("y", 1.05) and moveAxis("x", v.x * dt) then else v.x = 0 end
+        if P.inWater and moveAxis("y", 1.05) and moveAxis("x", v.x * dt) then else v.x = 0; blocked = true end
     end
     if not moveAxis("z", v.z * dt) then
-        if P.inWater and moveAxis("y", 1.05) and moveAxis("z", v.z * dt) then else v.z = 0 end
+        if P.inWater and moveAxis("y", 1.05) and moveAxis("z", v.z * dt) then else v.z = 0; blocked = true end
     end
+    -- Упёрся в стену — бег сбит (как в Minecraft).
+    P.blocked = blocked
+    if blocked and P.sprinting and not P.flying then P.sprinting = false end
     if P.flying and P.onGround then P.flying = false end
 
     local dx, dz = p.x - beforeX, p.z - beforeZ
