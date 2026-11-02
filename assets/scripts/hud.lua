@@ -11,6 +11,9 @@ local hearts, foods, xpFill, xpLabel = {}, {}, nil, nil
 local ICONS = "assets/ui/icons.png"
 Hud.health = 20
 Hud.food = 20
+-- Голод выключен, пока в игре почти нечего есть: без полоски еды, сытость
+-- не тратится, здоровье восстанавливается само. Включить — true.
+Hud.HUNGER = false
 Hud.xp, Hud.level = 0, 0
 
 -- Сердца и еда — значки набора текстур (icons.png): пустая ячейка снизу и
@@ -25,9 +28,11 @@ function Hud.buildIcons()
         U.sprite(root, "Heart Back " .. i, UIAnchor.BottomCenter, hx, y, 9 * S, 9 * S, ICONS, "heart_empty")
         local h = U.sprite(root, "Heart " .. i, UIAnchor.BottomCenter, hx, y, 9 * S, 9 * S, ICONS, "heart_full")
         hearts[i] = {obj = h, shown = ""}
-        U.sprite(root, "Food Back " .. i, UIAnchor.BottomCenter, fx, y, 9 * S, 9 * S, ICONS, "food_empty")
-        local f = U.sprite(root, "Food " .. i, UIAnchor.BottomCenter, fx, y, 9 * S, 9 * S, ICONS, "food_full")
-        foods[i] = {obj = f, shown = ""}
+        if Hud.HUNGER then
+            U.sprite(root, "Food Back " .. i, UIAnchor.BottomCenter, fx, y, 9 * S, 9 * S, ICONS, "food_empty")
+            local f = U.sprite(root, "Food " .. i, UIAnchor.BottomCenter, fx, y, 9 * S, 9 * S, ICONS, "food_full")
+            foods[i] = {obj = f, shown = ""}
+        end
     end
     U.sprite(root, "XP Back", UIAnchor.BottomCenter, 0, 22 * S + 1 * S, 182 * S, 5 * S, ICONS, "xp_back")
     local xfo, xf = U.sprite(root, "XP Fill", UIAnchor.BottomCenter, 0, 22 * S + 1 * S, 182 * S, 5 * S, ICONS, "xp_fill")
@@ -68,7 +73,7 @@ end
 
 -- Еда: восстанавливает сытость.
 function Hud.eat(n)
-    if Hud.food >= 20 then return false end
+    if not Hud.HUNGER or Hud.food >= 20 then return false end
     Hud.food = math.min(20, Hud.food + n)
     return true
 end
@@ -132,17 +137,20 @@ function Hud.update(dt)
     -- Сытость тратится на движение (бег и прыжки — больше), здоровье
     -- восстанавливается, только пока игрок сыт; голод отнимает здоровье.
     local P = require "player"
-    local speed = math.sqrt(P.vel.x * P.vel.x + P.vel.z * P.vel.z)
-    Hud.exhaust = (Hud.exhaust or 0) + dt * (0.01 + speed * (P.sprinting and 0.03 or 0.012))
-    if Hud.exhaust >= 1 then Hud.exhaust = 0; Hud.food = math.max(0, Hud.food - 1) end
+    if Hud.HUNGER then
+        local speed = math.sqrt(P.vel.x * P.vel.x + P.vel.z * P.vel.z)
+        Hud.exhaust = (Hud.exhaust or 0) + dt * (0.01 + speed * (P.sprinting and 0.03 or 0.012))
+        if Hud.exhaust >= 1 then Hud.exhaust = 0; Hud.food = math.max(0, Hud.food - 1) end
+    end
     Hud.regen = (Hud.regen or 0) + dt
     if Hud.regen > 4 then
         Hud.regen = 0
-        if Hud.food >= 18 and Hud.health < 20 then Hud.health = Hud.health + 1
-        elseif Hud.food == 0 and Hud.health > 1 then Hud.damage(1) end
+        local fed = not Hud.HUNGER or Hud.food >= 18
+        if fed and Hud.health < 20 then Hud.health = Hud.health + 1
+        elseif Hud.HUNGER and Hud.food == 0 and Hud.health > 1 then Hud.damage(1) end
     end
     setRow(hearts, Hud.health, "heart")
-    setRow(foods, Hud.food, "food")
+    if Hud.HUNGER then setRow(foods, Hud.food, "food") end
     local need = 10 + Hud.level * 2
     -- Заливка — кусок картинки той же ширины, что доля опыта.
     local frac = Hud.xp / need

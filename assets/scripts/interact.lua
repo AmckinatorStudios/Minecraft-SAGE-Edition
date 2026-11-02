@@ -50,7 +50,10 @@ local function outlineMesh()
     return m
 end
 
-local function crackMesh(stage)
+-- Трещина освещена как сам блок: свет каждой грани — из клетки перед ней
+-- (тот же, что у грани участка). С постоянным 15/15 она светилась в тёмной
+-- пещере белым узором поверх чёрного камня.
+local function crackMesh(stage, bx, by, bz)
     local tu, tv, ts = A.tileOrigin(A.destroyTile[stage])
     local pos, nrm, uv, uv2, idx = {}, {}, {}, {}, {}
     local e = 0.004
@@ -65,12 +68,17 @@ local function crackMesh(stage)
     local quv = {{0, 0}, {1, 0}, {1, 1}, {0, 1}}
     local nv = 0
     for _, f in ipairs(faces) do
+        local sky, blk = 15, 15
+        if bx then
+            local v = W.raw(bx + f.n[1], by + f.n[2], bz + f.n[3])
+            if v then sky, blk = (v >> W.SKY_SHIFT) & 15, (v >> W.BLK_SHIFT) & 15 end
+        end
         for k = 1, 4 do
             local p = f[k]
             for a = 1, 3 do pos[#pos + 1] = p[a] * (1 + 2 * e) - e end
             for a = 1, 3 do nrm[#nrm + 1] = f.n[a] end
             uv[#uv + 1] = tu + quv[k][1] * ts; uv[#uv + 1] = tv + quv[k][2] * ts
-            uv2[#uv2 + 1] = 15; uv2[#uv2 + 1] = 15
+            uv2[#uv2 + 1] = sky; uv2[#uv2 + 1] = blk
         end
         for _, i in ipairs({1, 2, 3, 1, 3, 4}) do idx[#idx + 1] = nv + i end
         nv = nv + 4
@@ -80,7 +88,17 @@ local function crackMesh(stage)
     return m
 end
 
-local crackMeshes = {}
+-- Меш трещины пересобирается, только когда сменились стадия или блок.
+local crackKey
+local function showCrack(stage, t)
+    local key = stage .. ":" .. t.x .. ":" .. t.y .. ":" .. t.z
+    if key ~= crackKey then
+        crackKey = key
+        crackMesh(stage, t.x, t.y, t.z).apply(crack)
+        SetMaterial(crack, "assets/materials/crack.sagemat")
+    end
+    crack.Transform.Position = Vec3(t.x, t.y, t.z)
+end
 
 function Act.init()
     outline = SpawnObject("Block Outline")
@@ -89,8 +107,7 @@ function Act.init()
     SetMaterial(outline, "sagecraft_outline")
     outline.Transform.Position = Vec3(0, -100, 0)
     crack = SpawnObject("Block Crack")
-    for s = 0, 9 do crackMeshes[s] = crackMesh(s) end
-    crackMeshes[0].apply(crack)
+    crackMesh(0).apply(crack)
     SetMaterial(crack, "assets/materials/crack.sagemat")
     crack.Transform.Position = Vec3(0, -100, 0)
 end
@@ -205,9 +222,7 @@ function Act.update(dt, actions)
 
     if Act.forceCrack and target then
         -- Отладка снимков: показать трещину этой стадии на блоке под прицелом.
-        crackMeshes[Act.forceCrack].apply(crack)
-        SetMaterial(crack, "assets/materials/crack.sagemat")
-        crack.Transform.Position = Vec3(target.x, target.y, target.z)
+        showCrack(Act.forceCrack, target)
     end
     if target then
         outline.Transform.Position = Vec3(target.x, target.y, target.z)
@@ -223,12 +238,8 @@ function Act.update(dt, actions)
         mining.t = mining.t + dt
         local need = Act.breakTime(target.id)
         local stage = math.min(9, math.floor(mining.t / need * 10))
-        if stage ~= mining.stage then
-            mining.stage = stage
-            crackMeshes[stage].apply(crack)
-            SetMaterial(crack, "assets/materials/crack.sagemat")
-        end
-        crack.Transform.Position = Vec3(target.x, target.y, target.z)
+        mining.stage = stage
+        showCrack(stage, target)
         if mining.t >= need then
             breakBlock(target)
             mining = nil

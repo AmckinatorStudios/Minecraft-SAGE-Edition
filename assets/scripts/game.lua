@@ -106,6 +106,20 @@ local function startGame()
     -- Проверка генерации без игры: --gencheck (итог — строка GENCHECK в логе).
     if LaunchFlag("gencheck") then
         log(G.selfCheck())
+        -- Свет факела в открытом воздухе: 14, 13, … — по одному за клетку.
+        -- (Очередь волны с дырой обрывала свет через три клетки.)
+        do
+            local c = W.chunk(0, 0)
+            L.lightChunk(c)
+            local x, z = 8, 8
+            local y = W.surface(x, z) + 2
+            W.setId(x, y, z, B.byName.torch.id)
+            L.update(x, y, z)
+            local bad = 0
+            for d = 0, 10 do if W.blockLight(x, y + d, z) ~= 14 - d then bad = bad + 1 end end
+            log(string.format("LIGHTCHECK: %s мимо=%d (на 6 клеток выше факела %d)",
+                bad == 0 and "PASS" or "FAIL", bad, W.blockLight(x, y + 6, z)))
+        end
         W.chunks = {}
         local miss = Inv.checkLayout()
         log(string.format("UICHECK: %s клеток_мимо=%d", miss == 0 and "PASS" or "FAIL", miss))
@@ -192,6 +206,13 @@ function OnUpdate(entity, dt)
                 Inv.grid = {{id = pl, n = 1}, {id = pl, n = 1}, {id = pl, n = 1}, nil, {id = st, n = 1}, nil, nil, {id = st, n = 1}}
             end
             if LaunchArg("crack") and LaunchArg("crack") ~= "" then Act.forceCrack = tonumber(LaunchArg("crack")) end
+            -- Для снимков: выпавшее бревно и кирка перед игроком.
+            if LaunchFlag("dropdemo") then
+                local dx, _, dz = P.lookDir()
+                local x, z = P.pos.x + dx * 3.5, P.pos.z + dz * 3.5
+                Drops.spawn(B.byName.log.id, 1, x, P.pos.y + 0.6, z, 0, 0, 0)
+                Drops.spawn(B.byName.stone_pickaxe.id, 1, x + dz * 0.5, P.pos.y + 0.6, z - dx * 0.5, 0, 0, 0)
+            end
             if LaunchArg("slot") and LaunchArg("slot") ~= "" then Inv.select(tonumber(LaunchArg("slot"))) end
             local n = 0
             for _ in pairs(W.chunks) do n = n + 1 end

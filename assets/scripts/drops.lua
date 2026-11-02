@@ -23,30 +23,25 @@ function D.init()
     material(ICON_MAT, {texture = A.ICONS, unlit = true, cutoff = 0.5, double_sided = true, nearest = true})
 end
 
-local FACES = {
-    {{0,1,0},{0,1,1},{1,1,1},{1,1,0}, n = {0,1,0}, t = "top"},
-    {{0,0,0},{1,0,0},{1,0,1},{0,0,1}, n = {0,-1,0}, t = "bottom"},
-    {{1,0,0},{1,1,0},{1,1,1},{1,0,1}, n = {1,0,0}, t = "side"},
-    {{0,0,0},{0,0,1},{0,1,1},{0,1,0}, n = {-1,0,0}, t = "side"},
-    {{0,0,1},{1,0,1},{1,1,1},{0,1,1}, n = {0,0,1}, t = "front"},
-    {{0,0,0},{0,1,0},{1,1,0},{1,0,0}, n = {0,0,-1}, t = "side"},
-}
-local QUV = {{0, 0}, {1, 0}, {1, 1}, {0, 1}}
+local M = require "mesher"
 
 -- Кубик с центром в нуле: size — сторона; sub — доля плитки (крошки берут
--- кусочек текстуры, а не всю).
+-- кусочек текстуры, а не всю). Развёртка граней — мешера (M.FACES): своя
+-- одна на все грани поворачивала и зеркалила текстуру боков (у бревна кольца
+-- ложились поперёк коры).
 local function cubeMesh(id, size, sub, su, sv)
     local tiles = A.blockTiles[id]
     local pos, nrm, uv, uv2, idx = {}, {}, {}, {}, {}
     local nv = 0
-    for _, f in ipairs(FACES) do
-        local tu, tv, ts = A.tileOrigin(tiles[f.t])
+    for _, f in ipairs(M.FACES) do
+        local tu, tv, ts = A.tileOrigin(tiles[f.tile])
         for k = 1, 4 do
-            local p = f[k]
+            local p = f.c[k]
             for a = 1, 3 do pos[#pos + 1] = (p[a] - 0.5) * size end
             for a = 1, 3 do nrm[#nrm + 1] = f.n[a] end
-            uv[#uv + 1] = tu + (su + QUV[k][1] * sub) * ts
-            uv[#uv + 1] = tv + (sv + QUV[k][2] * sub) * ts
+            local q = f.uv[k]
+            uv[#uv + 1] = tu + (su + q[1] * sub) * ts
+            uv[#uv + 1] = tv + (sv + q[2] * sub) * ts
             uv2[#uv2 + 1] = 15; uv2[#uv2 + 1] = 0
         end
         for _, i in ipairs({1, 2, 3, 1, 3, 4}) do idx[#idx + 1] = nv + i end
@@ -78,15 +73,18 @@ end
 D.cubeMesh = function(id, size) return cubeMesh(id, size, 1, 0, 0) end
 D.iconMesh = iconMesh
 
--- Объёмный предмет: его иконка, выдавленная в толщину в пиксель исходной
--- картинки (иконка — вдвое крупнее, поэтому depth = 2). Торцы — цветом своих
--- пикселей. Свет — полный (uv2 = 15): яркость задаёт день и сторона грани.
+-- Объёмный предмет: его иконка, выдавленная в толщину 1/16 предмета — как у
+-- Minecraft (пиксель картинки 16×16). Набор текстур 32×32, иконка — 64, так
+-- что толщина — 4 пикселя иконки; в пикселях она считается от размера иконки,
+-- а не задана числом, чтобы не зависеть от разрешения набора. Торцы — цветом
+-- своих пикселей. Свет — полный (uv2 = 15): яркость задаёт день и сторона.
+local DEPTH = math.max(1, A.ICON // 16)
 local extruded = {}
 function D.itemMesh(id, size)
     local key = id .. ":" .. size
     if extruded[key] then return extruded[key] end
     local x, y, w, h = A.iconRect(id)
-    local m = extrude(A.iconCanvas, {x = x, y = y, w = w, h = h, depth = 2, cutoff = 0.1})
+    local m = extrude(A.iconCanvas, {x = x, y = y, w = w, h = h, depth = DEPTH, cutoff = 0.1})
     for i = 1, m.vertices do m.set_uv2(i, 15, 0) end
     m.scale(size)
     extruded[key] = m

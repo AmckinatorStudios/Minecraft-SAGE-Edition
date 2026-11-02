@@ -286,7 +286,7 @@ function G.selfCheck()
     local heightBad, worldBad, n = 0, 0, 0
     -- Доля руды в толще: камня должно быть подавляюще больше, чем угля.
     -- (Хэш, понятый как целое, давал уголь вместо всего камня.)
-    local stone, coal = 0, 0
+    local stone, coal, iron = 0, 0, 0
     for cx = -1, 1 do
         for cz = -1, 1 do
             local c = W.chunk(cx, cz)
@@ -294,7 +294,9 @@ function G.selfCheck()
                 for lz = 0, 15 do
                     for lx = 0, 15 do
                         local id = getLocal(c, lx, y, lz)
-                        if id == STONE then stone = stone + 1 elseif id == COAL then coal = coal + 1 end
+                        if id == STONE then stone = stone + 1
+                        elseif id == COAL then coal = coal + 1
+                        elseif id == IRON then iron = iron + 1 end
                     end
                 end
             end
@@ -353,9 +355,9 @@ function G.selfCheck()
         end
     end
     local coalShare = coal / math.max(1, stone + coal)
-    local ok = coalShare < 0.05 and stone > 0 and heightBad == 0 and worldBad == 0 and broken == 0 and cut == 0 and crossed > 0 and close == 0 and borderGrass > 0 and #trees > 0
-    return string.format("GENCHECK: %s столбов=%d высота_мимо=%d мир_мимо=%d деревьев=%d сломано=%d тесно=%d через_границу=%d срезано=%d трава_у_края=%d трава_внутри=%d угля=%.1f%%",
-        ok and "PASS" or "FAIL", n, heightBad, worldBad, #trees, broken, close, crossed, cut, borderGrass, innerGrass, coalShare * 100)
+    local ok = coalShare < 0.05 and stone > 0 and iron > 0 and heightBad == 0 and worldBad == 0 and broken == 0 and cut == 0 and crossed > 0 and close == 0 and borderGrass > 0 and #trees > 0
+    return string.format("GENCHECK: %s столбов=%d высота_мимо=%d мир_мимо=%d деревьев=%d сломано=%d тесно=%d через_границу=%d срезано=%d трава_у_края=%d трава_внутри=%d угля=%.1f%% железа=%d",
+        ok and "PASS" or "FAIL", n, heightBad, worldBad, #trees, broken, close, crossed, cut, borderGrass, innerGrass, coalShare * 100, iron)
 end
 
 -- Точка спавна: ближайший к нулю сухой столб над уровнем моря, не под деревом.

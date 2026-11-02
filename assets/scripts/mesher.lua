@@ -295,4 +295,8 @@ function M.build(cx, sy, cz)
     return solid, liquid
 end
 
+-- Грани с развёрткой — для всех, кто строит кубик блока вне мира (выпавший
+-- блок, крошки): та же раскладка UV, что у граней участка.
+M.FACES = FACES
+
 return M
