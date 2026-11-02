@@ -59,7 +59,11 @@ end
 -- Хэш клетки 0..1: руда, деревья, трава — не по шуму, а по хэшу, чтобы
 -- разброс был ровным и не собирался в полосы.
 local function rnd(x, y, z, salt)
-    return (hash(x, y, z, G.seed + salt) % 100000) / 100000
+    -- hash движка уже даёт 0..1 (docs: «детерминированное число 0..1»). Здесь
+    -- стояло (hash % 100000) / 100000 — от дробного числа это сотые доли
+    -- процента: каждый камень проходил порог угля, трава росла везде, а
+    -- деревья вставали в каждую клетку сетки без сдвига.
+    return hash(x, y, z, G.seed + salt)
 end
 G.rnd = rnd
 
@@ -280,6 +284,22 @@ function G.selfCheck()
         end
     end
     local heightBad, worldBad, n = 0, 0, 0
+    -- Доля руды в толще: камня должно быть подавляюще больше, чем угля.
+    -- (Хэш, понятый как целое, давал уголь вместо всего камня.)
+    local stone, coal = 0, 0
+    for cx = -1, 1 do
+        for cz = -1, 1 do
+            local c = W.chunk(cx, cz)
+            for y = 5, 40 do
+                for lz = 0, 15 do
+                    for lx = 0, 15 do
+                        local id = getLocal(c, lx, y, lz)
+                        if id == STONE then stone = stone + 1 elseif id == COAL then coal = coal + 1 end
+                    end
+                end
+            end
+        end
+    end
     local borderGrass, innerGrass = 0, 0
     for cx = -R, R do
         for cz = -R, R do
@@ -332,9 +352,10 @@ function G.selfCheck()
             if math.max(math.abs(dx), math.abs(dz)) < TREE_CELL - TREE_JITTER then close = close + 1 end
         end
     end
-    local ok = heightBad == 0 and worldBad == 0 and broken == 0 and cut == 0 and crossed > 0 and close == 0 and borderGrass > 0 and #trees > 0
-    return string.format("GENCHECK: %s столбов=%d высота_мимо=%d мир_мимо=%d деревьев=%d сломано=%d тесно=%d через_границу=%d срезано=%d трава_у_края=%d трава_внутри=%d",
-        ok and "PASS" or "FAIL", n, heightBad, worldBad, #trees, broken, close, crossed, cut, borderGrass, innerGrass)
+    local coalShare = coal / math.max(1, stone + coal)
+    local ok = coalShare < 0.05 and stone > 0 and heightBad == 0 and worldBad == 0 and broken == 0 and cut == 0 and crossed > 0 and close == 0 and borderGrass > 0 and #trees > 0
+    return string.format("GENCHECK: %s столбов=%d высота_мимо=%d мир_мимо=%d деревьев=%d сломано=%d тесно=%d через_границу=%d срезано=%d трава_у_края=%d трава_внутри=%d угля=%.1f%%",
+        ok and "PASS" or "FAIL", n, heightBad, worldBad, #trees, broken, close, crossed, cut, borderGrass, innerGrass, coalShare * 100)
 end
 
 -- Точка спавна: ближайший к нулю сухой столб над уровнем моря, не под деревом.

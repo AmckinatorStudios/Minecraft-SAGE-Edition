@@ -170,11 +170,39 @@ end
 
 -- Раскладка окон набора текстур (в пикселях раскладки 256×256): где стоит
 -- 16×16 внутренность каждой ячейки.
+-- Клетки — ровно те, что нарисованы на картинках набора (раскладка 1.7:
+-- сетка рюкзака с 88,26, результат 144,36). Координаты из более новых версий
+-- (98,18 / 154,28) клали предметы между клетками.
 local LAYOUT = {
-    inventory = {armor = {8, 8}, craft = {98, 18}, result = {154, 28}, preview = {26, 8, 49, 70}},
+    inventory = {armor = {8, 8}, craft = {88, 26}, result = {144, 36}, preview = {26, 8, 49, 70}},
     table = {craft = {30, 17}, result = {124, 35}},
     rows = 84, hotbar = 142, W = 176, H = 166,
 }
+
+-- Сверка раскладки с картинками окон: в левом верхнем углу каждой клетки
+-- (внутри рамки) картинка темнее фона окна. Клетки, взятые из раскладки
+-- другой версии, попадают на фон — так предметы лежали между клетками.
+-- Возвращает число промахов (0 — всё на месте).
+function Inv.checkLayout()
+    local miss = 0
+    local function probe(img, x, y)
+        local k = img.width / 256
+        local c = img.get(math.floor((x + 1) * k), img.height - 1 - math.floor((y + 1) * k))
+        local panel = img.get(math.floor(4 * k), img.height - 1 - math.floor(4 * k))
+        if not (c.x < panel.x - 0.1) then miss = miss + 1 end
+    end
+    for _, w in ipairs({{"inventory", LAYOUT.inventory, 2}, {"table", LAYOUT.table, 3}}) do
+        local img = texture.load(w[1] == "table" and "assets/ui/crafting_table.png" or "assets/ui/inventory.png")
+        local L, n = w[2], w[3]
+        for r = 0, n - 1 do
+            for c = 0, n - 1 do probe(img, L.craft[1] + c * 18, L.craft[2] + r * 18) end
+        end
+        probe(img, L.result[1], L.result[2])
+        for c = 0, 8 do probe(img, 8 + c * 18, LAYOUT.rows); probe(img, 8 + c * 18, LAYOUT.hotbar) end
+        if L.armor then for i = 0, 3 do probe(img, L.armor[1], L.armor[2] + i * 18) end end
+    end
+    return miss
+end
 
 function Inv.buildHud()
     hudRoot = U.screen("Hotbar", 5)
