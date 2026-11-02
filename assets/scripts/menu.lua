@@ -17,15 +17,15 @@ local U = require "ui"
 local Menu = {}
 
 Menu.active = false
-Menu.started = false            -- игра уже шла: первая кнопка — «Продолжить»
+Menu.started = false            -- игра уже шла: первая кнопка — «Back to Game»
 
 local WIDGETS = "assets/ui/widgets.png"
 local S = 2                     -- пикселей экрана на пиксель интерфейса
 local root, buttons, splash
 local t = 0
 
-local SPLASHES = {"Теперь с печкой!", "Сделано на SAGE!", "Кубы повсюду!", "Железо найдено!",
-                  "Факел светит на 14!", "Без мусора!"}
+local SPLASHES = {"Now with furnaces!", "Made with SAGE!", "Cubes everywhere!", "Iron found!",
+                  "Torches shine at 14!", "No garbage!"}
 
 -- Буквы 5×7 (сверху вниз). Только те, что нужны заголовку.
 local GLYPHS = {
@@ -137,15 +137,15 @@ function Menu.init()
     Menu.splashScale = sp.TextScale
     buttons = {}
     -- Ряды кнопок — через 24 пикселя, как у оригинала (лишние ряды убраны).
-    Menu.play = button("Play", -24, "Одиночная игра", function() Menu.close() end)
-    button("Quit", 0, "Выйти из игры", function() game.Quit() end)
+    Menu.play = button("Play", -24, "Singleplayer", function() Menu.close() end)
+    button("Quit", 0, "Quit Game", function() game.Quit() end)
     U.show(root, false)
 end
 
 function Menu.open()
     Menu.active = true
     U.show(root, true)
-    Menu.play.label.Text = Menu.started and "Продолжить игру" or "Одиночная игра"
+    Menu.play.label.Text = Menu.started and "Back to Game" or "Singleplayer"
     SetMouseCaptured(false)
     require("hud").setVisible(false)
     require("inventory").setHudVisible(false)

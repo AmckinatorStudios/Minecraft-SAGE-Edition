@@ -214,10 +214,10 @@ function OnUpdate(entity, dt)
             failed = true
             local hint = ""
             if tostring(err):find("attempt to call a nil value") then
-                hint = " Плеер старше игры: нужна функция движка, которой в нём нет —"
-                    .. " скачайте свежий выпуск SAGE Craft или соберите плеер из main SAGE Engine."
+                hint = " The player is older than the game: it lacks an engine function —"
+                    .. " download the latest SAGE Craft release or build the player from SAGE Engine main."
             end
-            logError("SAGE Craft не запустился: " .. tostring(err) .. "." .. hint)
+            logError("SAGE Craft failed to start: " .. tostring(err) .. "." .. hint)
             return
         end
     end
@@ -274,7 +274,7 @@ function OnUpdate(entity, dt)
             if not (Auto.active or LaunchFlag("nomenu") or snapshot) then Menu.open() end
             local n = 0
             for _ in pairs(W.chunks) do n = n + 1 end
-            log(string.format("SAGE Craft: мир готов, участков %d (генерация %.2f с, свет %.2f с, меши %.2f с)",
+            log(string.format("SAGE Craft: world ready, %d chunks (generation %.2f s, light %.2f s, meshes %.2f s)",
                 n, C.stats.gen, C.stats.light, C.stats.mesh))
         end
         Sky.update(dt, P)
