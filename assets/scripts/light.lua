@@ -42,9 +42,13 @@ local function setChannel(x, y, z, v, shift, level)
 end
 
 -- Заливка: из каждой клетки очереди свет течёт в соседей, где его меньше.
+-- Конец очереди — явный счётчик tail, а не #queue: обработанные клетки
+-- освобождаются (queue[head] = nil), и длина таблицы с дырой в начале в Lua
+-- не определена — волна обрывалась через пару клеток (факел светил на три
+-- блока вместо четырнадцати).
 local function spread(queue, shift, isSky)
-    local head = 1
-    while head <= #queue do
+    local head, tail = 1, #queue
+    while head <= tail do
         local x, y, z = unpackXYZ(queue[head])
         queue[head] = nil
         head = head + 1
@@ -65,7 +69,8 @@ local function spread(queue, shift, isSky)
                                 else nl = level - a end
                                 if nl > ((nv >> shift) & 15) then
                                     setChannel(nx, ny, nz, nv, shift, nl)
-                                    queue[#queue + 1] = pack(nx, ny, nz)
+                                    tail = tail + 1
+                                    queue[tail] = pack(nx, ny, nz)
                                 end
                             end
                         end
@@ -79,14 +84,14 @@ end
 -- Снятие: гасим всё, что держалось на клетках очереди; более яркие соседи
 -- (у них свой источник) идут в очередь заливки.
 local function unspread(removeQ, refillQ, shift, isSky)
-    local head = 1
-    while head <= #removeQ do
+    local head, tail = 1, #removeQ
+    while head <= tail do
         local p = removeQ[head]
         removeQ[head] = nil
+        local level = removeQ.levels[head]
+        removeQ.levels[head] = nil
         head = head + 1
         local x, y, z = unpackXYZ(p)
-        local level = removeQ.levels[head - 1]
-        removeQ.levels[head - 1] = nil
         for d = 1, 6 do
             local dir = DIRS[d]
             local nx, ny, nz = x + dir[1], y + dir[2], z + dir[3]
@@ -98,8 +103,9 @@ local function unspread(removeQ, refillQ, shift, isSky)
                         local fromAbove = isSky and d == 4 and level == 15 and nl == 15
                         if nl < level or fromAbove then
                             setChannel(nx, ny, nz, nv, shift, 0)
-                            removeQ[#removeQ + 1] = pack(nx, ny, nz)
-                            removeQ.levels[#removeQ] = nl
+                            tail = tail + 1
+                            removeQ[tail] = pack(nx, ny, nz)
+                            removeQ.levels[tail] = nl
                         else
                             refillQ[#refillQ + 1] = pack(nx, ny, nz)
                         end

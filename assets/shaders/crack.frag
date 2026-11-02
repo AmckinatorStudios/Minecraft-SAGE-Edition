@@ -17,8 +17,10 @@ uniform float uStrength;    // 0.75 [0, 1] Сила трещин
 void main() {
     vec4 tex = texture(uAtlas, vUV);
     if (tex.a < 0.02) discard;
-    float sky = pow(clamp(vLight.x / 15.0, 0.0, 1.0), 2.65) * uDaylight;
-    float blk = pow(clamp(vLight.y / 15.0, 0.0, 1.0), 2.65);
+    // Та же кривая уровней, что у участка (chunk.frag): l / (4 - 3l).
+    float ls = clamp(vLight.x / 15.0, 0.0, 1.0), lb = clamp(vLight.y / 15.0, 0.0, 1.0);
+    float sky = ls / (4.0 - 3.0 * ls) * uDaylight;
+    float blk = lb / (4.0 - 3.0 * lb);
     float light = max(max(sky, blk), 0.05);
     FragColor = vec4(tex.rgb * light, tex.a * uStrength);
 }
