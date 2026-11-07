@@ -83,7 +83,11 @@ local flashTimer = 0
 
 function Hud.init()
     root = U.screen("HUD", 4)
-    U.sprite(root, "Crosshair", UIAnchor.Center, 0, 0, 15 * U.HUD, 15 * U.HUD, ICONS, "crosshair")
+    -- Прицел инвертирует то, что под ним (как в Minecraft 1.7.10:
+    -- ONE_MINUS_DST_COLOR / ONE_MINUS_SRC_COLOR) — тёмный на небе, светлый
+    -- в пещере, виден на любой поверхности.
+    local _, cross = U.sprite(root, "Crosshair", UIAnchor.Center, 0, 0, 15 * U.HUD, 15 * U.HUD, ICONS, "crosshair")
+    cross.Blend = "invert"
 
     Hud.buildIcons()
     local _, fl = U.fill(root, "Damage Flash", UIAnchor.TopLeft, 0, 0, 10, 10, Vec4(0.8, 0, 0, 0))
