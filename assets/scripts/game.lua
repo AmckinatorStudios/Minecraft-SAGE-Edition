@@ -25,6 +25,7 @@ local Auto   = require "autopilot"
 local Furn   = require "furnace"
 local Menu   = require "menu"
 local Fall   = require "falling"
+local Music  = require "music"
 
 local playerObj, cameraObj
 local started = false
@@ -282,6 +283,8 @@ function OnUpdate(entity, dt)
         return
     end
 
+    -- Музыка меню — только на титульном экране (не в паузе по Esc).
+    Music.update(dt, Menu.active and not Menu.started)
     if Menu.active then
         -- За меню — мир с медленно вращающейся камерой; игра стоит.
         Menu.update(dt)
