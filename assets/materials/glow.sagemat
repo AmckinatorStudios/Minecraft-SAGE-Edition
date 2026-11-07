@@ -1,0 +1,7 @@
+{
+  "cull": "none",
+  "opacity": 0.99,
+  "vertexShader": "assets/shaders/glow.vert",
+  "fragmentShader": "assets/shaders/glow.frag",
+  "params": {}
+}

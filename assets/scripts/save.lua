@@ -59,6 +59,7 @@ function S.write()
         maps = require("map").serialize(),
         player = {x = P.pos.x, y = P.pos.y, z = P.pos.z, yaw = P.yaw, pitch = P.pitch},
         time = Sky.time,
+        sky = Sky.save(),
         skin = Avatar.skinPath,
     }, {version = 1, meta = require("worlds").meta(S.world)})
 end

@@ -114,7 +114,7 @@ end
 -- Подложка и рисунок карты в руке: m — матрица ItemRenderer после
 -- glScalef(1/64) (единица — пиксель карты, подложка от −7 до 135).
 local inHand = {}
-function Map.placeInHand(obj, m, n)
+function Map.placeInHand(obj, m, n, layer)
     if not inHand.bg then
         material("sagecraft_map_bg", {texture = BG_TEX, nearest = true, cutoff = 0.05, double_sided = true, unlit = true})
         inHand.bg = SpawnObject("Map Background")
@@ -133,6 +133,8 @@ function Map.placeInHand(obj, m, n)
                  normal = {0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1},
                  uv = {0, 0,  1, 0,  1, 1,  0, 1}, index = {1, 2, 3, 1, 3, 4}}
         f.apply(inHand.fg)
+        inHand.bg:GetRenderer().Layer = layer or ""
+        inHand.fg:GetRenderer().Layer = layer or ""
     end
     M.applyTo(obj, m)
     n = n or Map.heldNumber

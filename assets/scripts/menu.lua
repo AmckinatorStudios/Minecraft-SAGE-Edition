@@ -567,6 +567,9 @@ function Menu.enterGame()
     input.ReleaseAll()
 end
 
+-- Догасает ли ещё экран (после входа в мир — экран загрузки).
+function Menu.fading() return fadeOut ~= nil end
+
 function Menu.update(dt)
     t = t + dt
     Pano.update(dt)

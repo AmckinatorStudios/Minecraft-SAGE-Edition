@@ -177,11 +177,17 @@ end
 
 -- --- Объекты ----------------------------------------------------------------
 
+-- Рука, предмет и карта от первого лица — свой слой: камера рисует его
+-- отдельным проходом после мира со сброшенной глубиной (game.lua), поэтому
+-- рука не уходит в блоки, как и у оригинала (renderHand после мира).
+Hand.LAYER = "viewmodel"
+
 function Hand.init(cameraObj)
     for i = 1, 2 do
         arms[i] = SpawnObject("First Person Arm " .. i)
         arms[i]:SetParent(cameraObj)
         armMesh().apply(arms[i])
+        arms[i]:GetRenderer().Layer = Hand.LAYER
         arms[i].Transform.Scale = HIDDEN
     end
     item = SpawnObject("First Person Item")
@@ -249,7 +255,7 @@ local function drawMap(base, sw, eq, mcPitch, mapTex)
     M.translate(m, -1, -1, 0)
     M.scale(m, 0.015625)
     -- Сама карта: подложка от −7 до 135 пикселей карты (меш карты — в map.lua).
-    require("map").placeInHand(mapObj, m)
+    require("map").placeInHand(mapObj, m, nil, Hand.LAYER)
 end
 
 -- Каждый кадр. visible — вид глазами; heldId — что в руке (0 — пусто).
@@ -302,6 +308,7 @@ function Hand.update(dt, visible, P, heldId)
     if itemKey ~= shown then
         itemKey = shown
         Hand.setItemMesh(item, Hand.meshIdOf(shown))
+        item:GetRenderer().Layer = Hand.LAYER
     end
     local u = Anim.use
     local action = u and u.id == shown and u.action or nil
@@ -313,7 +320,7 @@ function Hand.update(dt, visible, P, heldId)
             want = j >= 18 and B.byName.bow_pulling_2.id or (j > 13 and B.byName.bow_pulling_1.id
                 or (j > 0 and B.byName.bow_pulling_0.id or shown))
         end
-        if itemKey ~= want then itemKey = want; Hand.setItemMesh(item, want) end
+        if itemKey ~= want then itemKey = want; Hand.setItemMesh(item, want); item:GetRenderer().Layer = Hand.LAYER end
     end
 
     local m = M.copy(base)
