@@ -40,11 +40,13 @@ jobs:
           need=$(tr -d '[:space:]' < engine-min.txt)
           ok=""
           for i in $(seq 1 60); do
-            main=$(gh api repos/$engine/commits/main --jq .sha)
-            built=$(gh api repos/$engine/git/refs/tags/windows-latest --jq .object.sha)
+            # Пока релиз движка пересобирается, его тег на минуту пропадает
+            # (404) — это «ещё не готово», а не провал: ждём дальше.
+            main=$(gh api repos/$engine/commits/main --jq .sha 2>/dev/null || true)
+            built=$(gh api repos/$engine/git/refs/tags/windows-latest --jq .object.sha 2>/dev/null || true)
             # behind/diverged — в собранном плеере нет нужного игре коммита.
-            has=$(gh api repos/$engine/compare/$need...$built --jq .status)
-            if [ "$built" = "$main" ] && { [ "$has" = "ahead" ] || [ "$has" = "identical" ]; }; then
+            has=$(gh api repos/$engine/compare/$need...$built --jq .status 2>/dev/null || true)
+            if [ -n "$built" ] && [ "$built" = "$main" ] && { [ "$has" = "ahead" ] || [ "$has" = "identical" ]; }; then
               echo "ENGINE_SHA=$built" >> "$GITHUB_ENV"
               echo "движок $built — свежий"
               ok=1
