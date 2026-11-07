@@ -52,6 +52,13 @@ for _, m in ipairs({"coal", "iron_ingot", "gold_ingot", "diamond"}) do
     shapeless(m, 9, {block})
 end
 
+-- Рецепты 1.7.10 для предметов с анимацией использования.
+shaped("paper", 3, {"###"}, {["#"] = "reeds"})
+shaped("compass", 1, {" I ", "IRI", " I "}, {I = "iron_ingot", R = "redstone"})
+shaped("empty_map", 1, {"PPP", "PCP", "PPP"}, {P = "paper", C = "compass"})
+shaped("glass_bottle", 3, {"G G", " G "}, {G = "glass"})
+shaped("bow", 1, {" SX", "S X", " SX"}, {S = "stick", X = "string"})
+
 -- Инструменты: материал головки по уровню.
 local TIERS = {
     {prefix = "wood", mat = PLANKS},
@@ -69,7 +76,11 @@ end
 -- Переплавка в печи: что положили сверху -> что выйдет справа.
 R.SMELT = {}
 for from, to in pairs({iron_ore = "iron_ingot", gold_ore = "gold_ingot", sand = "glass",
-                       cobblestone = "stone", clay = "brick", log = "coal", birch_log = "coal"}) do
+                       cobblestone = "stone", clay = "brick", log = "coal", birch_log = "coal",
+                       -- Руды, добытые «Шёлковым касанием» в оригинале, плавятся в свой
+                       -- предмет; здесь их не добыть целыми, но рецепт тот же.
+                       coal_ore = "coal", diamond_ore = "diamond", redstone_ore = "redstone",
+                       lapis_ore = "lapis_lazuli", emerald_ore = "emerald"}) do
     R.SMELT[id(from)] = id(to)
 end
 

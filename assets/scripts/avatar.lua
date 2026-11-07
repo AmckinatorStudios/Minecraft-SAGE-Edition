@@ -2,10 +2,9 @@
 -- avatar.lua — модель игрока (assets/models/player.gltf) и её движения.
 --
 -- В модели нет клипов анимации — только кости (голова, тело, руки, ноги).
--- Движения считаются здесь каждый кадр и ставятся поворотами костей:
--- ноги и руки качаются в противофазе с частотой шага, амплитуда растёт со
--- скоростью; присед наклоняет тело; голова смотрит туда же, куда камера;
--- удар/постройка — взмах правой руки.
+-- Поза — формулы ModelBiped 1.7.10 (ходьба, покой, присед, взмах, предмет,
+-- лук, защита мечом) по числам из anim.lua; предмет в руке — как
+-- RenderPlayer.renderEquippedItems.
 --
 -- СКИНЫ. Скин — картинка 64×64 по развёртке модели. Игра ищет картинки в
 -- assets/skins: default.png (скин из модели), custom.png и skin1..skin9.png,
@@ -92,6 +91,10 @@ function Avatar.updatePreview()
     local dx = (c.x - size.x / 2) / size.x
     local dy = (c.y - size.y / 2) / size.y
     local o = Avatar.previewObj
+    -- Номера костей — когда модель загрузится (см. resolveJoints).
+    for _, name in ipairs({"Head", "Right Arm", "Left Arm"}) do
+        if (previewJoints[name] or -1) < 0 then previewJoints[name] = JointIndex(o, name) end
+    end
     o.Transform.Rotation = Vec3(0, dx * 40, 0)
     local j = previewJoints["Head"]
     if j and j >= 0 then SetJointRotation(o, j, dy * 40, dx * 50, 0) end
@@ -109,9 +112,6 @@ function Avatar.init(playerObj)
     -- игрок и камера движка: поворачивать не нужно.
     obj.Transform.Rotation = Vec3(0, 0, 0)
     AddAnimatedModel(obj, MODEL)
-    for _, name in ipairs({"Head", "Body", "Right Arm", "Left Arm", "Right Leg", "Left Leg", "Waist"}) do
-        joints[name] = JointIndex(obj, name)
-    end
     initPreview()
     loadSkins()
     local Save = require "save"
@@ -127,16 +127,171 @@ function Avatar.nextSkin()
     log("Skin: " .. skins[Avatar.skinIndex].path)
 end
 
-local function rot(name, x, y, z)
-    local j = joints[name]
-    if j and j >= 0 then SetJointRotation(obj, j, x, y or 0, z or 0) end
+-- --- Поза ModelBiped 1.7.10 -------------------------------------------------
+--
+-- Углы считаются в модели Minecraft (Y вниз, лицо к −Z, правая рука на
+-- x = −5 пикселей, радианы) — формулы ModelBiped.setRotationAngles слово в
+-- слово. Модель игры — Y вверх, правая рука на +X: переход — поворот на 180°
+-- вокруг Z (D = diag(−1, −1, 1)). Поворот кости в модели игры = D·R·D⁻¹, то
+-- есть углы X и Y меняют знак; сдвиг точки вращения — (−dx, −dy, dz)/16.
+-- Порядок поворотов ModelRenderer — Z, затем Y, затем X; движок ставит свои
+-- углы (Ry·Rx·Rz), поэтому поворот переводится через матрицу (mat.lua).
+local M = require "mat"
+local Anim = require "anim"
+local B = require "blocks"
+local PI = math.pi
+local sin, cos, sqrt = math.sin, math.cos, math.sqrt
+
+-- Номер кости. Модель грузится не сразу (асинхронно): пока её нет, номер
+-- −1, и его надо спросить снова, а не запомнить навсегда.
+local JOINTS = {"Head", "Body", "Right Arm", "Left Arm", "Right Leg", "Left Leg", "Waist"}
+local function resolveJoints()
+    if joints.ready then return true end
+    local ok = true
+    for _, name in ipairs(JOINTS) do
+        joints[name] = JointIndex(obj, name)
+        if joints[name] < 0 then ok = false end
+    end
+    joints.ready = ok
+    return ok
 end
 
--- visible — вид от третьего лица; swing — 0..1 фаза взмаха правой руки.
-function Avatar.update(dt, P, visible, swing)
+local function pose(name, x, y, z)
+    local j = joints[name]
+    if not j or j < 0 then return end
+    local ex, ey, ez = M.eulerOf(M.modelRotation(-x, -y, z))
+    SetJointRotation(obj, j, ex, ey, ez)
+end
+
+-- Точка вращения кости: сдвиг от её места в модели, в пикселях Minecraft.
+local function shift(name, dx, dy, dz)
+    local j = joints[name]
+    if j and j >= 0 then SetJointOffset(obj, j, -dx / 16, -dy / 16, dz / 16) end
+end
+
+-- Как держит предмет: 0 — ничего, 1 — предмет, 3 — защита (heldItemRight).
+-- aim — лук натянут (aimedBow).
+local function bipedAngles(limb, amount, age, headYaw, headPitch, sw, sneak, held, aim)
+    local a = {}
+    a.headY, a.headX = math.rad(headYaw), math.rad(headPitch)
+    a.rArmX = cos(limb * 0.6662 + PI) * 2 * amount * 0.5
+    a.lArmX = cos(limb * 0.6662) * 2 * amount * 0.5
+    a.rArmZ, a.lArmZ = 0, 0
+    a.rLegX = cos(limb * 0.6662) * 1.4 * amount
+    a.lLegX = cos(limb * 0.6662 + PI) * 1.4 * amount
+    if held ~= 0 then a.rArmX = a.rArmX * 0.5 - PI / 10 * held end
+    a.rArmY, a.lArmY = 0, 0
+    -- Взмах (onGround — доля взмаха 0..1).
+    a.bodyY = sin(sqrt(sw) * PI * 2) * 0.2
+    a.rArmPX, a.rArmPZ = -cos(a.bodyY) * 5, sin(a.bodyY) * 5
+    a.lArmPX, a.lArmPZ = cos(a.bodyY) * 5, -sin(a.bodyY) * 5
+    a.rArmY = a.rArmY + a.bodyY
+    a.lArmY = a.lArmY + a.bodyY
+    a.lArmX = a.lArmX + a.bodyY
+    local f6 = 1 - sw
+    f6 = f6 * f6; f6 = f6 * f6; f6 = 1 - f6
+    local f7 = sin(f6 * PI)
+    local f8 = sin(sw * PI) * -(a.headX - 0.7) * 0.75
+    a.rArmX = a.rArmX - (f7 * 1.2 + f8)
+    a.rArmY = a.rArmY + a.bodyY * 2
+    a.rArmZ = sin(sw * PI) * -0.4
+    -- Присед: тело на 0.5 рад вперёд, руки +0.4, ноги назад и вверх, голова
+    -- ниже на пиксель (sneak — доля перехода 0..1).
+    a.bodyX = 0.5 * sneak
+    a.rArmX = a.rArmX + 0.4 * sneak
+    a.lArmX = a.lArmX + 0.4 * sneak
+    a.legPZ = 0.1 + 3.9 * sneak
+    a.legPY = 12 - 3 * sneak
+    a.headPY = 1 * sneak
+    -- Покачивание рук на месте.
+    a.rArmZ = a.rArmZ + cos(age * 0.09) * 0.05 + 0.05
+    a.lArmZ = a.lArmZ - cos(age * 0.09) * 0.05 - 0.05
+    a.rArmX = a.rArmX + sin(age * 0.067) * 0.05
+    a.lArmX = a.lArmX - sin(age * 0.067) * 0.05
+    if aim then
+        a.rArmZ, a.lArmZ = 0, 0
+        a.rArmY = -0.1 + a.headY
+        a.lArmY = 0.1 + a.headY + 0.4
+        a.rArmX = -PI / 2 + a.headX
+        a.lArmX = -PI / 2 + a.headX
+        a.rArmZ = a.rArmZ + cos(age * 0.09) * 0.05 + 0.05
+        a.lArmZ = a.lArmZ - cos(age * 0.09) * 0.05 - 0.05
+        a.rArmX = a.rArmX + sin(age * 0.067) * 0.05
+        a.lArmX = a.lArmX - sin(age * 0.067) * 0.05
+    end
+    return a
+end
+Avatar.bipedAngles = bipedAngles
+
+-- Предмет в правой руке (RenderPlayer.renderEquippedItems): матрица в модели
+-- Minecraft, начиная с точки вращения руки.
+local function heldItemMatrix(a, id, action)
+    local Hand = require "hand"
+    local m = M.identity()
+    -- bipedRightArm.postRender(0.0625)
+    M.translate(m, a.rArmPX / 16, 2 / 16, a.rArmPZ / 16)
+    M.rotate(m, math.deg(a.rArmZ), 0, 0, 1)
+    M.rotate(m, math.deg(a.rArmY), 0, 1, 0)
+    M.rotate(m, math.deg(a.rArmX), 1, 0, 0)
+    M.translate(m, -0.0625, 0.4375, 0.0625)
+    local d = B.byId[id]
+    if Hand.isCube(id) then
+        local f2 = 0.5 * 0.75
+        M.translate(m, 0, 0.1875, -0.3125)
+        M.rotate(m, 20, 1, 0, 0)
+        M.rotate(m, 45, 0, 1, 0)
+        M.scale(m, -f2, -f2, f2)
+    elseif d.bow then
+        local f2 = 0.625
+        M.translate(m, 0, 0.125, 0.3125)
+        M.rotate(m, -20, 0, 1, 0)
+        M.scale(m, f2, -f2, f2)
+        M.rotate(m, -100, 1, 0, 0)
+        M.rotate(m, 45, 0, 1, 0)
+    elseif d.full3d then
+        local f2 = 0.625
+        if action == "block" then
+            M.translate(m, 0.05, 0, -0.1)
+            M.rotate(m, -50, 0, 1, 0)
+            M.rotate(m, -10, 1, 0, 0)
+            M.rotate(m, -60, 0, 0, 1)
+        end
+        M.translate(m, 0, 0.1875, 0)
+        M.scale(m, f2, -f2, f2)
+        M.rotate(m, -100, 1, 0, 0)
+        M.rotate(m, 45, 0, 1, 0)
+    else
+        local f2 = 0.375
+        M.translate(m, 0.25, 0.1875, -0.1875)
+        M.scale(m, f2)
+        M.rotate(m, 60, 0, 0, 1)
+        M.rotate(m, -90, 1, 0, 0)
+        M.rotate(m, 20, 0, 0, 1)
+    end
+    Hand.itemTransform(m, id)
+    -- Из модели Minecraft в модель игры: начало — на высоте 1.5 (24 пикселя),
+    -- оси X и Y наоборот.
+    local base = M.identity()
+    M.translate(base, 0, 1.5, 0)
+    M.scale(base, -1, -1, 1)
+    return M.mul(base, m)
+end
+
+local heldObj, heldKey
+
+-- visible — вид от третьего лица; heldId — что в руке.
+function Avatar.update(dt, P, visible, heldId)
     if not obj then return end
     obj.Transform.Scale = visible and Vec3(1, 1, 1) or Vec3(0.0001, 0.0001, 0.0001)
-    if visible and Avatar.material then
+    if not heldObj then
+        heldObj = SpawnObject("Held Item")
+        heldObj:SetParent(obj)
+    end
+    if not visible then
+        heldObj.Transform.Scale = Vec3(0.0001, 0.0001, 0.0001)
+        return
+    end
+    if Avatar.material then
         local W = require "world"
         local Sky = require "sky"
         local bx, by, bz = math.floor(P.pos.x), math.floor(P.pos.y + 1), math.floor(P.pos.z)
@@ -151,30 +306,47 @@ function Avatar.update(dt, P, visible, swing)
             material.Set(Avatar.material, "albedo", Vec3(k, k, k * (blk > sky and 0.85 or 1)))
         end
     end
-    local speed = math.sqrt(P.vel.x * P.vel.x + P.vel.z * P.vel.z)
-    if not P.onGround and not P.inWater then speed = speed * 0.3 end
-    local target = math.min(1, speed / 4.3)
-    amount = amount + (target - amount) * math.min(1, dt * 10)
-    phase = phase + dt * speed * 2.1
 
-    local legSwing = math.sin(phase) * 50 * amount
-    local armSwing = math.sin(phase) * 40 * amount
-    local sneak = P.sneaking and 1 or 0
-    local idle = math.sin(Time.total() * 1.3) * 3
+    -- Тело повёрнуто по renderYawOffset; голова — на разность со взглядом.
+    -- Рыскание Minecraft идёт в обратную сторону, наклон вниз — плюс.
+    local body = Anim.bodyYaw()
+    obj.Transform.Rotation = Vec3(0, body - Anim.viewYaw(), 0)
+    local limb, amount = Anim.limbs()
+    local held = heldId or 0
+    local u = Anim.use
+    local action = u and u.id == held and u.action or nil
+    local a = bipedAngles(limb, amount, Anim.age(), -(Anim.viewYaw() - body), -P.pitch,
+                          Anim.swingProgress(), Anim.sneak,
+                          held == 0 and 0 or (action == "block" and 3 or 1), action == "bow")
 
-    rot("Right Leg", legSwing, 0, 0)
-    rot("Left Leg", -legSwing, 0, 0)
-    local swingAngle = 0
-    if swing and swing > 0 then swingAngle = -math.sin((1 - swing) * math.pi) * 80 end
-    rot("Right Arm", -armSwing + swingAngle - sneak * 10, 0, 4 + idle)
-    rot("Left Arm", armSwing - sneak * 10, 0, -4 - idle)
-    rot("Body", sneak * 28, 0, 0)
+    resolveJoints()
+    pose("Head", a.headX, a.headY, 0)
+    shift("Head", 0, a.headPY, 0)
+    pose("Body", a.bodyX, a.bodyY, 0)
+    pose("Right Arm", a.rArmX, a.rArmY, a.rArmZ)
+    pose("Left Arm", a.lArmX, a.lArmY, a.lArmZ)
+    shift("Right Arm", a.rArmPX + 5, 0, a.rArmPZ)
+    shift("Left Arm", a.lArmPX - 5, 0, a.lArmPZ)
+    pose("Right Leg", a.rLegX, 0, 0)
+    pose("Left Leg", a.lLegX, 0, 0)
+    shift("Right Leg", 0, a.legPY - 12, a.legPZ)
+    shift("Left Leg", 0, a.legPY - 12, a.legPZ)
 
-    -- Голова — за взглядом камеры; тело доворачивается, если голова ушла
-    -- далеко (тело модели повёрнуто вместе с игроком на P.yaw).
-    headYaw = 0
-    rot("Head", -P.pitch, headYaw, 0)
-    if P.flying then rot("Waist", 0, 0, 0) end
+    if held == 0 then
+        heldObj.Transform.Scale = Vec3(0.0001, 0.0001, 0.0001)
+        heldKey = nil
+    else
+        local Hand = require "hand"
+        local want = held
+        local d = B.byId[held]
+        if d and d.bow and action == "bow" then
+            local j = Anim.useTicks()
+            want = j >= 18 and B.byName.bow_pulling_2.id or (j > 13 and B.byName.bow_pulling_1.id
+                or (j > 0 and B.byName.bow_pulling_0.id or held))
+        end
+        if heldKey ~= want then heldKey = want; Hand.setItemMesh(heldObj, want) end
+        M.applyTo(heldObj, heldItemMatrix(a, held, action))
+    end
 end
 
 return Avatar

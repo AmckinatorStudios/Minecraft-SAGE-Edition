@@ -12,7 +12,8 @@ local B = require "blocks"
 
 local P = {}
 
-P.WIDTH, P.HEIGHT, P.EYE, P.EYE_SNEAK = 0.6, 1.8, 1.62, 1.5
+-- Коробка в приседе НЕ ниже (1.7.10): глаза опускаются на 0.08, тело — нет.
+P.WIDTH, P.HEIGHT, P.EYE, P.EYE_SNEAK = 0.6, 1.8, 1.62, 1.54
 P.pos = {x = 0.5, y = 80, z = 0.5}
 P.vel = {x = 0, y = 0, z = 0}
 P.yaw, P.pitch = 0, 0
@@ -153,7 +154,9 @@ function P.update(input, dt)
     if P.flying and P.onGround then P.flying = false end
 
     local dx, dz = p.x - beforeX, p.z - beforeZ
-    if P.onGround then P.walkDist = P.walkDist + math.sqrt(dx * dx + dz * dz) end
+    -- Путь в приседе на земле не копится (Entity.moveEntity): нет шагов и
+    -- покачивания — присед в оригинале бесшумный.
+    if P.onGround and not P.sneaking then P.walkDist = P.walkDist + math.sqrt(dx * dx + dz * dz) end
 
     -- Высота падения: от верхней точки полёта до приземления.
     local landed = nil

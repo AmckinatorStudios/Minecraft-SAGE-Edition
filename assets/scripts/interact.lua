@@ -19,11 +19,11 @@ local L = require "light"
 local P = require "player"
 local Inv = require "inventory"
 local C = require "chunks"
+local Anim = require "anim"
 
 local Act = {}
 
 Act.REACH = 5
-Act.swing = 0               -- 0..1 — фаза взмаха руки (её читает аватар)
 Act.stats = {broken = 0, placed = 0, picked = 0}
 local target
 local mining = nil          -- {x, y, z, t}
@@ -175,8 +175,9 @@ local function breakBlock(t)
     local Drops = require "drops"
     if ok then
         local drop = B.dropOf(id)
-        if drop then Drops.spawn(drop, 1, t.x + 0.5, t.y + 0.5, t.z + 0.5) end
-        if B.byId[id].xp then require("hud").addXp(B.byId[id].xp) end
+        if drop then Drops.spawn(drop, B.dropCount(id), t.x + 0.5, t.y + 0.5, t.z + 0.5) end
+        local xp = B.xpOf(id)
+        if xp > 0 then require("hud").addXp(xp) end
         local d = B.byId[id]
         if d.apple and math.random() < d.apple then Drops.spawn(B.byName.apple.id, 1, t.x + 0.5, t.y + 0.5, t.z + 0.5) end
         if d.flint and math.random() < d.flint then Drops.spawn(B.byName.flint.id, 1, t.x + 0.5, t.y + 0.5, t.z + 0.5) end
@@ -186,24 +187,24 @@ local function breakBlock(t)
     settle(t.x, t.y, t.z)
 end
 
+-- Блок, который открывается по ПКМ (печь, верстак), — с Shift нет.
+local function activates(t)
+    if not t or IsActionDown("Sneak") then return false end
+    return require("furnace").isFurnace(t.id) or t.id == B.byName.crafting_table.id
+end
+
 local function place(t)
-    -- Печь и верстак открываются ПКМ (с Shift — ставим блок рядом, как обычно).
-    if require("furnace").isFurnace(t.id) and not IsActionDown("Sneak") then
+    if require("furnace").isFurnace(t.id) and activates(t) then
         Act.openFurnace = {x = t.x, y = t.y, z = t.z}
         return
     end
-    if t.id == B.byName.crafting_table.id and not IsActionDown("Sneak") then
+    if t.id == B.byName.crafting_table.id and activates(t) then
         Act.openTable = true
         return
     end
     local held = Inv.current()
     if not held then return end
     local d = B.byId[held.id]
-    -- Еда: ПКМ — съесть.
-    if d.food then
-        if require("hud").eat(d.food) then Inv.useOne(); Act.swing = 1 end
-        return
-    end
     if not d or not d.isBlock then return end
     local x, y, z = t.x + t.nx, t.y + t.ny, t.z + t.nz
     -- В траву ставится поверх (трава заменяется).
@@ -217,7 +218,7 @@ local function place(t)
         Act.stats.placed = Act.stats.placed + 1
         Snd.place(held.id, x, y, z)
         Inv.useOne()
-        Act.swing = 1
+        Anim.swingItem()
         settle(x, y - 1, z)
     end
 end
@@ -226,10 +227,10 @@ end
 function Act.update(dt, actions)
     target = P.raycast(Act.REACH)
     local breaking = actions and actions.breaking or IsActionDown("Break")
-    local placing = actions and actions.place or IsActionDown("Place")
+    local placing = actions and actions.place or IsActionDown("Place") or Act.forcePlace
+    if Act.forceSwing then Anim.swingItem() end
     placeCooldown = math.max(0, placeCooldown - dt)
     breakCooldown = math.max(0, breakCooldown - dt)
-    Act.swing = math.max(0, Act.swing - dt * 3.5)
 
     if Act.forceCrack and target then
         -- Отладка снимков: показать трещину этой стадии на блоке под прицелом.
@@ -241,8 +242,11 @@ function Act.update(dt, actions)
         outline.Transform.Position = Vec3(0, -100, 0)
     end
 
+    -- Удар по воздуху — один взмах на нажатие; по блоку — непрерывно
+    -- (swingItem каждый тик, новый взмах — с середины прошлого).
+    if (actions and actions.breaking) == nil and WasActionPressed("Break") then Anim.swingItem() end
     if breaking and target and breakCooldown == 0 then
-        if Act.swing < 0.3 then Act.swing = 1 end
+        Anim.swingItem()
         -- Другой блок под прицелом — прогресс и счёт ударов заново (1.7.10).
         if not mining or mining.x ~= target.x or mining.y ~= target.y or mining.z ~= target.z then
             mining = {x = target.x, y = target.y, z = target.z, t = 0, nextHit = 0}
@@ -270,11 +274,32 @@ function Act.update(dt, actions)
         if not (Act.forceCrack and target) then crack.Transform.Position = Vec3(0, -100, 0) end
     end
 
-    if placing and target and placeCooldown == 0 then
-        place(target)
-        placeCooldown = 0.22
+    -- ПКМ (как в 1.7.10): блок, который открывается, — открыть; предмет с
+    -- действием (еда, питьё, лук, меч) — использовать, пока держат кнопку;
+    -- иначе — поставить блок. Отпустили — использование кончилось (лук стреляет).
+    local held = Inv.current()
+    local hd = held and B.byId[held.id]
+    if placing then
+        if Anim.use then
+            -- уже используется
+        elseif placeCooldown == 0 and hd and hd.use and not activates(target) then
+            Act.startUse(held, hd)
+            placeCooldown = 0.22
+        elseif placeCooldown == 0 and hd and not hd.isBlock and not activates(target) then
+            Act.useItem(held, hd)
+            placeCooldown = 0.22
+        elseif target and placeCooldown == 0 then
+            place(target)
+            placeCooldown = 0.22
+        end
+    else
+        placeCooldown = 0
+        local u = Anim.use
+        if u then
+            Anim.stopUse()
+            if u.action == "bow" then Act.releaseBow(u) end
+        end
     end
-    if not placing then placeCooldown = 0 end
 
     if WasActionPressed("Pick") and target then
         for i = 1, 9 do
@@ -287,6 +312,74 @@ function Act.update(dt, actions)
         if s then
             require("drops").throwFromPlayer(s.id, 1, s.wear)
             Inv.useOne()
+        end
+    end
+end
+
+-- --- Использование предметов (ПКМ) ----------------------------------------
+
+-- Начать использовать: еда и питьё — 32 тика, лук и меч — пока держат.
+function Act.startUse(stack, d)
+    if d.use == "eat" then
+        local Hud = require "hud"
+        -- Сытый не ест (canEat); без голода в игре — ест всегда.
+        if Hud.HUNGER and Hud.food >= 20 then return end
+        Anim.startUse(stack.id, "eat", 32, function()
+            Hud.eat(d.food)
+            Inv.useOne()
+        end)
+    elseif d.use == "drink" then
+        Anim.startUse(stack.id, "drink", 32, function()
+            -- Выпитая бутылка с водой — пустая бутылка (ItemPotion.onEaten).
+            Inv.useOne()
+            if Inv.current() then Inv.add(B.byName.glass_bottle.id, 1)
+            else Inv.slots[Inv.selected] = {id = B.byName.glass_bottle.id, n = 1} end
+        end)
+    elseif d.use == "block" then
+        Anim.startUse(stack.id, "block", 72000)
+    elseif d.use == "bow" then
+        -- Без стрел лук не натягивается (ItemBow.onItemRightClick).
+        if Inv.count(B.byName.arrow.id) > 0 or Act.creative then Anim.startUse(stack.id, "bow", 72000) end
+    end
+end
+
+-- Выстрел при отпускании (ItemBow.onPlayerStoppedUsing).
+function Act.releaseBow(u)
+    local Ar = require "arrows"
+    local power = Ar.power(u.max - u.count)
+    if not power then return end
+    Ar.fire(P, power)
+    if not Act.creative then Inv.take(B.byName.arrow.id, 1) end
+end
+
+-- Предметы без «использования», но с действием по ПКМ.
+function Act.useItem(stack, d)
+    if d.name == "glass_bottle" then
+        -- Бутылка набирает воду, если взгляд упирается в воду (ItemGlassBottle).
+        local ex, ey, ez = P.eye()
+        local dx, dy, dz = P.lookDir()
+        for i = 1, 50 do
+            local t = i * 0.1
+            local x, y, z = math.floor(ex + dx * t), math.floor(ey + dy * t), math.floor(ez + dz * t)
+            local id = W.get(x, y, z)
+            if id == 11 then
+                Inv.useOne()
+                local potion = B.byName.potion.id
+                if Inv.current() then Inv.add(potion, 1) else Inv.slots[Inv.selected] = {id = potion, n = 1} end
+                return
+            end
+            if B.solid[id] then return end
+        end
+    elseif d.name == "empty_map" then
+        -- Пустая карта — карта этого места (ItemEmptyMap.onItemRightClick).
+        local n = require("map").create(P.pos.x, P.pos.z)
+        Inv.useOne()
+        local s = {id = B.byName.filled_map.id, n = 1, wear = n}
+        if Inv.current() then
+            for i = 1, Inv.SIZE do if not Inv.slots[i] then Inv.slots[i] = s; return end end
+            require("drops").spawnAtPlayer(s.id, 1)
+        else
+            Inv.slots[Inv.selected] = s
         end
     end
 end

@@ -54,6 +54,7 @@ function S.write()
         edits = edits,
         inventory = Inv.serialize(),
         furnaces = require("furnace").serialize(),
+        maps = require("map").serialize(),
         player = {x = P.pos.x, y = P.pos.y, z = P.pos.z, yaw = P.yaw, pitch = P.pitch},
         time = Sky.time,
         skin = Avatar.skinPath,
