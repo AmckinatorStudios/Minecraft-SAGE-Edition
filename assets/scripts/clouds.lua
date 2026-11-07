@@ -1,96 +1,104 @@
 -- ---------------------------------------------------------------------------
--- clouds.lua — объёмные облака: поле клеток CELL×CELL, каждая занятая клетка —
--- коробка высотой THICK. Между соседними занятыми клетками стенок нет, поэтому
--- облако — цельное тело с верхом, низом и боками, а не набор кубиков.
+-- clouds.lua — облака Minecraft 1.7.10 (RenderGlobal.renderCloudsFancy).
 --
--- Узор — свой шум по зерну мира, повторяется с периодом PERIOD клеток.
--- Ветер сносит поле по X; меш строится на окно вокруг игрока и
--- пересобирается, только когда поле уехало на целую клетку (или игрок ушёл
--- далеко) — между этим объект просто сдвигается.
+-- Узор — текстура clouds.png 256×256: пиксель — клетка 12×12 блоков,
+-- непрозрачный — облако. Слой — на высоте 128.33, толщиной 4 блока. Ветер —
+-- 0.03 блока за тик облаков к западу (−X): поле сдвигается по своему
+-- счётчику тиков, а не по времени мира.
+--
+-- Оригинал строит облака каждый кадр вокруг глаза: 8×8 кусков по 8×8 клеток
+-- (от −24 до +40 клеток от клетки глаза — несимметрично, как у него),
+-- верх и низ куска — одним квадратом, стенки — на каждой границе клеток,
+-- лишнее отрезает альфа текстуры. Здесь меш тот же, но построен один раз в
+-- клетках относительно клетки глаза: объект стоит в мире со сдвигом на долю
+-- клетки, а какая клетка текстуры под гранью — сдвиг UV в шейдере.
+-- Цвет — Sky.cloudColor (getCloudColour), туман — как у мира (sky.lua).
 -- ---------------------------------------------------------------------------
 local Clouds = {}
 
-local CELL, THICK, HEIGHT = 12, 4, 120
-local PERIOD = 64
-local RANGE = 22              -- клеток от центра окна в каждую сторону
-local WIND = 1.2              -- блоков в секунду
+local CELL, THICK, HEIGHT = 12, 4, 128
+local EPS = 1 / 1024
 local MAT = "assets/materials/clouds.sagemat"
 
-local field = {}
 local obj
-local shift = 0               -- накопленный снос ветром, блоков
-local builtAt                 -- клетка, вокруг которой построен меш
 
-local function filled(i, j)
-    return field[(i % PERIOD) + (j % PERIOD) * PERIOD] == true
-end
-
-function Clouds.init(seed)
-    local n = noise{kind = "simplex", seed = seed + 101, octaves = 3, scale = 1 / 9}
-    for j = 0, PERIOD - 1 do
-        for i = 0, PERIOD - 1 do
-            -- Шум на торе: поле бесшовно повторяется по обеим осям.
-            local a, b = i / PERIOD * 2 * math.pi, j / PERIOD * 2 * math.pi
-            local v = n(math.cos(a) * 10, math.sin(a) * 10, math.cos(b) * 10 + math.sin(b) * 7)
-            field[i + j * PERIOD] = v > 0.18
-        end
-    end
-    obj = SpawnObject("Clouds")
-end
-
-local function build(ci, cj)
-    local pos, nrm, idx = {}, {}, {}
+local function build()
+    local pos, nrm, uv, idx = {}, {}, {}, {}
     local nv = 0
-    local function face(corners, n)
+    local function quad(corners, n, uvs)
         for k = 1, 4 do
-            local p = corners[k]
+            local p, t = corners[k], uvs[k]
             pos[#pos + 1] = p[1]; pos[#pos + 1] = p[2]; pos[#pos + 1] = p[3]
             nrm[#nrm + 1] = n[1]; nrm[#nrm + 1] = n[2]; nrm[#nrm + 1] = n[3]
+            uv[#uv + 1] = t[1] / 256; uv[#uv + 1] = t[2] / 256
         end
         idx[#idx + 1] = nv + 1; idx[#idx + 1] = nv + 2; idx[#idx + 1] = nv + 3
         idx[#idx + 1] = nv + 1; idx[#idx + 1] = nv + 3; idx[#idx + 1] = nv + 4
         nv = nv + 4
     end
-    for j = cj - RANGE, cj + RANGE do
-        for i = ci - RANGE, ci + RANGE do
-            if filled(i, j) then
-                local x0, x1 = i * CELL, (i + 1) * CELL
-                local z0, z1 = j * CELL, (j + 1) * CELL
-                local y0, y1 = 0, THICK
-                face({{x0,y1,z0},{x0,y1,z1},{x1,y1,z1},{x1,y1,z0}}, {0, 1, 0})
-                face({{x0,y0,z0},{x1,y0,z0},{x1,y0,z1},{x0,y0,z1}}, {0, -1, 0})
-                if not filled(i + 1, j) then face({{x1,y0,z0},{x1,y1,z0},{x1,y1,z1},{x1,y0,z1}}, {1, 0, 0}) end
-                if not filled(i - 1, j) then face({{x0,y0,z0},{x0,y0,z1},{x0,y1,z1},{x0,y1,z0}}, {-1, 0, 0}) end
-                if not filled(i, j + 1) then face({{x0,y0,z1},{x1,y0,z1},{x1,y1,z1},{x0,y1,z1}}, {0, 0, 1}) end
-                if not filled(i, j - 1) then face({{x0,y0,z0},{x0,y1,z0},{x1,y1,z0},{x1,y0,z0}}, {0, 0, -1}) end
+    local B = 8
+    for l = -3, 4 do
+        for i1 = -3, 4 do
+            local x0, z0 = l * B, i1 * B
+            local x1, z1 = x0 + B, z0 + B
+            local flat = {{x0, z0}, {x1, z0}, {x1, z1}, {x0, z1}}
+            quad({{x0, 0, z0}, {x1, 0, z0}, {x1, 0, z1}, {x0, 0, z1}}, {0, -1, 0}, flat)
+            local top = THICK - EPS
+            quad({{x0, top, z0}, {x1, top, z0}, {x1, top, z1}, {x0, top, z1}}, {0, 1, 0}, flat)
+            for j = 0, B - 1 do
+                local uc = x0 + j + 0.5
+                local vc = z0 + j + 0.5
+                if l > -1 then
+                    local x = x0 + j
+                    quad({{x, 0, z0}, {x, THICK, z0}, {x, THICK, z1}, {x, 0, z1}}, {-1, 0, 0},
+                         {{uc, z0}, {uc, z0}, {uc, z1}, {uc, z1}})
+                end
+                if l <= 1 then
+                    local x = x0 + j + 1 - EPS
+                    quad({{x, 0, z0}, {x, THICK, z0}, {x, THICK, z1}, {x, 0, z1}}, {1, 0, 0},
+                         {{uc, z0}, {uc, z0}, {uc, z1}, {uc, z1}})
+                end
+                if i1 > -1 then
+                    local z = z0 + j
+                    quad({{x0, 0, z}, {x0, THICK, z}, {x1, THICK, z}, {x1, 0, z}}, {0, 0, -1},
+                         {{x0, vc}, {x0, vc}, {x1, vc}, {x1, vc}})
+                end
+                if i1 <= 1 then
+                    local z = z0 + j + 1 - EPS
+                    quad({{x0, 0, z}, {x0, THICK, z}, {x1, THICK, z}, {x1, 0, z}}, {0, 0, 1},
+                         {{x0, vc}, {x0, vc}, {x1, vc}, {x1, vc}})
+                end
             end
         end
     end
-    if nv == 0 then return end
     local m = mesh()
-    m.arrays{position = pos, normal = nrm, index = idx}
+    m.arrays{position = pos, normal = nrm, uv = uv, index = idx}
     m.apply(obj)
     SetMaterial(obj, MAT)
-    builtAt = {ci, cj}
+end
+
+function Clouds.init()
+    obj = SpawnObject("Clouds")
+    build()
 end
 
 function Clouds.update(dt, P)
     if not obj then return end
-    shift = shift + WIND * dt
-    -- Клетка поля под игроком с учётом сноса: поле уехало на shift вправо,
-    -- значит игрок «стоит» на клетке левее.
-    local ci = math.floor((P.pos.x - shift) / CELL)
-    local cj = math.floor(P.pos.z / CELL)
-    if not builtAt or math.abs(ci - builtAt[1]) > 4 or math.abs(cj - builtAt[2]) > 4 then build(ci, cj) end
-    obj.Transform.Position = Vec3(shift, HEIGHT, 0)
-    -- Снизу облака видны лицом вниз, изнутри — тоже: отсечение задних граней
-    -- выключаем, когда камера внутри слоя (иначе облако исчезает изнутри).
-    local _, ey = P.eye()
-    local inside = ey > HEIGHT and ey < HEIGHT + THICK
-    if inside ~= Clouds._inside then
-        Clouds._inside = inside
-        SetMaterialParam(MAT, "uCloudColor", inside and Vec3(0.9, 0.9, 0.92) or Vec3(1, 1, 1))
-    end
+    local Sky = require "sky"
+    local ex, ey, ez = P.eye()
+    local t = Sky.cloudTicks + Sky.partial
+    local d1 = (ex + t * 0.03) / CELL
+    local d2 = ez / CELL + 0.33
+    d1 = d1 - math.floor(d1 / 2048) * 2048
+    d2 = d2 - math.floor(d2 / 2048) * 2048
+    local c1, c2 = math.floor(d1), math.floor(d2)
+    obj.Transform.Position = Vec3(ex - (d1 - c1) * CELL, HEIGHT + 0.33, ez - (d2 - c2) * CELL)
+    obj.Transform.Scale = Vec3(CELL, 1, CELL)
+    SetMaterialParam(MAT, "uOffset", Vec2((c1 % 256) / 256, (c2 % 256) / 256))
+    -- Низ виден снизу и изнутри слоя, верх — сверху и изнутри (f4 оригинала).
+    local f4 = HEIGHT - ey + 0.33
+    SetMaterialParam(MAT, "uShowBottom", f4 > -THICK - 1 and 1 or 0)
+    SetMaterialParam(MAT, "uShowTop", f4 <= THICK + 1 and 1 or 0)
 end
 
 return Clouds

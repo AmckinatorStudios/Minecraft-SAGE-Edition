@@ -1,5 +1,5 @@
 {
-  "cull": "front",
+  "cull": "none",
   "vertexShader": "assets/shaders/sky.vert",
   "fragmentShader": "assets/shaders/sky.frag",
   "params": {}

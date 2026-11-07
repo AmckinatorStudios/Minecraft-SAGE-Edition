@@ -101,6 +101,7 @@ local function placeCamera()
         Mat.rotate(m, orbit, 0, 1, 0)
         Mat.rotate(m, -6, 1, 0, 0)
         Mat.applyTo(cameraObj, m)
+        Sky.follow(cameraObj)
         return
     end
     if thirdPerson == 0 then
@@ -128,6 +129,7 @@ local function placeCamera()
         else Mat.rotate(m, 180, 0, 1, 0); Mat.rotate(m, -P.pitch, 1, 0, 0) end
         Mat.applyTo(cameraObj, Mat.mul(m, bobInv))
     end
+    Sky.follow(cameraObj)
 end
 
 -- Мир: сохранение, зерно, игрок, рюкзак — ПОСЛЕ выбора в меню (или сразу —
@@ -150,11 +152,13 @@ local function openWorld(w)
     if loaded and loaded.player then
         sx, sy, sz = loaded.player.x, loaded.player.y, loaded.player.z
         P.yaw, P.pitch = loaded.player.yaw or 0, loaded.player.pitch or 0
-        Sky.time = loaded.time or Sky.time
     end
+    Sky.load(loaded)
     P.pos.x, P.pos.y, P.pos.z = sx, sy, sz
     -- Параметры для снимков и проверки: время суток, вид, взгляд.
-    if LaunchArg("time") ~= "" and LaunchArg("time") then Sky.time = tonumber(LaunchArg("time")) or Sky.time end
+    Sky.setTime(tonumber(LaunchArg("time") or ""))
+    if (LaunchArg("weather") or "") ~= "" then require("weather").set(LaunchArg("weather")) end
+    Sky.flashFlag = LaunchFlag("lightning")
     thirdPerson = tonumber(LaunchArg("third") or "") or 0
     P.yaw = tonumber(LaunchArg("yaw") or "") or P.yaw
     P.pitch = tonumber(LaunchArg("pitch") or "") or P.pitch
@@ -202,12 +206,24 @@ local function startGame()
     bindControls()
     playerObj = FindObject("Player")
     cameraObj = FindObject("Player Camera")
+    -- Кадр — проходами, как у EntityRenderer 1.7.10: небо (своя дальность,
+    -- светила на 100 блоках при любой прорисовке), поверх — светила и звёзды,
+    -- потом мир со сброшенной глубиной, последней — рука от первого лица со
+    -- своей проекцией (поле зрения 70, ближняя плоскость 0.05) и снова
+    -- сброшенной глубиной: в блоки она не уходит.
+    camera.set_passes(cameraObj, {
+        {layers = {"sky"}, far = 1000},
+        {layers = {"sky_top"}, far = 1000},
+        {layers = {"default"}, clear_depth = true},
+        {layers = {Hand.LAYER}, clear_depth = true, fov = 70, near = 0.05},
+    })
     A.build()
     if LaunchFlag("gencheck") then G.init(tonumber(LaunchArg("seed") or "") or 1337) end
     -- Проверка генерации без игры: --gencheck (итог — строка GENCHECK в логе).
     if LaunchFlag("gencheck") then
         log(G.selfCheck())
         log(Anim.selfCheck())
+        log(Sky.selfCheck())
         -- Свет факела в открытом воздухе: 14, 13, … — по одному за клетку.
         -- (Очередь волны с дырой обрывала свет через три клетки.)
         do
@@ -375,6 +391,8 @@ function OnUpdate(entity, dt)
         Menu.update(dt)
         if not busy then
             loading = false
+            -- Время из параметра — с момента входа в мир: загрузка его не сдвигает.
+            Sky.setTime(tonumber(LaunchArg("time") or ""))
             Menu.enterGame()
             Hud.setVisible(true)
             Inv.setHudVisible(true)
@@ -471,6 +489,9 @@ function OnUpdate(entity, dt)
         placeCamera()
         return
     end
+    -- Экран загрузки гаснет уже поверх мира: меню не активно, но довести
+    -- растворение надо (иначе он остаётся на экране навсегда).
+    if Menu.fading() then Menu.update(dt) end
 
     if WasActionPressed("Inventory") then Inv.toggleScreen() end
     if WasActionPressed("Pause") then

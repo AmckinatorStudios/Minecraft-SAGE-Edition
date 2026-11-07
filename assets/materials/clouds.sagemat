@@ -1,7 +1,9 @@
 {
-  "cull": "back",
+  "cull": "none",
   "opacity": 0.8,
+  "filtering": "nearest",
   "vertexShader": "assets/shaders/clouds.vert",
   "fragmentShader": "assets/shaders/clouds.frag",
+  "textures": {"uTex": "assets/textures/environment/clouds.png"},
   "params": {}
 }
