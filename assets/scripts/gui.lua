@@ -70,15 +70,18 @@ function Gui.label(parent, text, align, color)
     return l
 end
 
--- Кнопка 1.7.10: 20 пикселей в высоту, надпись по центру (на пиксель выше
--- середины, как у оригинала). Девятина: края 2×2 пикселя оригинала (×2 у
--- набора 32×) — в листе у куска; пиксель набора — 1 экранный (S / 2).
+-- Кнопка 1.7.10: 20 пикселей в высоту, верх букв — на 6-м пикселе
+-- (drawCenteredString с y + (20 - 8) / 2). Движок ставит по центру тело букв
+-- (7 пикселей шрифта), поэтому снизу снят один экранный пиксель: буквы
+-- встают ровно туда, где их рисует оригинал. Девятина: края 2×2 пикселя
+-- оригинала (×2 у набора 32×) — в листе у куска; пиксель набора — 1 экранный
+-- (S / 2).
 local function widget(parent, name, text, normal, hover)
     return ui.button{parent = parent, name = name, w = 200 * S, h = 20 * S,
         image = WIDGETS, sprite = normal, pixel = S / 2,
         hover = {sprite = hover}, pressed = {sprite = hover}, disabled = {sprite = "button_disabled"},
         text = text, font = U.FONT, size = 16, text_color = Gui.BUTTON, shadow_offset = 2,
-        hover_text_color = Gui.HOVER, disabled_text_color = Gui.GRAY, text_margin = {0, 0, 0, 2 * S}}
+        hover_text_color = Gui.HOVER, disabled_text_color = Gui.GRAY, text_margin = {0, 0, 0, 2}}
 end
 
 function Gui.button(parent, text, onClick)
