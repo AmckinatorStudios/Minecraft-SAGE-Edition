@@ -30,6 +30,8 @@ function Auto.checkLook()
     return y1 > y0 and x2 > 0
 end
 
+function Auto.wanted() return LaunchFlag("autopilot") end
+
 function Auto.init()
     Auto.active = LaunchFlag("autopilot")
     if Auto.active then
