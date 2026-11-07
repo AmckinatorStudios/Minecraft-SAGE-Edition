@@ -135,7 +135,10 @@ end
 
 -- Крошки: кусочки текстуры блока разлетаются и пропадают.
 function D.burst(id, x, y, z)
-    if not isCube(id) then return end
+    -- Крошки — у любого блока с картинкой (addBlockDestroyEffects): у
+    -- растений — из их собственной текстуры.
+    local d = B.byId[id]
+    if not d or not d.isBlock or B.drawKind[id] == 4 then return end
     for i = 1, 8 do
         local o = SpawnObject("Bit")
         cubeMesh(id, 0.09, 0.2, math.random() * 0.8, math.random() * 0.8).apply(o)
@@ -218,6 +221,7 @@ function D.update(dt)
         if e.age > 300 or e.y < -10 then removed = true end
         if removed then
             DestroyObject(e.obj)
+            if e.shadow then require("shadows").destroy(e.shadow) end
             table.remove(list, i)
         else
             e.spin = (e.spin + dt * 70) % 360
@@ -225,6 +229,10 @@ function D.update(dt)
             e.obj.Transform.Position = Vec3(e.x, e.y + bob, e.z)
             -- Свет клетки предмета (getBrightnessForRender: высота 0.25 × 0.66).
             Light.applyLevels(e.obj, Light.levels(e.x, e.y + 0.165, e.z))
+            -- Тень предмета (RenderItem: shadowSize 0.15, shadowOpaque 0.75).
+            local Sh = require "shadows"
+            e.shadow = e.shadow or Sh.new("Drop Shadow")
+            Sh.place(e.shadow, e.x, e.y - 0.13, e.z, 0.15, 0.75, Sh.camera())
             e.obj.Transform.Rotation = Vec3(0, e.spin, 0)
             i = i + 1
         end

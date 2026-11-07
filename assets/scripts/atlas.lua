@@ -31,6 +31,8 @@ A.destroyTile = {}         -- стадии трещин 0..9 -> плитка
 -- Цвет растительности: серые трава и листва набора окрашиваются им.
 local FOLIAGE = {0.50, 0.76, 0.33}
 local BIRCH = {0.56, 0.70, 0.40}
+-- Ель: постоянный цвет 0x619961 (ColorizerFoliage.getFoliageColorPine).
+local PINE = {0x61 / 255, 0x99 / 255, 0x61 / 255}
 
 local tiles = {}           -- имя картинки -> номер плитки
 local sources = {}         -- имя картинки -> холст (для иконок)
@@ -69,7 +71,7 @@ end
 local function tintOf(d, name)
     if not name:find("!$") then return name, nil end
     name = name:sub(1, -2)
-    return name, d.name:find("birch") and BIRCH or FOLIAGE
+    return name, d.name:find("birch") and BIRCH or (d.name:find("spruce") and PINE or FOLIAGE)
 end
 
 -- Выборка картинки грани для иконки: u, v — доли 0..1 (v снизу вверх).

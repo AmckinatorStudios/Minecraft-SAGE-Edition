@@ -32,7 +32,7 @@ Menu.screen = nil
 Menu.onOpenWorld = nil    -- function(world) — из game.lua
 Menu.onQuitToTitle = nil
 Menu.onResume = nil
-Menu.options = {fov = 70, render = 6, master = 1, music = 1, sensitivity = 0.5, gamma = 0}
+Menu.options = {fov = 70, render = 6, master = 1, music = 1, sensitivity = 0.5, gamma = 0, fancy = true}
 
 local screens = {}
 local lastW, lastH = 0, 0
@@ -452,6 +452,14 @@ local function buildOptions()
             return "Brightness: " .. (p == 0 and "Moody" or (p == 100 and "Bright" or ("+" .. p .. "%")))
         end, function(v) o.gamma = v; apply() end),
     }
+    -- Graphics: Fancy/Fast (fancyGraphics) — тени под существами только в Fancy.
+    local function graphicsText() return "Graphics: " .. (o.fancy == false and "Fast" or "Fancy") end
+    local graphics
+    graphics = s.button(graphicsText(), function()
+        o.fancy = o.fancy == false
+        graphics.set(graphicsText())
+        apply()
+    end)
     local done = s.button("Done", function()
         saveOptions()
         Menu.go(Menu.optionsBack or "title")
@@ -464,6 +472,7 @@ local function buildOptions()
             local k = i - 1
             sl.place(W / 2 - 155 + (k % 2) * 160, H / 6 - 12 + 24 * (k // 2), 150)
         end
+        graphics.place(W / 2 - 155 + (#sliders % 2) * 160, H / 6 - 12 + 24 * (#sliders // 2), 150)
         done.place(W / 2 - 100, H / 6 + 168, 200)
     end
     function s.tick() for _, sl in ipairs(sliders) do sl.update() end end

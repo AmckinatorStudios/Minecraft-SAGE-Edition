@@ -57,6 +57,7 @@ function S.write()
         inventory = Inv.serialize(),
         furnaces = require("furnace").serialize(),
         maps = require("map").serialize(),
+        plants = require("plants").save(),
         player = {x = P.pos.x, y = P.pos.y, z = P.pos.z, yaw = P.yaw, pitch = P.pitch},
         time = Sky.time,
         sky = Sky.save(),

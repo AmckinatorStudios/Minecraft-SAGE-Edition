@@ -13,6 +13,7 @@
 -- ---------------------------------------------------------------------------
 local W = require "world"
 local Snd = require "sounds"
+local Plants = require "plants"
 local B = require "blocks"
 local A = require "atlas"
 local L = require "light"
@@ -125,7 +126,11 @@ function Act.breakTime(id)
     if tool and tool.isBlock then tool = nil end
     local speed, tier = 1, 0
     if tool and tool.tool and tool.tool == d.tool then speed, tier = tool.speed, tool.tier end
-    if tool and tool.tool == "sword" and (d.name == "leaves" or d.name == "birch_leaves") then speed = 1.5 end
+    if tool and tool.tool == "sword" and B.isLeaves[id] then speed = 1.5 end
+    -- Ножницы (ItemShears.func_150893_a): листва — 15, шерсть — 5.
+    if tool and tool.shears then
+        if B.isLeaves[id] then speed = 15 elseif d.name:find("wool") then speed = 5 end
+    end
     local ok = (d.need or 0) <= tier
     -- Неподходящим инструментом (или руками по камню) — втрое дольше.
     local t = d.hard * (ok and 1.5 or 5) / speed
@@ -165,21 +170,31 @@ local function breakBlock(t)
     -- Содержимое печи — на землю, как в Minecraft.
     if require("furnace").isFurnace(id) then require("furnace").broken(t.x, t.y, t.z) end
     Act.setBlock(t.x, t.y, t.z, 0)
-    -- Растение над сломанным блоком падает вместе с опорой.
+    Plants.onBreak(id, t.x, t.y, t.z)
+    -- Растение над сломанным блоком без опоры ломается само (checkAndDropBlock)
+    -- и роняет то же, что при поломке рукой.
     local above = W.get(t.x, t.y + 1, t.z)
-    if B.drawKind[above] == 3 or B.drawKind[above] == 5 then Act.setBlock(t.x, t.y + 1, t.z, 0) end
+    if B.drawKind[above] == 3 or B.drawKind[above] == 5 then
+        Act.setBlock(t.x, t.y + 1, t.z, 0)
+        Plants.onBreak(above, t.x, t.y + 1, t.z)
+        Plants.spill(Plants.dropsOf(above, false) or {{B.dropOf(above), 1}}, t.x, t.y + 1, t.z)
+    end
     -- Соседняя вода затекает в дыру (одна клетка — без настоящего течения).
     for _, d in ipairs({{1,0,0},{-1,0,0},{0,0,1},{0,0,-1},{0,1,0}}) do
         if W.get(t.x + d[1], t.y + d[2], t.z + d[3]) == 11 then Act.setBlock(t.x, t.y, t.z, 11); break end
     end
     local Drops = require "drops"
-    if ok then
+    local heldNow = Inv.current()
+    local special = Plants.dropsOf(id, heldNow and B.byId[heldNow.id] and B.byId[heldNow.id].shears)
+    if special then
+        -- Листва и трава: свои шансы (саженцы, яблоки, семена; ножницами — блок).
+        Plants.spill(special, t.x, t.y, t.z)
+    elseif ok then
         local drop = B.dropOf(id)
         if drop then Drops.spawn(drop, B.dropCount(id), t.x + 0.5, t.y + 0.5, t.z + 0.5) end
         local xp = B.xpOf(id)
         if xp > 0 then require("hud").addXp(xp) end
         local d = B.byId[id]
-        if d.apple and math.random() < d.apple then Drops.spawn(B.byName.apple.id, 1, t.x + 0.5, t.y + 0.5, t.z + 0.5) end
         if d.flint and math.random() < d.flint then Drops.spawn(B.byName.flint.id, 1, t.x + 0.5, t.y + 0.5, t.z + 0.5) end
     end
     Drops.burst(id, t.x + 0.5, t.y + 0.5, t.z + 0.5)
@@ -207,16 +222,23 @@ local function place(t)
     local d = B.byId[held.id]
     if not d or not d.isBlock then return end
     local x, y, z = t.x + t.nx, t.y + t.ny, t.z + t.nz
-    -- В траву ставится поверх (трава заменяется).
-    if B.drawKind[t.id] == 3 then x, y, z = t.x, t.y, t.z end
+    -- В траву ставится поверх (трава заменяется: isReplaceable — только у
+    -- высокой травы, не у цветов и саженцев).
+    local tall = B.byName.tallgrass.id
+    if t.id == tall then x, y, z = t.x, t.y, t.z end
     local cur = W.get(x, y, z)
-    if cur ~= 0 and B.drawKind[cur] ~= 4 and B.drawKind[cur] ~= 3 then return end
+    if cur ~= 0 and B.drawKind[cur] ~= 4 and cur ~= tall then return end
     if y < 0 or y >= W.HEIGHT or not P.canPlace(x, y, z, held.id) then return end
-    -- Растение и факел — только на твёрдую опору.
-    if (d.draw == "cross" or d.draw == "torch") and not B.opaque[W.get(x, y - 1, z)] then return end
+    -- Трава, цветы, саженцы — на траву или землю (BlockBush.canPlaceBlockOn);
+    -- тростник и факел — на твёрдую опору.
+    local below = W.get(x, y - 1, z)
+    if d.draw == "cross" and d.name ~= "reeds" then
+        if not Plants.soil(below) then return end
+    elseif (d.draw == "cross" or d.draw == "torch") and not B.opaque[below] then return end
     if Act.setBlock(x, y, z, held.id) then
         Act.stats.placed = Act.stats.placed + 1
         Snd.place(held.id, x, y, z)
+        Plants.onPlace(held.id, x, y, z)
         Inv.useOne()
         Anim.swingItem()
         settle(x, y - 1, z)
@@ -284,6 +306,13 @@ function Act.update(dt, actions)
             -- уже используется
         elseif placeCooldown == 0 and hd and hd.use and not activates(target) then
             Act.startUse(held, hd)
+            placeCooldown = 0.22
+        elseif placeCooldown == 0 and hd and hd.name == "bone_meal" and target then
+            -- Костная мука по саженцу (ItemDye.applyBonemeal): тратится одна.
+            if Plants.boneMeal(target.x, target.y, target.z) then
+                Inv.useOne()
+                Anim.swingItem()
+            end
             placeCooldown = 0.22
         elseif placeCooldown == 0 and hd and not hd.isBlock and not activates(target) then
             Act.useItem(held, hd)
