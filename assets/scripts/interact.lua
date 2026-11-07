@@ -336,11 +336,15 @@ function Act.update(dt, actions)
             if s and s.id == target.id then Inv.select(i); return end
         end
     end
+    -- Q — один предмет из выбранной ячейки, Ctrl+Q — всю стопку
+    -- (dropOneItem(GuiScreen.isCtrlKeyDown())).
     if WasActionPressed("Drop") then
         local s = Inv.current()
         if s then
-            require("drops").throwFromPlayer(s.id, 1, s.wear)
-            Inv.useOne()
+            local all = Input.is_key_down("LeftControl") or Input.is_key_down("Control")
+            local n = all and s.n or 1
+            require("drops").throwFromPlayer(s.id, n, s.wear)
+            if all then Inv.slots[Inv.selected] = nil else Inv.useOne() end
         end
     end
 end
