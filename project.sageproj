@@ -1,4 +1,13 @@
 {
   "name": "SAGE Craft",
-  "sage_project_version": 1
+  "sage_project_version": 1,
+  "game": {
+    "name": "SAGE Craft",
+    "description": "Voxel sandbox built on SAGE Engine",
+    "author": "Amckinator Studios",
+    "company": "Amckinator Studios",
+    "version": "0.1.0",
+    "copyright": "© 2026 Amckinator Studios",
+    "icon": "assets/icon.png"
+  }
 }
