@@ -25,21 +25,19 @@ function Hud.buildIcons()
         local hx = -half + (i - 1) * 8 * S + 4.5 * S
         local fx = half - (i - 1) * 8 * S - 4.5 * S
         local y = 22 * S + 6 * S
-        U.sprite(root, "Heart Back " .. i, UIAnchor.BottomCenter, hx, y, 9 * S, 9 * S, ICONS, "heart_empty")
-        local h = U.sprite(root, "Heart " .. i, UIAnchor.BottomCenter, hx, y, 9 * S, 9 * S, ICONS, "heart_full")
-        hearts[i] = {obj = h, shown = ""}
+        U.sprite(root, "Heart Back " .. i, "bottom", hx, y, 9 * S, 9 * S, ICONS, "heart_empty")
+        local h = U.sprite(root, "Heart " .. i, "bottom", hx, y, 9 * S, 9 * S, ICONS, "heart_full")
+        hearts[i] = {el = h, shown = ""}
         if Hud.HUNGER then
-            U.sprite(root, "Food Back " .. i, UIAnchor.BottomCenter, fx, y, 9 * S, 9 * S, ICONS, "food_empty")
-            local f = U.sprite(root, "Food " .. i, UIAnchor.BottomCenter, fx, y, 9 * S, 9 * S, ICONS, "food_full")
-            foods[i] = {obj = f, shown = ""}
+            U.sprite(root, "Food Back " .. i, "bottom", fx, y, 9 * S, 9 * S, ICONS, "food_empty")
+            local f = U.sprite(root, "Food " .. i, "bottom", fx, y, 9 * S, 9 * S, ICONS, "food_full")
+            foods[i] = {el = f, shown = ""}
         end
     end
-    U.sprite(root, "XP Back", UIAnchor.BottomCenter, 0, 22 * S + 1 * S, 182 * S, 5 * S, ICONS, "xp_back")
-    local xfo, xf = U.sprite(root, "XP Fill", UIAnchor.BottomCenter, 0, 22 * S + 1 * S, 182 * S, 5 * S, ICONS, "xp_fill")
-    xpFill = xf
-    Hud.xpFillObj = xfo
-    local _, xl = U.label(root, "XP Level", UIAnchor.BottomCenter, 0, 22 * S + 4 * S, 60, 18, "", 1, true)
-    xl.TextColor = Vec4(0.5, 1, 0.13, 1)
+    U.sprite(root, "XP Back", "bottom", 0, 22 * S + 1 * S, 182 * S, 5 * S, ICONS, "xp_back")
+    xpFill = U.sprite(root, "XP Fill", "bottom", 0, 22 * S + 1 * S, 182 * S, 5 * S, ICONS, "xp_fill")
+    local xl = U.label(root, "XP Level", "bottom", 0, 22 * S + 4 * S, 60, 18, "", 1, true)
+    xl.text_color = Vec4(0.5, 1, 0.13, 1)
     xpLabel = xl
     Hud.xpWidth = 182 * S
 end
@@ -52,11 +50,10 @@ local function setRow(row, value, prefix)
         local it = row[i]
         if it.shown ~= piece then
             it.shown = piece
-            local e = it.obj:GetUI()
-            if piece == "" then e.Visible = false
+            if piece == "" then it.el.visible = false
             else
-                e.Visible = true
-                SetUISpriteNamed(it.obj, ICONS, prefix .. piece, true)
+                it.el.visible = true
+                it.el.sprite = prefix .. piece
             end
         end
     end
@@ -93,9 +90,9 @@ local function buildChat()
     for i = 1, CHAT_ROWS do
         -- Строка i — от 48 пикселей игры над низом экрана вверх по 9 (GuiNewChat).
         local y = (48 + (i - 1) * 9) * S
-        local _, bg = U.fill(root, "Chat Back " .. i, UIAnchor.BottomLeft, 0, y, 324 * S, 9 * S, Vec4(0, 0, 0, 0))
-        local _, tx = U.label(root, "Chat " .. i, UIAnchor.BottomLeft, 2 * S, y + 1 * S, 320 * S, 8 * S, "", 1)
-        bg.Visible, tx.Visible = false, false
+        local bg = U.fill(root, "Chat Back " .. i, "bottom_left", 0, y, 324 * S, 9 * S, Vec4(0, 0, 0, 0))
+        local tx = U.label(root, "Chat " .. i, "bottom_left", 2 * S, y + 1 * S, 320 * S, 8 * S, "", 1)
+        bg.visible, tx.visible = false, false
         chatRows[i] = {bg = bg, text = tx}
     end
 end
@@ -120,12 +117,12 @@ local function updateChat(dt)
             a = math.max(0, math.min(1, (1 - line.age / CHAT_LIFE) * 10))
             a = a * a
         end
-        row.bg.Visible, row.text.Visible = a > 0.02, a > 0.02
+        row.bg.visible, row.text.visible = a > 0.02, a > 0.02
         if a > 0.02 then
-            row.text.Text = line.text
-            row.text.TextColor = Vec4(1, 1, 1, a)
-            row.text.TextShadowColor = Vec4(0.25, 0.25, 0.25, a)
-            row.bg.Color = Vec4(0, 0, 0, 0.5 * a)
+            row.text.text = line.text
+            row.text.text_color = Vec4(1, 1, 1, a)
+            row.text.shadow_color = Vec4(0.25, 0.25, 0.25, a)
+            row.bg.color = Vec4(0, 0, 0, 0.5 * a)
         end
     end
     -- Возраст идёт и у строк за пределами экрана.
@@ -138,27 +135,24 @@ function Hud.init()
     -- Прицел инвертирует то, что под ним (как в Minecraft 1.7.10:
     -- ONE_MINUS_DST_COLOR / ONE_MINUS_SRC_COLOR) — тёмный на небе, светлый
     -- в пещере, виден на любой поверхности.
-    local _, cross = U.sprite(root, "Crosshair", UIAnchor.Center, 0, 0, 15 * U.HUD, 15 * U.HUD, ICONS, "crosshair")
-    cross.Blend = "invert"
+    local cross = U.sprite(root, "Crosshair", "center", 0, 0, 15 * U.HUD, 15 * U.HUD, ICONS, "crosshair")
+    cross.blend = "invert"
 
     Hud.buildIcons()
-    local _, fl = U.fill(root, "Damage Flash", UIAnchor.TopLeft, 0, 0, 10, 10, Vec4(0.8, 0, 0, 0))
-    fl.Stretch = UIStretch.Both
-    flash = fl
+    flash = U.fill(root, "Damage Flash", "top_left", 0, 0, 10, 10, Vec4(0.8, 0, 0, 0))
+    flash.stretch = "both"
 
     buildChat()
 
-    local _, de = U.label(root, "Debug", UIAnchor.TopLeft, 8, 8, 600, 160, "", 1.1)
-    de.Visible = false
-    debugLabel = de
+    debugLabel = U.label(root, "Debug", "top_left", 8, 8, 600, 160, "", 1.1)
+    debugLabel.visible = false
 
     local lp = U.screen("Loading", 50)
-    local _, bg = U.fill(lp, "Loading Back", UIAnchor.TopLeft, 0, 0, 10, 10, Vec4(0.10, 0.11, 0.13, 1))
-    bg.Stretch = UIStretch.Both
-    bg.Rounding = 0
-    U.label(lp, "Loading Title", UIAnchor.Center, 0, -20, 500, 40, "SAGE Craft", 2.6, true)
-    local _, sub = U.label(lp, "Loading Text", UIAnchor.Center, 0, 24, 500, 24, "Generating world…", 1.3, true)
-    sub.TextColor = U.MUTED
+    local bg = U.fill(lp, "Loading Back", "top_left", 0, 0, 10, 10, Vec4(0.10, 0.11, 0.13, 1))
+    bg.stretch = "both"
+    U.label(lp, "Loading Title", "center", 0, -20, 500, 40, "SAGE Craft", 2.6, true)
+    local sub = U.label(lp, "Loading Text", "center", 0, 24, 500, 24, "Generating world…", 1.3, true)
+    sub.text_color = U.MUTED
     loadPanel = lp
 end
 
@@ -173,7 +167,7 @@ end
 
 function Hud.toggleDebug()
     Hud.debug = not Hud.debug
-    debugLabel.Visible = Hud.debug
+    debugLabel.visible = Hud.debug
 end
 
 function Hud.damage(n)
@@ -219,12 +213,11 @@ function Hud.update(dt)
     -- Заливка — кусок картинки той же ширины, что доля опыта.
     local frac = Hud.xp / need
     local w = math.max(1, math.floor(182 * frac))
-    xpFill.Size = Vec2(w * U.HUD, 5 * U.HUD)
-    xpFill.Position = Vec2((-182 + w) / 2 * U.HUD, 22 * U.HUD + 1 * U.HUD)
-    SetUISprite(Hud.xpFillObj, 0, 138, w * 2, 10)
-    xpLabel.Text = Hud.level > 0 and tostring(Hud.level) or ""
+    xpFill.place((-182 + w) / 2 * U.HUD, 22 * U.HUD + 1 * U.HUD, w * U.HUD, 5 * U.HUD)
+    xpFill.sprite = {0, 138, w * 2, 10}
+    xpLabel.text = Hud.level > 0 and tostring(Hud.level) or ""
     flashTimer = math.max(0, flashTimer - dt)
-    flash.Color = Vec4(0.8, 0, 0, flashTimer)
+    flash.color = Vec4(0.8, 0, 0, flashTimer)
 
     if Hud.debug then
         local P = require "player"
@@ -234,7 +227,7 @@ function Hud.update(dt)
         for _ in pairs(W.chunks) do n = n + 1 end
         for _ in pairs(C.objects) do secs = secs + 1 end
         local bx, by, bz = math.floor(P.pos.x), math.floor(P.pos.y), math.floor(P.pos.z)
-        debugLabel.Text = string.format(
+        debugLabel.text = string.format(
             "SAGE Craft   %.0f fps\nXYZ: %.2f / %.2f / %.2f\nBlock: %d %d %d   chunk %d %d\n" ..
             "Light: sky %d, block %d   day %.2f\nFacing: %.1f / %.1f\nChunks %d, sections %d, view %d\nTime of day %.3f\nBiome: %s",
             fps, P.pos.x, P.pos.y, P.pos.z, bx, by, bz, bx // 16, bz // 16,

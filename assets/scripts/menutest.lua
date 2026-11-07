@@ -53,7 +53,7 @@ function T.update(dt, worldOpen, loading)
                 Menu.go("select")
                 Menu.go("create")
                 local cs = Menu.screens.create
-                cs.field.e.Text = NAME
+                cs.field.el.text = NAME
                 phase, timer = "creating", 0
             end
         elseif phase == "creating" and timer > 0.3 then

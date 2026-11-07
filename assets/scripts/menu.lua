@@ -46,8 +46,8 @@ local SPLASHES = {"Made with SAGE!", "Now with furnaces!", "Cubes everywhere!", 
 -- --- Каркас экрана ----------------------------------------------------------
 
 local function newScreen(name, order)
-    local root, re = U.screen("Screen " .. name, order or 70)
-    local s = {name = name, root = root, re = re, items = {}, buttons = {}}
+    local root = U.screen("Screen " .. name, order or 70)
+    local s = {name = name, root = root, items = {}, buttons = {}}
     function s.add(item) s.items[#s.items + 1] = item; return item end
     function s.button(text, onClick)
         local b = Gui.button(root, text, onClick)
@@ -61,7 +61,7 @@ end
 
 local function show(s, on, alpha)
     U.show(s.root, on)
-    s.re.Alpha = alpha or 1
+    s.root.alpha = alpha or 1
 end
 
 -- Перейти на экран (с растворением). name == nil — закрыть все.
@@ -92,8 +92,8 @@ local function backdrop(s)
     s.layoutBack = function(W, H)
         s.dirt.place(0, 0, W, H)
         s.dim.place(0, 0, W, H)
-        U.show(s.dirt.obj, Menu.phase ~= "game")
-        U.show(s.dim.obj, Menu.phase == "game")
+        U.show(s.dirt.el, Menu.phase ~= "game")
+        U.show(s.dim.el, Menu.phase == "game")
     end
 end
 
@@ -104,18 +104,15 @@ local function buildTitle()
     -- Светлый верх и тёмный низ поверх размытой панорамы (renderSkybox).
     local top = Gui.rect(s.root, Vec4(1, 1, 1, 0.5), Vec4(1, 1, 1, 0))
     local bottom = Gui.rect(s.root, Vec4(0, 0, 0, 0), Vec4(0, 0, 0, 0.5))
-    local lo, le = U.base(s.root, "Title Logo", UIAnchor.TopLeft, 0, 0, 274, 45)
-    le.Type = UIKind.Image
-    le.Color = Gui.WHITE
-    SetUIImage(lo, "assets/ui/title.png", false)
-    local _, sp = U.label(s.root, "Title Splash", UIAnchor.TopLeft, 0, 0, 300, 20, "", 1, true)
-    sp.TextColor = Gui.YELLOW
-    sp.TextShadowColor = Vec4(0.25, 0.25, 0, 1)
-    sp.TextVAlign = "center"
-    sp.Rotation = -20
+    local logo = ui.image{parent = s.root, name = "Title Logo", w = 274, h = 45,
+                          image = "assets/ui/title.png", sharp = false}
+    local sp = U.label(s.root, "Title Splash", "top_left", 0, 0, 300, 20, "", 1, true)
+    sp.text_color = Gui.YELLOW
+    sp.shadow_color = Vec4(0.25, 0.25, 0, 1)
+    sp.rotation = -20
     s.splash = sp
     s.splashText = SPLASHES[math.random(#SPLASHES)]
-    sp.Text = s.splashText
+    sp.text = s.splashText
     local single = s.button("Singleplayer", function() Menu.go("select") end)
     local options = s.button("Options...", function() Menu.optionsBack = "title"; Menu.go("options") end)
     local quit = s.button("Quit Game", function() game.Quit() end)
@@ -125,7 +122,7 @@ local function buildTitle()
         top.place(0, 0, W, H)
         bottom.place(0, 0, W, H)
         -- Логотип — 274 пикселя в ширину на высоте 30 (как два куска minecraft.png).
-        Gui.place(le, W / 2 - 137, 30, 274, 274 * 166 / 1003)
+        Gui.place(logo, W / 2 - 137, 30, 274, 274 * 166 / 1003)
         local j = math.floor(H / 4) + 48
         single.place(W / 2 - 100, j, 200)
         -- Ряд Options/Quit — на 12 ниже следующей строки кнопок (у оригинала
@@ -143,7 +140,7 @@ local function buildTitle()
         f = f * 100 / (#s.splashText * 6 + 32)
         -- Размер — масштаб текста: 2 — обычные 8 пикселей интерфейса (масштаб
         -- надписи движка по умолчанию), надпись крупнее в f раз (glScalef).
-        sp.TextScale = 2 * f
+        sp.size = 16 * f
         Gui.place(sp, W / 2 + 90 - 150, 70 - 20, 300, 40)
     end
     return s
@@ -175,9 +172,7 @@ end
 local function buildSelect()
     local s = newScreen("select", 70)
     local back = Gui.dirt(s.root, 0x20 / 255)
-    local clipObj, clip = U.base(s.root, "World List", UIAnchor.TopLeft, 0, 0, 10, 10)
-    clip.Color = Vec4(0, 0, 0, 0)
-    clip.ClipChildren = true
+    local clip = ui.group{parent = s.root, name = "World List", clip = true}
     local bandTop, bandBottom = Gui.dirt(s.root), Gui.dirt(s.root)
     local shadeTop = Gui.rect(s.root, Vec4(0, 0, 0, 1), Vec4(0, 0, 0, 0))
     local shadeBottom = Gui.rect(s.root, Vec4(0, 0, 0, 0), Vec4(0, 0, 0, 1))
@@ -198,9 +193,8 @@ local function buildSelect()
     local function rowFor(i)
         local r = s.rows[i]
         if r then return r end
-        local o, e = U.base(clipObj, "World Row " .. i, UIAnchor.TopLeft, 0, 0, 220, SLOT)
-        e.Color = Vec4(0, 0, 0, 0)
-        r = {obj = o, e = e}
+        local o = ui.group{parent = clip, name = "World Row " .. i, w = 220, h = SLOT}
+        r = {el = o}
         r.box = Gui.rect(o, Gui.DARK)
         r.inner = Gui.rect(o, Vec4(0, 0, 0, 1))
         r.icon = Gui.image(o)
@@ -215,10 +209,10 @@ local function buildSelect()
         s.worlds = Worlds.list()
         s.selected = nil
         s.scroll = 0
-        for i, r in ipairs(s.rows) do U.show(r.obj, false) end
+        for i, r in ipairs(s.rows) do U.show(r.el, false) end
         for i, w in ipairs(s.worlds) do
             local r = rowFor(i)
-            U.show(r.obj, true)
+            U.show(r.el, true)
             r.name.set(w.name)
             r.info.set(w.folder .. " (" .. Worlds.dateText(w.savedAt) .. ")")
             r.mode.set(w.broken and "Damaged save" or "Survival Mode")
@@ -256,10 +250,10 @@ local function buildSelect()
         for i = 1, n do
             local r = s.rows[i]
             local y = 4 + (i - 1) * SLOT - s.scroll
-            Gui.place(r.e, left, y - 2, 220, SLOT)
+            Gui.place(r.el, left, y - 2, 220, SLOT)
             local sel = s.selected == i
-            U.show(r.box.obj, sel)
-            U.show(r.inner.obj, sel)
+            U.show(r.box.el, sel)
+            U.show(r.inner.el, sel)
             r.box.place(0, 0, 220, SLOT)
             r.inner.place(1, 1, 218, SLOT - 2)
             -- Превью 32×32 слева, текст — правее (иконка мира, как в новых
@@ -271,7 +265,7 @@ local function buildSelect()
         end
         -- Полоса прокрутки (x = W/2 + 124, ширина 6).
         local showBar = maxScroll > 0
-        U.show(track.obj, showBar); U.show(thumb.obj, showBar); U.show(thumbHi.obj, showBar)
+        U.show(track.el, showBar); U.show(thumb.el, showBar); U.show(thumbHi.el, showBar)
         if showBar then
             local h = math.max(32, math.min(area - 8, area * area / (n * SLOT)))
             local y = s.scroll * (area - h) / maxScroll + s.top
@@ -281,7 +275,7 @@ local function buildSelect()
         end
         -- Выбор строки щелчком; двойной щелчок (≤ 0.25 с) — играть.
         if Input.is_mouse_pressed("left") then
-            local c = UICursor()
+            local c = ui.cursor()
             local mx, my = c.x / S, c.y / S
             if my >= s.top and my < s.bottom and mx >= left and mx <= left + 220 then
                 local i = math.floor((my - s.top - 4 + s.scroll + 2) / SLOT) + 1
@@ -330,7 +324,7 @@ local function buildCreate()
     local cancel = s.button("Cancel", function() Menu.go("select") end)
     s.confirm = function() create.onClick() end
     function s.onOpen()
-        field.e.Text = "New World"
+        field.el.text = "New World"
         field.focus()
     end
     function s.layout(W, H)
@@ -369,7 +363,7 @@ local function buildRename()
     s.confirm = function() ok.onClick() end
     function s.onOpen()
         local w = Menu.selectedWorld()
-        field.e.Text = w and w.name or ""
+        field.el.text = w and w.name or ""
         field.focus()
     end
     function s.layout(W, H)
@@ -538,7 +532,7 @@ local function buildWorking(name, titleText)
     end
     function s.tick()
         local p = s.progress
-        U.show(bar.obj, p ~= nil); U.show(fill.obj, p ~= nil)
+        U.show(bar.el, p ~= nil); U.show(fill.el, p ~= nil)
         if p and s.W then
             bar.place(s.W / 2 - 50, s.H / 2 + 16, 100, 2)
             fill.place(s.W / 2 - 50, s.H / 2 + 16, math.max(0, math.min(100, p * 100)), 2)
@@ -613,12 +607,12 @@ function Menu.update(dt)
     -- Растворение экранов.
     if fadeIn then
         fadeIn.t = fadeIn.t + dt
-        fadeIn.s.re.Alpha = math.min(1, fadeIn.t / FADE)
+        fadeIn.s.root.alpha = math.min(1, fadeIn.t / FADE)
         if fadeIn.t >= FADE then fadeIn = nil end
     end
     if fadeOut then
         fadeOut.t = fadeOut.t + dt
-        fadeOut.s.re.Alpha = math.max(0, 1 - fadeOut.t / FADE)
+        fadeOut.s.root.alpha = math.max(0, 1 - fadeOut.t / FADE)
         if fadeOut.t >= FADE then
             if fadeOut.s ~= Menu.screen then show(fadeOut.s, false) end
             fadeOut = nil
