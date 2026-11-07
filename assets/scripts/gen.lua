@@ -6,12 +6,14 @@
 -- холодно, сухо / влажно) — ещё два медленных шума; из них — покров:
 -- дёрн, песок пустыни, снег. Пещеры — «червоточины» из двух 3D-шумов: клетка
 -- пустая, где оба шума близки к нулю (пересечение двух поверхностей даёт
--- длинные извилистые ходы, а не пузыри). Руда — гнёзда по хэшу.
+-- длинные извилистые ходы, а не пузыри). Руды — жилы по правилам Minecraft
+-- 1.7.10 (ores.lua).
 --
 -- Всё детерминировано по зерну: один и тот же участок всегда одинаков, поэтому
 -- в сохранение пишутся только ИЗМЕНЁННЫЕ клетки, а не весь мир.
 -- ---------------------------------------------------------------------------
 local W = require "world"
+local Ores = require "ores"
 
 local G = {}
 
@@ -43,6 +45,10 @@ local function shape(hv, rv, cv, tv, wv)
     local biome
     if tv > 0.32 and wv < 0.1 then biome = "desert"
     elseif tv < -0.38 then biome = "snow"
+    -- Горы — Extreme Hills, их подножие — Extreme Hills Edge (там и только
+    -- там растёт изумруд, см. ores.lua).
+    elseif mount >= 0.4 then biome = "extreme_hills"
+    elseif mount >= 0.25 then biome = "extreme_hills_edge"
     elseif wv > 0.18 then biome = "forest"
     else biome = "plains" end
     return math.floor(h), biome
@@ -70,6 +76,7 @@ G.rnd = rnd
 local AIR, STONE, GRASS, DIRT, SAND, GRAVEL, BEDROCK, WATER = 0, 1, 2, 3, 8, 9, 10, 11
 local COAL, IRON, GOLD, DIAMOND, SANDSTONE, SNOW, ICE, CLAY = 13, 14, 15, 16, 21, 28, 29, 30
 local LOG, LEAVES, BLOG, BLEAVES, TALLGRASS, ROSE, DANDELION, CACTUS = 6, 7, 31, 32, 22, 23, 24, 41
+local REEDS = 51
 
 local function put(c, x, y, z, id)
     -- Запись в свой участок по локальным координатам, без проверок мира.
@@ -219,14 +226,6 @@ function G.generate(c)
                     if a * a + bb * bb < 0.012 then id = AIR end
                 end
 
-                if id == STONE then
-                    local r = rnd(x, y, z, 2)
-                    if r < 0.012 then id = COAL
-                    elseif r < 0.019 and y < 64 then id = IRON
-                    elseif r < 0.021 and y < 32 then id = GOLD
-                    elseif r < 0.0222 and y < 16 then id = DIAMOND
-                    elseif r < 0.03 and y < 80 then id = GRAVEL end
-                end
                 if id ~= AIR then
                     if (y >> 4) ~= secY then secY = y >> 4; sec = W.section(c, secY, true) end
                     local i = col + (y & 15) * 256
@@ -236,6 +235,9 @@ function G.generate(c)
         end
     end
 
+    -- Руды — после рельефа и пещер: заменяют только камень.
+    Ores.generate(c, G.seed, function(x, z) local _, b = G.column(x, z) return b end, G.oreStats)
+
     -- Деревья — все клетки сетки, чья крона задевает участок (свои и соседей).
     local reach = CROWN + TREE_JITTER
     for gx = (bx - reach) // TREE_CELL, (bx + 15 + CROWN) // TREE_CELL do
@@ -243,6 +245,49 @@ function G.generate(c)
             local x, y, z, h, birch = G.treeIn(gx, gz)
             if x and x + CROWN >= bx and x - CROWN < bx + 16 and z + CROWN >= bz and z - CROWN < bz + 16 then
                 tree(c, x, y, z, h, birch)
+            end
+        end
+    end
+
+    -- Тростник (BiomeDecorator: 10 попыток WorldGenReed на участок, со
+    -- смещением +8 — потому прогоняются и соседи слева/сверху). Попытка — 20
+    -- точек рядом (±3), ставится в воздух на землю/песок/траву у воды,
+    -- высотой 2 + nextInt(nextInt(3) + 1). Высота попытки — nextInt(2·высоты
+    -- столба), как в оригинале: большинство попыток мимо.
+    for dz = -1, 0 do
+        for dx = -1, 0 do
+            local scx, scz = c.cx + dx, c.cz + dz
+            local r = Ores.chunkRandom(G.seed ~ 0x5EED, scx, scz)
+            -- reedsPerChunk биома (пустыня — 50, как BiomeGenDesert) + 10 общих.
+            local _, sb = G.column(scx * 16 + 16, scz * 16 + 16)
+            for _ = 1, (sb == "desert" and 50 or 0) + 10 do
+                local k = scx * 16 + r:nextInt(16) + 8
+                local l = scz * 16 + r:nextInt(16) + 8
+                local hk = G.column(k, l)
+                local y = r:nextInt(math.max(1, (math.max(hk, SEA) + 1) * 2))
+                for _ = 1, 20 do
+                    local x = k + r:nextInt(4) - r:nextInt(4)
+                    local z = l + r:nextInt(4) - r:nextInt(4)
+                    local tall = 2 + r:nextInt(r:nextInt(3) + 1)
+                    local lx, lz = x - bx, z - bz
+                    if lx >= 0 and lx < 16 and lz >= 0 and lz < 16 and y > 0 and y + tall < W.HEIGHT then
+                        local below = getLocal(c, lx, y - 1, lz)
+                        if getLocal(c, lx, y, lz) == AIR and (below == GRASS or below == DIRT or below == SAND) then
+                            -- Вода рядом с основанием — по рельефу (соседний участок
+                            -- может быть ещё не построен): вода стоит над дном до SEA.
+                            local wet = false
+                            for _, d in ipairs({{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) do
+                                local nh = G.column(x + d[1], z + d[2])
+                                if y - 1 > nh and y - 1 <= SEA then wet = true end
+                            end
+                            if wet then
+                                for t = 0, tall - 1 do
+                                    if getLocal(c, lx, y + t, lz) == AIR then put(c, lx, y + t, lz, REEDS) end
+                                end
+                            end
+                        end
+                    end
+                end
             end
         end
     end
@@ -274,15 +319,68 @@ end
 -- читает ту же клетку, что участок, — и при отрицательных координатах. 2) Ствол каждого дерева стоит
 -- целиком, а крона есть и по ту сторону границы участка. 3) Стволы не ближе
 -- TREE_CELL - TREE_JITTER клеток — кроны не слипаются. 4) Трава доходит до края участка.
+-- Руды (ores.lua): копия java.util.Random даёт числа Java; ни одной руды выше
+-- своего предела (+ полжилы); изумруд только в участках Extreme Hills, 4..31 и
+-- не больше 8 на участок; на участке без камня руда не ставится вовсе.
+local function oreCheck(stats, chunks)
+    local okRand, randText = Ores.selfCheckRandom()
+    local lim = {[COAL] = 127, [IRON] = 64, [GOLD] = 32, [48] = 16, [DIAMOND] = 16, [49] = 31}
+    local over = 0
+    for id, top in pairs(lim) do
+        local s = stats[id]
+        if s and s.maxY > top then over = over + 1 end
+    end
+    local em = stats[50] or {n = 0, minY = 4, maxY = 4}
+    local emOk = em.n <= 8 * (stats.emeraldChunks or 0) and (em.n == 0 or (em.minY >= 4 and em.maxY <= 31))
+    -- Участок без камня (одна земля) — руда не ставится вовсе.
+    local dirtChunk = W.newChunk(1000, 1000)
+    for y = 0, 60 do for z = 0, 15 do for x = 0, 15 do
+        local s = W.section(dirtChunk, y >> 4, true)
+        s[x + z * 16 + (y & 15) * 256 + 1] = DIRT
+    end end end
+    local dirtStats = {}
+    Ores.generate(dirtChunk, G.seed, function() return "extreme_hills" end, dirtStats)
+    local onDirt = 0
+    for id, s in pairs(dirtStats) do if type(s) == "table" then onDirt = onDirt + s.n end end
+    local n = function(id) return stats[id] and stats[id].n or 0 end
+    local per = function(id) return n(id) / chunks end
+    local ok = okRand and over == 0 and emOk and onDirt == 0 and n(COAL) > 0 and n(IRON) > 0 and n(49) > 0
+    return ok, string.format("%s руды/участок: уголь=%.0f железо=%.0f золото=%.1f редстоун=%.1f алмаз=%.1f лазурит=%.1f изумруд=%d(в %d горн.) выше_предела=%d на_земле=%d",
+        randText, per(COAL), per(IRON), per(GOLD), per(48), per(DIAMOND), per(49), n(50), stats.emeraldChunks or 0, over, onDirt)
+end
+
 function G.selfCheck()
     local R = 5
     local cells = {}
+    G.oreStats = {}
     for cx = -R, R do
         for cz = -R, R do
             local c = W.newChunk(cx, cz)
             G.generate(c)
         end
     end
+    local oreOk, oreText = oreCheck(G.oreStats, (2 * R + 1) * (2 * R + 1))
+    -- Тростник: есть, и каждый стебель стоит у воды на земле/песке/траве.
+    local reeds, reedsBad = 0, 0
+    for cx = -R, R do
+        for cz = -R, R do
+            local c = W.chunk(cx, cz)
+            for y = 1, W.HEIGHT - 1 do
+                for lz = 0, 15 do
+                    for lx = 0, 15 do
+                        if getLocal(c, lx, y, lz) == REEDS and getLocal(c, lx, y - 1, lz) ~= REEDS then
+                            reeds = reeds + 1
+                            local below = getLocal(c, lx, y - 1, lz)
+                            if below ~= GRASS and below ~= DIRT and below ~= SAND then reedsBad = reedsBad + 1 end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    oreOk = oreOk and reedsBad == 0
+    oreText = oreText .. string.format(" тростник=%d мимо=%d", reeds, reedsBad)
+    G.oreStats = nil
     local heightBad, worldBad, n = 0, 0, 0
     -- Доля руды в толще: камня должно быть подавляюще больше, чем угля.
     -- (Хэш, понятый как целое, давал уголь вместо всего камня.)
@@ -355,9 +453,9 @@ function G.selfCheck()
         end
     end
     local coalShare = coal / math.max(1, stone + coal)
-    local ok = coalShare < 0.05 and stone > 0 and iron > 0 and heightBad == 0 and worldBad == 0 and broken == 0 and cut == 0 and crossed > 0 and close == 0 and borderGrass > 0 and #trees > 0
-    return string.format("GENCHECK: %s столбов=%d высота_мимо=%d мир_мимо=%d деревьев=%d сломано=%d тесно=%d через_границу=%d срезано=%d трава_у_края=%d трава_внутри=%d угля=%.1f%% железа=%d",
-        ok and "PASS" or "FAIL", n, heightBad, worldBad, #trees, broken, close, crossed, cut, borderGrass, innerGrass, coalShare * 100, iron)
+    local ok = oreOk and coalShare < 0.05 and stone > 0 and iron > 0 and heightBad == 0 and worldBad == 0 and broken == 0 and cut == 0 and crossed > 0 and close == 0 and borderGrass > 0 and #trees > 0
+    return string.format("GENCHECK: %s столбов=%d высота_мимо=%d мир_мимо=%d деревьев=%d сломано=%d тесно=%d через_границу=%d срезано=%d трава_у_края=%d трава_внутри=%d угля=%.1f%% железа=%d %s",
+        ok and "PASS" or "FAIL", n, heightBad, worldBad, #trees, broken, close, crossed, cut, borderGrass, innerGrass, coalShare * 100, iron, oreText)
 end
 
 -- Точка спавна: ближайший к нулю сухой столб над уровнем моря, не под деревом.

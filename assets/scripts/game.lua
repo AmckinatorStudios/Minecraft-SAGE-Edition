@@ -27,6 +27,10 @@ local Menu   = require "menu"
 local Fall   = require "falling"
 local Music  = require "music"
 local Snd    = require "sounds"
+local Anim   = require "anim"
+local Arrows = require "arrows"
+local Map    = require "map"
+local Mat    = require "mat"
 
 local playerObj, cameraObj
 local started = false
@@ -49,6 +53,7 @@ local function bindControls()
     BindAction("Drop",      "Q")
     BindAction("View",      "F5")
     BindAction("Debug",     "F3")
+    BindAction("Screenshot", "F2")
     BindAction("Fly",       "F")
     BindAction("Skin",      "K")
     BindAction("Pause",     "ESCAPE")
@@ -65,20 +70,38 @@ local function readInput()
     inp.sneak = IsActionDown("Sneak")
     inp.descend = inp.sneak
     inp.sprintPressed = WasActionPressed("Sprint")
+    -- Проверка снимками: присед и ходьба без рук.
+    if LaunchFlag("sneak") then inp.sneak = true; inp.descend = true end
+    if LaunchFlag("walk") then inp.forward = 1 end
     return inp
 end
 
 local function placeCamera()
     local ex, ey, ez = P.eye()
-    -- Покачивание при ходьбе — от пройденного пути, а не от времени: стоя на
-    -- месте, камера не качается.
-    local bob = (P.onGround and not P.flying) and math.sin(P.walkDist * 2.2) * 0.04 or 0
+    -- Глаза в приседе ниже на 0.08 — плавно, по доле приседа.
+    ey = P.pos.y + P.EYE + (P.EYE_SNEAK - P.EYE) * Anim.sneak
     playerObj.Transform.Position = Vec3(P.pos.x, P.pos.y, P.pos.z)
     playerObj.Transform.Rotation = Vec3(0, P.yaw, 0)
     local cam = cameraObj.Transform
+    -- Покачивание при ходьбе (setupViewBobbing) — то же, что у руки: мир
+    -- рисуется с ним, значит камера стоит с обратным ему.
+    local bobInv = Mat.inverseRigid(Hand.bobMatrix())
+    -- Проверка снимками: камера по кругу у игрока (--orbit=градусы, 90 — справа).
+    local orbit = tonumber(LaunchArg("orbit") or "")
+    if orbit and thirdPerson ~= 0 then
+        local m = Mat.identity()
+        local r = math.rad(orbit)
+        Mat.translate(m, math.sin(r) * 3.2, 1.1, math.cos(r) * 3.2)
+        Mat.rotate(m, orbit, 0, 1, 0)
+        Mat.rotate(m, -6, 1, 0, 0)
+        Mat.applyTo(cameraObj, m)
+        return
+    end
     if thirdPerson == 0 then
-        cam.Position = Vec3(0, ey - P.pos.y + math.abs(bob), 0)
-        cam.Rotation = Vec3(P.pitch, 0, bob * 20)
+        local m = Mat.identity()
+        Mat.translate(m, 0, ey - P.pos.y, 0)
+        Mat.rotate(m, P.pitch, 1, 0, 0)
+        Mat.applyTo(cameraObj, Mat.mul(m, bobInv))
     else
         -- Камера отходит назад (или вперёд) по лучу взгляда, но не сквозь стену.
         local dx, dy, dz = P.lookDir()
@@ -93,9 +116,11 @@ local function placeCamera()
         local yr = math.rad(P.yaw)
         local cx = lx * math.cos(yr) - lz * math.sin(yr)
         local cz = lx * math.sin(yr) + lz * math.cos(yr)
-        cam.Position = Vec3(cx, ey - P.pos.y + ly, cz)
-        if thirdPerson == 1 then cam.Rotation = Vec3(P.pitch, 0, 0)
-        else cam.Rotation = Vec3(-P.pitch, 180, 0) end
+        local m = Mat.identity()
+        Mat.translate(m, cx, ey - P.pos.y + ly, cz)
+        if thirdPerson == 1 then Mat.rotate(m, P.pitch, 1, 0, 0)
+        else Mat.rotate(m, 180, 0, 1, 0); Mat.rotate(m, -P.pitch, 1, 0, 0) end
+        Mat.applyTo(cameraObj, Mat.mul(m, bobInv))
     end
 end
 
@@ -112,6 +137,7 @@ local function startGame()
     -- Проверка генерации без игры: --gencheck (итог — строка GENCHECK в логе).
     if LaunchFlag("gencheck") then
         log(G.selfCheck())
+        log(Anim.selfCheck())
         -- Свет факела в открытом воздухе: 14, 13, … — по одному за клетку.
         -- (Очередь волны с дырой обрывала свет через три клетки.)
         do
@@ -168,6 +194,7 @@ local function startGame()
     Inv.init(loaded and loaded.inventory)
     C.edits = loaded and loaded.edits or {}
     Furn.load(loaded and loaded.furnaces)
+    Map.load(loaded and loaded.maps)
     C.radius = tonumber(LaunchArg("view") or "") or C.radius
 
     local sx, sy, sz = G.spawnPoint()
@@ -182,6 +209,13 @@ local function startGame()
     thirdPerson = tonumber(LaunchArg("third") or "") or 0
     P.yaw = tonumber(LaunchArg("yaw") or "") or P.yaw
     P.pitch = tonumber(LaunchArg("pitch") or "") or P.pitch
+    -- Для проверки анимаций: меч, лук со стрелами, еда, вода, карта, блок.
+    if LaunchFlag("animkit") then
+        for _, k in ipairs({{"diamond_sword", 1}, {"bow", 1}, {"apple", 16}, {"potion", 1}, {"empty_map", 1},
+                            {"cobblestone", 64}, {"iron_pickaxe", 1}, {"stick", 16}, {"arrow", 64}}) do
+            Inv.add(B.byName[k[1]].id, k[2])
+        end
+    end
     if LaunchFlag("kit") then
         for _, n in ipairs({"torch", "glowstone", "planks", "diamond_sword", "stone_pickaxe", "cobblestone", "log", "stick", "iron_pickaxe"}) do
             Inv.add(B.byName[n].id, B.byName[n].stack)
@@ -206,6 +240,18 @@ end
 -- интерфейса и рук каждый кадр падал бы на nil в другом модуле, а движок
 -- снимал бы скрипт целиком, не сказав причины.
 local failed = false
+
+-- F2 — снимок экрана, как в Minecraft: файл по времени в screenshots/
+-- каталога игры, в чат — его имя (со следующего кадра, в снимок не попадает).
+local shotDemo = nil
+local shotAt = nil
+local useFor = nil
+local quitAfterShot = nil
+function takeScreenshot()
+    local path = game.screenshot()
+    Hud.chat("Saved screenshot as " .. (path:match("[^/\\]+$") or path))
+    log("Screenshot: " .. path)
+end
 
 function OnUpdate(entity, dt)
     if failed then return end
@@ -255,6 +301,20 @@ function OnUpdate(entity, dt)
                 Drops.spawn(B.byName.log.id, 1, x, P.pos.y + 0.6, z, 0, 0, 0)
                 Drops.spawn(B.byName.stone_pickaxe.id, 1, x + dz * 0.5, P.pos.y + 0.6, z - dx * 0.5, 0, 0, 0)
             end
+            -- Для проверки F2: снимок через 3 с, ещё через 2 с — кадр с надписью в чате.
+            if LaunchFlag("shotdemo") then shotDemo = 0 end
+            if (LaunchArg("shotat") or "") ~= "" then shotAt = {t = 0, at = tonumber(LaunchArg("shotat"))} end
+            if (LaunchArg("hold") or "") ~= "" and B.byName[LaunchArg("hold")] then
+                for i = 1, 36 do
+                    local s = Inv.slots[i]
+                    if s and s.id == B.byName[LaunchArg("hold")].id and i <= 9 then Inv.select(i) end
+                end
+            end
+            Act.forcePlace = LaunchFlag("forceuse")
+            -- Держать ПКМ столько секунд и отпустить (выстрел из лука).
+            useFor = tonumber(LaunchArg("usefor") or "")
+            if useFor then Act.forcePlace = true end
+            Act.forceSwing = LaunchFlag("forceswing")
             if LaunchArg("slot") and LaunchArg("slot") ~= "" then Inv.select(tonumber(LaunchArg("slot"))) end
             -- Для снимков: печь рядом — руда плавится, уголь горит, окно открыто.
             if LaunchFlag("furnacedemo") then
@@ -282,6 +342,26 @@ function OnUpdate(entity, dt)
         Sky.update(dt, P)
         placeCamera()
         return
+    end
+
+    if useFor then
+        useFor = useFor - dt
+        if useFor <= 0 then Act.forcePlace = false; useFor = nil end
+    end
+    if shotAt then
+        shotAt.t = shotAt.t + dt
+        if shotAt.t >= shotAt.at then
+            game.screenshot("screenshots/" .. (LaunchArg("shotname") or "shot") .. ".png")
+            shotAt = nil
+            if LaunchFlag("quit") then quitAfterShot = 3 end
+        end
+    end
+    if quitAfterShot then quitAfterShot = quitAfterShot - 1; if quitAfterShot <= 0 then game.Quit() end end
+    if shotDemo then
+        local was = shotDemo
+        shotDemo = shotDemo + dt
+        if was < 3 and shotDemo >= 3 then takeScreenshot() end
+        if was < 5 and shotDemo >= 5 then game.screenshot("screenshots/shotdemo_chat.png"); shotDemo = nil end
     end
 
     -- Музыка меню — только на титульном экране (не в паузе по Esc).
@@ -319,6 +399,9 @@ function OnUpdate(entity, dt)
     end
     if WasActionPressed("View") then thirdPerson = (thirdPerson + 1) % 3 end
     if WasActionPressed("Debug") then Hud.toggleDebug() end
+    -- F2 — снимок экрана, как в Minecraft: файл по времени в screenshots/
+    -- каталога игры, в чат — его имя.
+    if WasActionPressed("Screenshot") then takeScreenshot() end
     if WasActionPressed("Fly") then P.flying = not P.flying; P.vel.y = 0 end
     if WasActionPressed("Skin") then Avatar.nextSkin() end
 
@@ -336,8 +419,17 @@ function OnUpdate(entity, dt)
         if wheel ~= 0 then Inv.select(((Inv.selected - 1 - (wheel > 0 and 1 or -1)) % 9) + 1) end
     end
 
+    -- Пока предмет используется (едят, пьют, натягивают лук, держат блок),
+    -- шаг ×0.2 и бег сбит (EntityPlayerSP.onLivingUpdate).
+    if Anim.use then
+        inp.forward, inp.strafe = inp.forward * 0.2, inp.strafe * 0.2
+        inp.sprintPressed = false
+        P.sprinting = false
+    end
     local walkedBefore = P.walkDist
     local fall = P.update(inp, dt)
+    local heldNow = Inv.current()
+    Anim.update(dt, P, heldNow and heldNow.id or 0, Inv.selected)
     -- Шаги — как у 1.7.10: путь по земле копится с множителем 0.6, звук —
     -- при каждом переходе через целое (то есть раз в 1/0.6 блока); в воде
     -- и в полёте тихо. Материал — у блока под ногами.
@@ -358,10 +450,13 @@ function OnUpdate(entity, dt)
     Furn.update(dt)
     Sky.update(dt, P)
     Clouds.update(dt, P)
-    Avatar.update(dt, P, thirdPerson ~= 0, Act.swing)
-    Avatar.updatePreview()
+    Arrows.update(dt, P)
     local held = Inv.current()
-    Hand.update(dt, thirdPerson == 0, Act.swing, P.walkDist, held and held.id or 0)
+    local heldId = held and held.id or 0
+    Map.heldNumber = held and held.id == B.byName.filled_map.id and held.wear or nil
+    Avatar.update(dt, P, thirdPerson ~= 0, heldId)
+    Avatar.updatePreview()
+    Hand.update(dt, thirdPerson == 0, P, heldId)
     placeCamera()
     Hud.update(dt)
     Inv.update(dt)

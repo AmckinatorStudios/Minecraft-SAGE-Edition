@@ -1,0 +1,84 @@
+[07:09:18.415] [INFO ] [Player] SAGE Player v0.5.0 запускается...
+[07:09:18.470] [INFO ] [Window] Окно создано: 1280x720, контекст OpenGL 3.3 получен
+[07:09:18.470] [INFO ] [Engine] Обработчик падений: установлен
+[07:09:18.470] [INFO ] [Engine] Запуск: окно готово, поднимаю графическое устройство
+[07:09:18.471] [INFO ] [RHI] Графический бэкенд: OpenGL 4.5 (Core Profile) Mesa 25.2.8-0ubuntu0.24.04.4
+[07:09:18.471] [INFO ] [RHI] Видеокарта: llvmpipe (LLVM 20.1.2, 256 bits) (Mesa)
+[07:09:18.471] [INFO ] [RHI] Лимиты: текстурных юнитов фрагмента 32, всего 192, uniform-компонент 16384, размер текстуры 16384
+[07:09:18.471] [INFO ] [JobSystem] Пул задач: 3 фоновых воркеров (+главный поток = 4-кратный параллелизм)
+[07:09:18.471] [INFO ] [Engine] SAGE Engine 0.5.0 — подсистем: 26
+[07:09:18.471] [DEBUG] [Engine]   v1  Core — Application/Layer/Window, главный цикл и тайминг
+[07:09:18.471] [DEBUG] [Engine]   v1  Jobs — пул рабочих потоков: параллельные отсечение и подготовка кадра
+[07:09:18.471] [DEBUG] [Engine]   v1  RHI — абстракция графики (бэкенды: OpenGL 3.3, Vulkan, Null)
+[07:09:18.471] [DEBUG] [Engine]   v1  ECS / Scene — сущности+компоненты (entt), иерархия, мировые матрицы
+[07:09:18.471] [DEBUG] [Engine]   v1  Serialization — сцены/материалы/конфиг в JSON (.sage/.sagemat/sage.cfg)
+[07:09:18.471] [DEBUG] [Engine]   v1  Resources — кэш мешей/моделей/материалов/текстур
+[07:09:18.471] [DEBUG] [Engine]   v1  Assets — база ассетов, импорт (glTF/FBX/OBJ/Blend) и пакет игры (.sagepak)
+[07:09:18.471] [DEBUG] [Engine]   v1  Rendering — инстансный батч, фрустум-отсечение, PBR (Cook-Torrance)
+[07:09:18.471] [DEBUG] [Engine]   v1  Shadows — карта теней направленного солнца
+[07:09:18.471] [DEBUG] [Engine]   v1  Post-processing — SSAO + Bloom + тон-маппинг ACES + виньетка
+[07:09:18.471] [DEBUG] [Engine]   v1  Lighting — полусферический ambient, солнце, точечные, прожекторы
+[07:09:18.471] [DEBUG] [Engine]   v1  GI — запечённое глобальное освещение: лайтмапы и объём световых проб
+[07:09:18.471] [DEBUG] [Engine]   v1  Materials — metallic-roughness, normal/AO-карты (.sagemat)
+[07:09:18.471] [DEBUG] [Engine]   v1  Skybox — процедурный градиентный скайбокс + туман
+[07:09:18.471] [DEBUG] [Engine]   v1  Particles — инстансные billboard-частицы (залпы и струи)
+[07:09:18.471] [DEBUG] [Engine]   v1  Animation — скелетная анимация (скины glTF и FBX, палитра костей)
+[07:09:18.471] [DEBUG] [Engine]   v1  Physics — PhysicsWorld: встроенный движок / Jolt / Null
+[07:09:18.471] [DEBUG] [Engine]   v1  Audio — miniaudio: 2D/3D звук, музыка, группы громкости
+[07:09:18.471] [DEBUG] [Engine]   v1  Vars — публичные переменные объектов и ссылки, пережившие переименование
+[07:09:18.471] [DEBUG] [Engine]   v1  Scripting — Lua (sol2): доступ к системам/компонентам/сообщениям
+[07:09:18.471] [DEBUG] [Engine]   v1  Network — UDP-хост и клиенты: репликация состояния, Lua-API Net.*
+[07:09:18.471] [DEBUG] [Engine]   v1  UI — SDF-виджеты, ECS UIElement, редактор интерфейса
+[07:09:18.471] [DEBUG] [Engine]   v1  Fonts / Text — TrueType (stb_truetype), Unicode/кириллица
+[07:09:18.471] [DEBUG] [Engine]   v2  Input — устройства -> действия -> события; контексты, геймпад, ремаппинг
+[07:09:18.471] [DEBUG] [Engine]   v1  Events — шина событий: именная и типизированная, правила «когда-если-то»
+[07:09:18.471] [DEBUG] [Engine]   v1  Config — EngineConfig + пресеты качества (Low..Ultra)
+[07:09:18.471] [INFO ] [Engine] Запуск: движок готов, передаю управление слоям
+[07:09:18.471] [INFO ] [Engine] Запуск слоя 'Player'
+[07:09:18.484] [DEBUG] [Shader] Скомпилирован: assets/shaders/lit.vert + assets/shaders/lit.frag
+[07:09:18.484] [DEBUG] [Shader] Скомпилирован: assets/shaders/shadow_depth.vert + assets/shaders/shadow_depth.frag
+[07:09:18.534] [INFO ] [Assets] База ассетов: 248 файлов (новых 0, переехавших 0) в .
+[07:09:18.543] [INFO ] [Scene] Сцена обновлена с формата 5 до 18
+[07:09:18.567] [INFO ] [Audio] Аудио инициализировано (2 канала, 48000 Гц)
+[07:09:18.567] [INFO ] [Player] Параметры запуска игры: --nomenu=1 --nosave=1 --view=4 --quit=1 --shotname=arrow_fly --animkit=1 --fresh=1 --hold=bow --usefor=3 --pitch=10 --third=1 --orbit=90 --shotat=3.15
+[07:09:18.568] [INFO ] [Physics] PhysicsScene: бэкенд Jolt, тел 0, �[07:09:18.576] [INFO ][07:09:18.587] [INFO ] [Player] Скриптов привязано: 1
+[07:09:18.587] [INFO ] [Player] PLAYER: started 'SAGE Craft', scene main.sage (3 entities, 0 physics bodies on Jolt)
+[07:09:18.587] [INFO ] [Engine] Слой 'P[07:09:20.274] [INFO ][07:09:20.357] [INFO ] [Texture] Текстура загружена: assets/ui/widgets.png (512x512)
+[07:09:20.358] [INFO ] [Texture] Текстура загружена: assets/ui/inventory.png (512x512)
+[07:09:20.360] [INFO ] [Texture] Текстура загружена: assets/ui/crafting_table.png (512x512)
+[07:09:20.363] [INFO ] [Texture] Текстура загружена: assets/ui/furnace.png (512x512)
+[07:09:20.365] [DEBUG] [Shader] Скомпилирован: assets/shaders/sky.vert + assets/shaders/sky.frag
+[07:09:20.365] [INFO ] [Resources] Шейдер собран: assets/shaders/sky.vert + assets/shaders/sky.frag
+[07:09:20.366] [DEBUG] [Shader] Скомпилирован: assets/shaders/sprite.vert + assets/shaders/sprite.frag
+[07:09:20.366] [INFO ] [Resources] Шейдер собран: assets/shaders/sprite.vert + assets/shaders/sprite.frag
+[07:09:20.367] [DEBUG] [Shader] Скомпилирован: assets/shaders/chunk.vert + assets/shaders/chunk.frag
+[07:09:20.367] [INFO ] [Resources] Шейдер собран: assets/shaders/chunk.vert + assets/shaders/chunk.frag
+[07:09:20.368] [DEBUG] [Shader] Скомпилирован: assets/shaders/clouds.vert + assets/shaders/clouds.frag
+[07:09:20.368] [INFO ] [Resources] Шейдер собран: assets/shaders/clouds.vert + assets/shaders/clouds.frag
+[07:09:20.369] [DEBUG] [Shader] Скомпилирован: assets/shaders/chunk.vert + assets/shaders/crack.frag
+[07:09:20.369] [INFO ] [Resources] Шейдер собран: assets/shaders/chunk.vert + assets/shaders/crack.frag
+[07:09:20.374] [INFO ] [Texture] Текстура загружена: assets/u[07:09:20.495] [INFO ][07:09:20.580] [INFO ] [Anim] SkinnedModel из кэша: assets/models/player.gltf (костей 10, subme[07:09:20.654] [DEBUG][07:09:20.751] [DEBUG] [Shader] Скомпилирован из исходников: RenderBatchLit
+[07:09:20.838] [DEBUG] [Shader] Скомпилирован из исходников: SkinnedModel
+[07:09:20.874] [INFO ] [Texture] Текстура загружена: assets/textures/environment/moon_phases.png (256x128)
+[07:09:20.897] [DEBUG] [Shader] Скомпилирован из исходников: PostFX.Tonemap
+[07:09:20.909] [DEBUG] [Shader] Скомпилирован из исходников: PostFX.Copy
+[07:09:20.931] [INFO ] [Frame] Состав кадра: 3 из 4 проходов (отброшено 0, выключено 1)
+Кадр: объявлено 4, выполняется 3, отброшено 0, выключено 1
+  1. Отражения: окружение (цвет: загрузить, глубина: загрузить)
+       пишет  EnvCube
+  2. Тени: глубина (цвет: загрузить, глубина: загрузить)
+       пишет  ShadowMap
+  3. Сцена: освещение, тени, отражения (цвет: очистить, глубина: загрузить)
+       читает ShadowMap
+       читает EnvCube
+       пишет  Screen
+
+[07:09:20.932] [DEBUG] [Shader] Скомпилирован из исходников: UIRenderer
+[07:09:20.956] [INFO ] [Font] Загружен шрифт /home/user/SAGE-Engine/build/runtime/assets/fonts/sage-default.ttf (48px, глифов 471)
+[07:09:20.959] [INFO ] [Font] Загружен шрифт assets/fonts/Minecraftia-Regular.ttf [ближайший пиксель] (42px, глифов 372)
+[07:09:20.[07:09:41.749] [INFO ] [Lua] SAGE Craft: world ready, 113 chunks (generation 3.86 s, light 1.23 s, meshes 1.57 s)
+[07:09:42.051] [INFO ] [Font] Загружен шрифт assets/fonts/Minecraftia-Regular.ttf [ближайший пиксель] (16px, глифов 372)
+[07:09:52.167] [INFO ] [Screenshot] Скриншот сохранён: /tmp/claude-0/xdg/SAGE_Craft/screenshots/arrow_stuck.png
+[07:09:52.509] [INFO ] [Engine] Завершение работы
+от сохранён: /tmp/claude-0/xdg/SAGE_Craft/screenshots/arrow_fly.png
+[07:09:48.411] [INFO ] [Engine] Завершение работы

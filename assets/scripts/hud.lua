@@ -81,6 +81,58 @@ Hud.debug = false
 local fps, fpsTimer, frames = 0, 0, 0
 local flashTimer = 0
 
+-- ЧАТ — строки сообщений внизу слева, как в Minecraft 1.7.10 (GuiNewChat):
+-- новые снизу, до 10 строк, каждая видна 10 с и гаснет в последнюю секунду
+-- (непрозрачность (1 - возраст/10 с)·10, в квадрате), под текстом — полоса
+-- чёрного с альфой 0.5. Полоса шириной 320 пикселей игры.
+local CHAT_ROWS, CHAT_LIFE = 10, 10
+local chatRows, chatLines, chatPending = {}, {}, {}
+
+local function buildChat()
+    local S = U.HUD
+    for i = 1, CHAT_ROWS do
+        -- Строка i — от 48 пикселей игры над низом экрана вверх по 9 (GuiNewChat).
+        local y = (48 + (i - 1) * 9) * S
+        local _, bg = U.fill(root, "Chat Back " .. i, UIAnchor.BottomLeft, 0, y, 324 * S, 9 * S, Vec4(0, 0, 0, 0))
+        local _, tx = U.label(root, "Chat " .. i, UIAnchor.BottomLeft, 2 * S, y + 1 * S, 320 * S, 8 * S, "", 1)
+        bg.Visible, tx.Visible = false, false
+        chatRows[i] = {bg = bg, text = tx}
+    end
+end
+
+-- Сообщение в чат. Показывается со СЛЕДУЮЩЕГО кадра: так снимок экрана по F2
+-- (снимается в конце кадра) выходит без своей же надписи, как в оригинале.
+function Hud.chat(text)
+    chatPending[#chatPending + 1] = text
+end
+
+local function updateChat(dt)
+    for _, t in ipairs(chatPending) do
+        table.insert(chatLines, 1, {text = t, age = -dt})
+        if #chatLines > 100 then chatLines[#chatLines] = nil end
+    end
+    chatPending = {}
+    for i, row in ipairs(chatRows) do
+        local line = chatLines[i]
+        local a = 0
+        if line then
+            line.age = line.age + dt
+            a = math.max(0, math.min(1, (1 - line.age / CHAT_LIFE) * 10))
+            a = a * a
+        end
+        row.bg.Visible, row.text.Visible = a > 0.02, a > 0.02
+        if a > 0.02 then
+            row.text.Text = line.text
+            row.text.TextColor = Vec4(1, 1, 1, a)
+            row.text.TextShadowColor = Vec4(0.25, 0.25, 0.25, a)
+            row.bg.Color = Vec4(0, 0, 0, 0.5 * a)
+        end
+    end
+    -- Возраст идёт и у строк за пределами экрана.
+    for i = #chatRows + 1, #chatLines do chatLines[i].age = chatLines[i].age + dt end
+end
+Hud.chatLines = chatLines
+
 function Hud.init()
     root = U.screen("HUD", 4)
     -- Прицел инвертирует то, что под ним (как в Minecraft 1.7.10:
@@ -94,7 +146,9 @@ function Hud.init()
     fl.Stretch = UIStretch.Both
     flash = fl
 
-    local _, de = U.label(root, "Debug", UIAnchor.TopLeft, 8, 8, 600, 140, "", 1.1)
+    buildChat()
+
+    local _, de = U.label(root, "Debug", UIAnchor.TopLeft, 8, 8, 600, 160, "", 1.1)
     de.Visible = false
     debugLabel = de
 
@@ -137,6 +191,7 @@ function Hud.damage(n)
 end
 
 function Hud.update(dt)
+    updateChat(dt)
     frames = frames + 1
     fpsTimer = fpsTimer + dt
     if fpsTimer >= 0.5 then
@@ -181,10 +236,10 @@ function Hud.update(dt)
         local bx, by, bz = math.floor(P.pos.x), math.floor(P.pos.y), math.floor(P.pos.z)
         debugLabel.Text = string.format(
             "SAGE Craft   %.0f fps\nXYZ: %.2f / %.2f / %.2f\nBlock: %d %d %d   chunk %d %d\n" ..
-            "Light: sky %d, block %d   day %.2f\nFacing: %.1f / %.1f\nChunks %d, sections %d, view %d\nTime of day %.3f",
+            "Light: sky %d, block %d   day %.2f\nFacing: %.1f / %.1f\nChunks %d, sections %d, view %d\nTime of day %.3f\nBiome: %s",
             fps, P.pos.x, P.pos.y, P.pos.z, bx, by, bz, bx // 16, bz // 16,
             W.sky(bx, by + 1, bz), W.blockLight(bx, by + 1, bz), Sky.daylight,
-            P.yaw, P.pitch, n, secs, C.radius, Sky.time)
+            P.yaw, P.pitch, n, secs, C.radius, Sky.time, select(2, require("gen").column(bx, bz)))
     end
 end
 

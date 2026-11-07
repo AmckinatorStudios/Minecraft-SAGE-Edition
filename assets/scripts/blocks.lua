@@ -32,10 +32,10 @@ local defs = {
     {id = 10, name = "bedrock",      title = "Bedrock",   tex = "bedrock", hard = -1},
     {id = 11, name = "water",        title = "Water",              tex = "water_still", draw = "liquid", hard = -1, opacityLight = 2, solid = false},
     {id = 12, name = "glass",        title = "Glass",            tex = "glass", draw = "cutout", hard = 0.3, drop = "none", opacityLight = 0},
-    {id = 13, name = "coal_ore",     title = "Coal Ore",     tex = "coal_ore", hard = 3.0, tool = "pickaxe", need = 1, drop = "coal", xp = 1},
+    {id = 13, name = "coal_ore",     title = "Coal Ore",     tex = "coal_ore", hard = 3.0, tool = "pickaxe", need = 1, drop = "coal", xp = {0, 2}},
     {id = 14, name = "iron_ore",     title = "Iron Ore",     tex = "iron_ore", hard = 3.0, tool = "pickaxe", need = 2},
     {id = 15, name = "gold_ore",     title = "Gold Ore",      tex = "gold_ore", hard = 3.0, tool = "pickaxe", need = 3},
-    {id = 16, name = "diamond_ore",  title = "Diamond Ore",     tex = "diamond_ore", hard = 3.0, tool = "pickaxe", need = 3, drop = "diamond", xp = 5},
+    {id = 16, name = "diamond_ore",  title = "Diamond Ore",     tex = "diamond_ore", hard = 3.0, tool = "pickaxe", need = 3, drop = "diamond", xp = {3, 7}},
     {id = 17, name = "brick",        title = "Bricks",            tex = "brick", hard = 2.0, tool = "pickaxe", need = 1},
     {id = 18, name = "stonebrick",   title = "Stone Bricks",   tex = "stonebrick", hard = 1.5, tool = "pickaxe", need = 1},
     {id = 19, name = "glowstone",    title = "Glowstone",       tex = "glowstone", hard = 0.3, light = 15},
@@ -68,6 +68,13 @@ local defs = {
     {id = 46, name = "diamond_block", title = "Block of Diamond",    tex = "diamond_block", hard = 5.0, tool = "pickaxe", need = 3},
     -- Горящая печь: та же печь, пока в ней огонь (furnace.lua меняет блок
     -- туда и обратно). Светит и роняет обычную печь.
+    -- Руды 1.7.10: красная пыль (4–5 штук), лазурит (4–8), изумруд (1).
+    -- Опыт — случайно в пределах, как в оригинале.
+    {id = 48, name = "redstone_ore", title = "Redstone Ore", tex = "redstone_ore", hard = 3.0, tool = "pickaxe", need = 3, drop = "redstone", count = {4, 5}, xp = {1, 5}},
+    {id = 49, name = "lapis_ore",    title = "Lapis Lazuli Ore", tex = "lapis_ore", hard = 3.0, tool = "pickaxe", need = 2, drop = "lapis_lazuli", count = {4, 8}, xp = {2, 5}},
+    {id = 50, name = "emerald_ore",  title = "Emerald Ore", tex = "emerald_ore", hard = 3.0, tool = "pickaxe", need = 3, drop = "emerald", xp = {3, 7}},
+    -- Сахарный тростник (WorldGenReed): у воды, крестом; из него бумага.
+    {id = 51, name = "reeds",        title = "Sugar Canes", tex = "reeds", draw = "cross", hard = 0, solid = false, opacityLight = 0},
     {id = 47, name = "lit_furnace",  title = "Furnace",              top = "furnace_top", side = "furnace_side", front = "furnace_front_on", bottom = "furnace_top", hard = 3.5, tool = "pickaxe", need = 1, light = 13, drop = "furnace"},
 }
 
@@ -83,6 +90,24 @@ local items = {
     {id = 260, name = "gold_ingot",      title = "Gold Ingot",     tex = "gold_ingot"},
     {id = 261, name = "apple",           title = "Apple",             tex = "apple", food = 4},
     {id = 262, name = "flint",           title = "Flint",            tex = "flint"},
+    {id = 263, name = "redstone",        title = "Redstone",         tex = "redstone_dust"},
+    {id = 264, name = "lapis_lazuli",    title = "Lapis Lazuli",     tex = "dye_powder_blue"},
+    {id = 265, name = "emerald",         title = "Emerald",          tex = "emerald"},
+    -- Использование (ПКМ, как в 1.7.10): еда и питьё — 32 тика, лук — натяжение,
+    -- меч — защита. full3d — инструмент держится «как палка» (Item.isFull3D).
+    {id = 266, name = "bow",             title = "Bow",              tex = "bow_standby", bow = true, stack = 1},
+    {id = 267, name = "arrow",           title = "Arrow",            tex = "arrow"},
+    {id = 268, name = "string",          title = "String",           tex = "string"},
+    {id = 269, name = "glass_bottle",    title = "Glass Bottle",     tex = "potion_bottle_empty"},
+    {id = 286, name = "potion",          title = "Water Bottle",     tex = "water_bottle", drink = true, stack = 1},
+    {id = 287, name = "paper",           title = "Paper",            tex = "paper"},
+    {id = 288, name = "compass",         title = "Compass",          tex = "compass"},
+    {id = 289, name = "empty_map",       title = "Empty Map",        tex = "map_empty"},
+    {id = 290, name = "filled_map",      title = "Map",              tex = "map_filled", map = true, stack = 1},
+    -- Кадры натяжения лука (ItemBow.getItemIconForUseDuration) — только картинки.
+    {id = 291, name = "bow_pulling_0",   title = "Bow", tex = "bow_pulling_0", hidden = true, stack = 1},
+    {id = 292, name = "bow_pulling_1",   title = "Bow", tex = "bow_pulling_1", hidden = true, stack = 1},
+    {id = 293, name = "bow_pulling_2",   title = "Bow", tex = "bow_pulling_2", hidden = true, stack = 1},
     {id = 270, name = "wood_pickaxe",    title = "Wooden Pickaxe",   tex = "wood_pickaxe",    tool = "pickaxe", tier = 1, speed = 2,  uses = 60},
     {id = 271, name = "stone_pickaxe",   title = "Stone Pickaxe",     tex = "stone_pickaxe",   tool = "pickaxe", tier = 2, speed = 4,  uses = 132},
     {id = 272, name = "iron_pickaxe",    title = "Iron Pickaxe",     tex = "iron_pickaxe",    tool = "pickaxe", tier = 3, speed = 6,  uses = 251},
@@ -142,13 +167,33 @@ end
 
 for _, it in ipairs(items) do
     it.isBlock = false
-    it.stack = it.tool and 1 or 64
+    it.stack = it.stack or (it.tool and 1 or 64)
+    -- Как держится и что делает ПКМ (Item.isFull3D, getItemUseAction).
+    it.full3d = it.tool ~= nil or it.name == "stick"
+    if it.food then it.use = "eat"
+    elseif it.drink then it.use = "drink"
+    elseif it.tool == "sword" then it.use = "block"
+    elseif it.bow then it.use = "bow" end
     B.byId[it.id] = it
     B.byName[it.name] = it
     B.itemList[#B.itemList + 1] = it
 end
 
 -- Что выпадает: имя предмета/блока или "none". По умолчанию — сам блок.
+-- Сколько выпадает (count = {от, до}) и сколько опыта (xp — число или {от, до}).
+local function roll(v)
+    if type(v) == "table" then return v[1] + math.random(0, v[2] - v[1]) end
+    return v or 0
+end
+function B.dropCount(id)
+    local d = B.byId[id]
+    return d and d.count and roll(d.count) or 1
+end
+function B.xpOf(id)
+    local d = B.byId[id]
+    return d and roll(d.xp) or 0
+end
+
 function B.dropOf(id)
     local d = B.byId[id]
     if not d then return nil end
