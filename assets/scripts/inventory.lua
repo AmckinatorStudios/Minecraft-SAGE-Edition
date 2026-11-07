@@ -203,16 +203,14 @@ function Inv.buildHud()
     hudRoot = U.screen("Hotbar", 5)
     local S = U.HUD
     Inv.rowY = 0
-    U.sprite(hudRoot, "Hotbar Back", UIAnchor.BottomCenter, 0, 0, 182 * S, 22 * S, "assets/ui/widgets.png", "hotbar")
+    U.sprite(hudRoot, "Hotbar Back", "bottom", 0, 0, 182 * S, 22 * S, "assets/ui/widgets.png", "hotbar")
     for i = 1, 9 do
         local x = (-91 + 3 + (i - 1) * 20 + 8) * S
-        hotbar[i] = U.slot(hudRoot, "Hotbar " .. i, UIAnchor.BottomCenter, x, 3 * S, 16 * S)
+        hotbar[i] = U.slot(hudRoot, "Hotbar " .. i, "bottom", x, 3 * S, 16 * S)
     end
-    local sel, se = U.sprite(hudRoot, "Hotbar Select", UIAnchor.BottomCenter, 0, -1 * S, 24 * S, 24 * S,
-                             "assets/ui/widgets.png", "hotbar_select")
-    selFrame = se
-    local _, te = U.label(hudRoot, "Hotbar Title", UIAnchor.BottomCenter, 0, 22 * S + 46, 400, 22, "", 1, true)
-    titleLabel = te
+    selFrame = U.sprite(hudRoot, "Hotbar Select", "bottom", 0, -1 * S, 24 * S, 24 * S,
+                        "assets/ui/widgets.png", "hotbar_select")
+    titleLabel = U.label(hudRoot, "Hotbar Title", "bottom", 0, 22 * S + 46, 400, 22, "", 1, true)
     Inv.titleTimer = 0
     Inv.lastSelected = 0
 end
@@ -227,20 +225,17 @@ end
 local windows = {}
 local function buildWindow(which)
     local S = U.WIN
-    local root = SpawnObject("Window " .. which)
-    root:AddUI()
     local w, h = LAYOUT.W * S, LAYOUT.H * S
     local path = ({table = "assets/ui/crafting_table.png", furnace = "assets/ui/furnace.png"})[which]
         or "assets/ui/inventory.png"
-    local win, _ = U.sprite(nil, "Window Image " .. which, UIAnchor.Center, 0, 0, w, h, path, "window")
-    win:SetParent(screenRoot)
+    local win = U.sprite(screenRoot, "Window Image " .. which, "center", 0, 0, w, h, path, "window")
     -- Центр ячейки раскладки (x, y — левый верх 16×16) в координатах от
     -- центра экрана, как у U.base с якорем Center.
     local function at(x, y) return (x + 8 - LAYOUT.W / 2) * S, (y + 8 - LAYOUT.H / 2) * S end
     local list = {win = win, slots = {}}
     local function slot(kind, index, x, y)
         local cx, cy = at(x, y)
-        local sl = U.slot(screenRoot, which .. " " .. kind .. " " .. index, UIAnchor.Center, cx, cy, 16 * S)
+        local sl = U.slot(screenRoot, which .. " " .. kind .. " " .. index, "center", cx, cy, 16 * S)
         sl.window = which
         addRegion(kind, index, cx, cy, sl)
         list.slots[#list.slots + 1] = sl
@@ -258,12 +253,10 @@ local function buildWindow(which)
         -- Полосы: элемент с левым верхним углом на месте полосы; видимая
         -- часть задаётся куском картинки (Inv.update).
         local function bar(name, r)
-            local o, e = U.base(screenRoot, "Furnace " .. name, UIAnchor.Center, 0, 0, r[3] * S, r[4] * S)
-            e.Type = UIKind.Image
-            e.Color = Vec4(1, 1, 1, 1)
-            SetUIImage(o, path, true)
-            list.slots[#list.slots + 1] = {bg = o}
-            return {obj = o, e = e, x = r[1], y = r[2], w = r[3], h = r[4]}
+            local el = ui.image{parent = screenRoot, name = "Furnace " .. name, anchor = "center",
+                                w = r[3] * S, h = r[4] * S, image = path}
+            list.slots[#list.slots + 1] = {bg = el}
+            return {el = el, x = r[1], y = r[2], w = r[3], h = r[4]}
         end
         list.flame = bar("Flame", L.flame)
         list.arrow = bar("Arrow", L.arrow)
@@ -282,22 +275,20 @@ local function buildWindow(which)
         for i = 0, 3 do slot("inv", Inv.ARMOR + i, LAYOUT.inventory.armor[1], LAYOUT.inventory.armor[2] + i * 18) end
         local p = LAYOUT.inventory.preview
         local px, py = (p[1] + p[3] / 2 - LAYOUT.W / 2) * S, (p[2] + p[4] / 2 - LAYOUT.H / 2) * S
-        local pv, pve = U.base(screenRoot, "Preview", UIAnchor.Center, px, py, p[3] * S, p[4] * S)
-        pve.Type = UIKind.Image
-        pve.Color = Vec4(1, 1, 1, 1)
-        list.preview = pv
+        list.preview = ui.image{parent = screenRoot, name = "Preview", anchor = "center", x = px, y = py,
+                                w = p[3] * S, h = p[4] * S, color = Vec4(1, 1, 1, 0)}
     end
     windows[which] = list
 end
 
 function Inv.buildScreen()
     screenRoot = U.screen("Backpack", 20)
-    local _, dim = U.fill(screenRoot, "Backpack Dim", UIAnchor.TopLeft, 0, 0, 10, 10, Vec4(0, 0, 0, 0.55))
-    dim.Stretch = UIStretch.Both
+    local dim = U.fill(screenRoot, "Backpack Dim", "top_left", 0, 0, 10, 10, Vec4(0, 0, 0, 0.55))
+    dim.stretch = "both"
     buildWindow("inventory")
     buildWindow("table")
     buildWindow("furnace")
-    heldSlot = U.slot(screenRoot, "Held", UIAnchor.TopLeft, 0, 0, 16 * U.WIN)
+    heldSlot = U.slot(screenRoot, "Held", "top_left", 0, 0, 16 * U.WIN)
     U.show(screenRoot, false)
 end
 
@@ -326,7 +317,8 @@ function Inv.toggleScreen(size)
         showWindow(Inv.gridSize == 3 and "table" or "inventory")
         local A = require "avatar"
         if A.previewTexture and windows.inventory.preview then
-            SetUIImage(windows.inventory.preview, "rt:" .. A.previewTexture, true)
+            windows.inventory.preview.image = "rt:" .. A.previewTexture
+            windows.inventory.preview.color = Vec4(1, 1, 1, 1)
             A.setPreview(Inv.gridSize == 2)
         end
     else
@@ -498,39 +490,38 @@ function Inv.updateFurnaceBars()
     local S, K = U.WIN, 2
     local L = LAYOUT.furnace
     local function place(bar, x, y, bw, bh)
-        bar.e.Size = Vec2(bw * S, bh * S)
-        bar.e.Position = Vec2((x + bw / 2 - LAYOUT.W / 2) * S, (y + bh / 2 - LAYOUT.H / 2) * S)
+        bar.el.place((x + bw / 2 - LAYOUT.W / 2) * S, (y + bh / 2 - LAYOUT.H / 2) * S, bw * S, bh * S)
     end
     -- Огонь: высота 1..14 по оставшемуся топливу (0 — не горит, не видно).
     local fh = flame > 0 and math.max(1, math.ceil(flame * w.flame.h)) or 0
-    U.show(w.flame.obj, fh > 0)
+    U.show(w.flame.el, fh > 0)
     if fh > 0 then
         local top = w.flame.h - fh
-        SetUISprite(w.flame.obj, L.flameSrc[1] * K, (L.flameSrc[2] + top) * K, w.flame.w * K, fh * K)
+        w.flame.el.sprite = {L.flameSrc[1] * K, (L.flameSrc[2] + top) * K, w.flame.w * K, fh * K}
         place(w.flame, w.flame.x, w.flame.y + top, w.flame.w, fh)
     end
     local aw = math.floor(cook * (w.arrow.w + 1))
-    U.show(w.arrow.obj, aw > 0)
+    U.show(w.arrow.el, aw > 0)
     if aw > 0 then
         aw = math.min(aw, w.arrow.w)
-        SetUISprite(w.arrow.obj, L.arrowSrc[1] * K, L.arrowSrc[2] * K, aw * K, w.arrow.h * K)
+        w.arrow.el.sprite = {L.arrowSrc[1] * K, L.arrowSrc[2] * K, aw * K, w.arrow.h * K}
         place(w.arrow, w.arrow.x, w.arrow.y, aw, w.arrow.h)
     end
 end
 
 function Inv.update(dt)
     for i = 1, 9 do U.setSlot(hotbar[i], Inv.slots[i]) end
-    selFrame.Position = Vec2((-91 - 1 + (Inv.selected - 1) * 20 + 12) * U.HUD, -1 * U.HUD)
+    selFrame.place((-91 - 1 + (Inv.selected - 1) * 20 + 12) * U.HUD, -1 * U.HUD)
     -- Название предмета над панелью — на пару секунд после смены ячейки.
     local cur = Inv.slots[Inv.selected]
     local curId = cur and cur.id or 0
     if Inv.selected ~= Inv.lastSelected or curId ~= Inv.lastId then
         Inv.lastSelected, Inv.lastId = Inv.selected, curId
         Inv.titleTimer = curId ~= 0 and 2.0 or 0
-        titleLabel.Text = curId ~= 0 and B.title(curId) or ""
+        titleLabel.text = curId ~= 0 and B.title(curId) or ""
     end
     Inv.titleTimer = math.max(0, Inv.titleTimer - dt)
-    titleLabel.TextColor = Vec4(1, 1, 1, math.min(1, Inv.titleTimer))
+    titleLabel.text_color = Vec4(1, 1, 1, math.min(1, Inv.titleTimer))
 
     if not Inv.screenOpen then return end
     for _, s in ipairs(regions) do
@@ -547,8 +538,8 @@ function Inv.update(dt)
         U.setSlot(windows[Inv.window].result, r and {id = r.out, n = r.n} or nil)
     end
 
-    local cursor = UICursor()
-    local size = UIScreenSize()
+    local cursor = ui.cursor()
+    local size = ui.size()
     local mx, my = cursor.x - size.x / 2, cursor.y - size.y / 2
     local left = Input.is_mouse_pressed("left")
     local right = Input.is_mouse_pressed("right")
@@ -573,7 +564,7 @@ function Inv.update(dt)
         end
     end
     U.setSlot(heldSlot, Inv.held)
-    heldSlot.bge.Position = Vec2(cursor.x - 8 * U.WIN, cursor.y - 8 * U.WIN)
+    heldSlot.bg.place(cursor.x - 8 * U.WIN, cursor.y - 8 * U.WIN)
 end
 
 return Inv
