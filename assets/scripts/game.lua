@@ -31,10 +31,15 @@ local Anim   = require "anim"
 local Arrows = require "arrows"
 local Map    = require "map"
 local Mat    = require "mat"
+local Pano   = require "panorama"
+local Worlds = require "worlds"
 
 local playerObj, cameraObj
 local started = false
-local loading = true
+local loading = false
+local worldOpen = false        -- мир выбран и строится/идёт (до этого — только меню)
+local quitting = nil           -- «Save and Quit to Title» по шагам
+local hidePlayerHand = false
 local thirdPerson = 0          -- 0 — глазами, 1 — сзади, 2 — спереди
 local MOUSE_SENS = 0.12
 
@@ -54,6 +59,7 @@ local function bindControls()
     BindAction("View",      "F5")
     BindAction("Debug",     "F3")
     BindAction("Screenshot", "F2")
+    BindAction("MenuConfirm", {"ENTER", "KP_ENTER"})
     BindAction("Fly",       "F")
     BindAction("Skin",      "K")
     BindAction("Pause",     "ESCAPE")
@@ -124,16 +130,80 @@ local function placeCamera()
     end
 end
 
+-- Мир: сохранение, зерно, игрок, рюкзак — ПОСЛЕ выбора в меню (или сразу —
+-- для прогонов и снимков). До этого ничего не генерируется.
+local function openWorld(w)
+    Save.slot, Save.world = w.slot, w
+    local loaded = (not w.new) and Save.load() or nil
+    local seed = tonumber(LaunchArg("seed") or "")
+    if loaded and loaded.seed then seed = loaded.seed end
+    -- Новому миру — своё случайное зерно (как у 1.7.10 без поля «Seed»).
+    if not seed then seed = w.new and math.random(1, 2147483646) or 1337 end
+    G.init(seed)
+    Inv.init(loaded and loaded.inventory)
+    C.edits = loaded and loaded.edits or {}
+    Furn.load(loaded and loaded.furnaces)
+    Map.load(loaded and loaded.maps)
+    C.radius = tonumber(LaunchArg("view") or "") or C.radius
+
+    local sx, sy, sz = G.spawnPoint()
+    if loaded and loaded.player then
+        sx, sy, sz = loaded.player.x, loaded.player.y, loaded.player.z
+        P.yaw, P.pitch = loaded.player.yaw or 0, loaded.player.pitch or 0
+        Sky.time = loaded.time or Sky.time
+    end
+    P.pos.x, P.pos.y, P.pos.z = sx, sy, sz
+    -- Параметры для снимков и проверки: время суток, вид, взгляд.
+    if LaunchArg("time") ~= "" and LaunchArg("time") then Sky.time = tonumber(LaunchArg("time")) or Sky.time end
+    thirdPerson = tonumber(LaunchArg("third") or "") or 0
+    P.yaw = tonumber(LaunchArg("yaw") or "") or P.yaw
+    P.pitch = tonumber(LaunchArg("pitch") or "") or P.pitch
+    -- Для проверки анимаций: меч, лук со стрелами, еда, вода, карта, блок.
+    if LaunchFlag("animkit") then
+        for _, k in ipairs({{"diamond_sword", 1}, {"bow", 1}, {"apple", 16}, {"potion", 1}, {"empty_map", 1},
+                            {"cobblestone", 64}, {"iron_pickaxe", 1}, {"stick", 16}, {"arrow", 64}}) do
+            Inv.add(B.byName[k[1]].id, k[2])
+        end
+    end
+    if LaunchFlag("kit") then
+        for _, n in ipairs({"torch", "glowstone", "planks", "diamond_sword", "stone_pickaxe", "cobblestone", "log", "stick", "iron_pickaxe"}) do
+            Inv.add(B.byName[n].id, B.byName[n].stack)
+        end
+    end
+    Sky.init()
+    Clouds.init(seed)
+    Hud.init()
+    Hud.loading(false)          -- загрузку показывает меню (Loading world)
+    Hand.init(cameraObj)
+    Avatar.init(playerObj)
+    Drops.init()
+    Act.init()
+    Auto.init()
+    Menu.applyOptions()
+    worldOpen, loading = true, true
+    Hud.setVisible(false)
+    Inv.setHudVisible(false)
+    if w.new then Save.write() end      -- мир в списке сразу, даже если игру закроют на загрузке
+    log("SAGE Craft: opening world '" .. w.name .. "' (" .. w.slot .. ")" .. (w.new and ", new" or ""))
+end
+
+-- Настройки (меню Options) — к игре.
+function Menu.applyOptions()
+    local o = Menu.options
+    if not tonumber(LaunchArg("view") or "") then C.radius = o.render end
+    MOUSE_SENS = 0.24 * o.sensitivity + 0.01
+    SetMasterVolume(o.master)
+    Music.setVolume(o.music)
+    local c = cameraObj and cameraObj:GetCamera()
+    if c and not Pano.active then c.Fov = o.fov end
+end
+
 local function startGame()
     bindControls()
     playerObj = FindObject("Player")
     cameraObj = FindObject("Player Camera")
-
-    local seed = tonumber(LaunchArg("seed") or "") or 1337
-    local loaded = Save.load()
-    if loaded and loaded.seed then seed = loaded.seed end
-    G.init(seed)
     A.build()
+    if LaunchFlag("gencheck") then G.init(tonumber(LaunchArg("seed") or "") or 1337) end
     -- Проверка генерации без игры: --gencheck (итог — строка GENCHECK в логе).
     if LaunchFlag("gencheck") then
         log(G.selfCheck())
@@ -191,46 +261,32 @@ local function startGame()
         local miss = Inv.checkLayout()
         log(string.format("UICHECK: %s клеток_мимо=%d", miss == 0 and "PASS" or "FAIL", miss))
     end
-    Inv.init(loaded and loaded.inventory)
-    C.edits = loaded and loaded.edits or {}
-    Furn.load(loaded and loaded.furnaces)
-    Map.load(loaded and loaded.maps)
-    C.radius = tonumber(LaunchArg("view") or "") or C.radius
-
-    local sx, sy, sz = G.spawnPoint()
-    if loaded and loaded.player then
-        sx, sy, sz = loaded.player.x, loaded.player.y, loaded.player.z
-        P.yaw, P.pitch = loaded.player.yaw or 0, loaded.player.pitch or 0
-        Sky.time = loaded.time or Sky.time
-    end
-    P.pos.x, P.pos.y, P.pos.z = sx, sy, sz
-    -- Параметры для снимков и проверки: время суток, вид, взгляд.
-    if LaunchArg("time") ~= "" and LaunchArg("time") then Sky.time = tonumber(LaunchArg("time")) or Sky.time end
-    thirdPerson = tonumber(LaunchArg("third") or "") or 0
-    P.yaw = tonumber(LaunchArg("yaw") or "") or P.yaw
-    P.pitch = tonumber(LaunchArg("pitch") or "") or P.pitch
-    -- Для проверки анимаций: меч, лук со стрелами, еда, вода, карта, блок.
-    if LaunchFlag("animkit") then
-        for _, k in ipairs({{"diamond_sword", 1}, {"bow", 1}, {"apple", 16}, {"potion", 1}, {"empty_map", 1},
-                            {"cobblestone", 64}, {"iron_pickaxe", 1}, {"stick", 16}, {"arrow", 64}}) do
-            Inv.add(B.byName[k[1]].id, k[2])
+    Pano.init(cameraObj)
+    Menu.init({version = "0.1.0"})
+    Menu.onOpenWorld = openWorld
+    Menu.onOptions = function() Menu.applyOptions() end
+    Menu.onQuitToTitle = function() quitting = {stage = 0, t = 0} end
+    Menu.applyOptions()
+    -- Прогоны и снимки (автопилот, --nomenu, демо) — сразу в мир прежнего
+    -- слота «world»; обычный запуск — титульный экран.
+    local direct = Auto.wanted() or LaunchFlag("nomenu") or LaunchFlag("gencheck") or LaunchFlag("openinv")
+        or LaunchFlag("craftdemo") or LaunchFlag("dropdemo") or LaunchFlag("furnacedemo")
+        or (LaunchArg("crack") or "") ~= ""
+    if direct then
+        openWorld({slot = "world", name = "World", folder = "World"})
+    else
+        Menu.openTitle()
+        -- Для снимков: сразу нужный экран (--menu=select|create|options|delete|rename).
+        local m = LaunchArg("menu") or ""
+        if m ~= "" then
+            if m == "delete" or m == "rename" or LaunchFlag("pick") then
+                Menu.go("select")
+                Menu.screens.select.selected = 1
+            end
+            Menu.go(m)
         end
+        if LaunchFlag("menutest") then require("menutest").start(openWorld) end
     end
-    if LaunchFlag("kit") then
-        for _, n in ipairs({"torch", "glowstone", "planks", "diamond_sword", "stone_pickaxe", "cobblestone", "log", "stick", "iron_pickaxe"}) do
-            Inv.add(B.byName[n].id, B.byName[n].stack)
-        end
-    end
-    Sky.init()
-    Clouds.init(seed)
-    Hud.init()
-    Menu.init()
-    Hand.init(cameraObj)
-    Avatar.init(playerObj)
-    Drops.init()
-    Act.init()
-    Auto.init()
-    SetMouseCaptured(true)
 end
 
 function OnStart(entity)
@@ -270,14 +326,59 @@ function OnUpdate(entity, dt)
         end
     end
     dt = math.min(dt, 0.1)
+    local MT = package.loaded["menutest"]
+    if MT then MT.update(dt, worldOpen, loading) end
+
+    -- Титульный экран и меню без мира: мира ещё нет, генерация не идёт.
+    if not worldOpen then
+        Menu.update(dt)
+        Music.update(dt, true)
+        return
+    end
+
+    -- Save and Quit to Title (GuiIngameMenu): кадр без интерфейса — превью
+    -- мира, затем «Saving world», запись и перезапуск сцены (меню — с чистого
+    -- листа: прошлый мир не держится в памяти).
+    if quitting then
+        quitting.t = quitting.t + dt
+        if quitting.stage == 0 then
+            Menu.go(nil)
+            Hud.setVisible(false)
+            Inv.setHudVisible(false)
+            hidePlayerHand = true
+            quitting.stage, quitting.t = 1, 0
+        elseif quitting.stage == 1 and quitting.t > 0.25 then
+            Save.world.preview = game.screenshot("previews/" .. Save.slot .. ".png")
+            quitting.stage = 2
+        elseif quitting.stage == 2 then
+            Menu.saving()
+            quitting.stage, quitting.t = 3, 0
+        elseif quitting.stage == 3 and quitting.t > 0.2 then
+            if not LaunchFlag("nosave") then Save.write() end
+            game.Restart()
+            quitting.stage = 4
+        end
+        Menu.update(dt)
+        Avatar.update(dt, P, thirdPerson ~= 0, 0)
+        Hand.update(dt, false, P, 0)
+        placeCamera()
+        return
+    end
 
     if loading then
         -- Мир вокруг спавна строится до того, как игрок упадёт в пустоту.
         local busy = C.update(P.pos.x, P.pos.z, 40)
-        Hud.loading(true)
+        local need = (2 * C.radius + 1) * (2 * C.radius + 1)
+        local have = 0
+        for _ in pairs(W.chunks) do have = have + 1 end
+        Menu.loading("Building terrain", math.min(1, have / math.max(1, need)))
+        Menu.update(dt)
         if not busy then
             loading = false
-            Hud.loading(false)
+            Menu.enterGame()
+            Hud.setVisible(true)
+            Inv.setHudVisible(true)
+            if LaunchFlag("pause") then Menu.open() end
             P.spawnAt(P.pos.x, P.pos.y, P.pos.z)
             -- Для снимков ночного света: факелы кольцом вокруг игрока.
             if LaunchFlag("torches") then
@@ -329,11 +430,6 @@ function OnUpdate(entity, dt)
                 f.burn, f.burnMax, f.cook = 50, 80, 6
                 Inv.openFurnace(f)
             end
-            -- Главное меню — после загрузки, поверх живого мира. Прогоны и
-            -- снимки (у них своя цель) его пропускают.
-            local snapshot = LaunchFlag("openinv") or LaunchFlag("craftdemo") or LaunchFlag("dropdemo")
-                or LaunchFlag("furnacedemo") or (LaunchArg("crack") or "") ~= ""
-            if not (Auto.active or LaunchFlag("nomenu") or snapshot) then Menu.open() end
             local n = 0
             for _ in pairs(W.chunks) do n = n + 1 end
             log(string.format("SAGE Craft: world ready, %d chunks (generation %.2f s, light %.2f s, meshes %.2f s)",
@@ -365,21 +461,13 @@ function OnUpdate(entity, dt)
     end
 
     -- Музыка меню — только на титульном экране (не в паузе по Esc).
-    Music.update(dt, Menu.active and not Menu.started)
+    Music.update(dt, false)
     if Menu.active then
-        -- За меню — мир с медленно вращающейся камерой; игра стоит.
+        -- Пауза (Game menu): одиночная игра стоит, кадр рисуется.
         Menu.update(dt)
-        P.yaw = (P.yaw + dt * 3) % 360
-        P.pitch = 8
-        C.update(P.pos.x, P.pos.z, C.budgetMs)
-        Fall.update(dt)
-        Furn.update(dt)
-        Sky.update(dt, P)
-        Clouds.update(dt, P)
-        Hand.update(dt, false, 0, P.walkDist, 0)
-        -- Вид глазами: голову персонажа спрятать, иначе камера смотрит
-        -- изнутри неё (во время загрузки аватар ещё не обновлялся).
-        Avatar.update(dt, P, false, 0)
+        local held = Inv.current()
+        Avatar.update(dt, P, thirdPerson ~= 0, held and held.id or 0)
+        Hand.update(dt, thirdPerson == 0, P, held and held.id or 0)
         placeCamera()
         return
     end
@@ -456,7 +544,7 @@ function OnUpdate(entity, dt)
     Map.heldNumber = held and held.id == B.byName.filled_map.id and held.wear or nil
     Avatar.update(dt, P, thirdPerson ~= 0, heldId)
     Avatar.updatePreview()
-    Hand.update(dt, thirdPerson == 0, P, heldId)
+    Hand.update(dt, thirdPerson == 0 and not hidePlayerHand, P, heldId)
     placeCamera()
     Hud.update(dt)
     Inv.update(dt)

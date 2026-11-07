@@ -6,7 +6,9 @@
 -- ---------------------------------------------------------------------------
 local S = {}
 
-local SLOT = "world"
+-- Слот мира выбирает меню (worlds.lua); «world» — сохранение прежних версий.
+S.slot = "world"
+S.world = {slot = "world", name = "World", folder = "World"}
 local SAVE_EVERY = 30
 -- Версия генерации мира. Правки и место игрока имеют смысл только поверх
 -- ТОГО ЖЕ мира: сменилась генерация (деревья, ключи участков) — мир из
@@ -16,8 +18,8 @@ local timer = 0
 
 function S.load()
     if LaunchFlag("fresh") then return nil end
-    if not HasSave(SLOT) then return nil end
-    local ok, data = pcall(LoadGame, SLOT)
+    if not HasSave(S.slot) then return nil end
+    local ok, data = pcall(LoadGame, S.slot)
     if not ok or type(data) ~= "table" then return nil end
     -- Ключи правок пишутся строками (JSON), обратно — числами.
     local edits = {}
@@ -48,7 +50,7 @@ function S.write()
         for idx, id in pairs(cells) do e[tostring(idx)] = id end
         edits[tostring(k)] = e
     end
-    SaveGame(SLOT, {
+    SaveGame(S.slot, {
         gen = S.GEN,
         seed = G.seed,
         edits = edits,
@@ -58,7 +60,7 @@ function S.write()
         player = {x = P.pos.x, y = P.pos.y, z = P.pos.z, yaw = P.yaw, pitch = P.pitch},
         time = Sky.time,
         skin = Avatar.skinPath,
-    })
+    }, {version = 1, meta = require("worlds").meta(S.world)})
 end
 
 function S.tick(dt)
