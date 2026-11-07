@@ -6,10 +6,13 @@
 -- лук, защита мечом) по числам из anim.lua; предмет в руке — как
 -- RenderPlayer.renderEquippedItems.
 --
--- СКИНЫ. Скин — картинка 64×64 по развёртке модели. Игра ищет картинки в
--- assets/skins: default.png (скин из модели), custom.png и skin1..skin9.png,
--- а ещё путь из параметра запуска --skin=<путь>. K — следующий скин; выбор
--- запоминается в сохранении. Свой скин — положить PNG в assets/skins.
+-- СКИНЫ. Скин — картинка 64×64 по развёртке модели (или старая 64×32 —
+-- она переводится в 64×64, как ImageBufferDownload Minecraft 1.8: левые рука
+-- и нога — зеркала правых). Встроенный — assets/skins/default.png. Свои
+-- скины игрок кладёт в пользовательскую папку игры «skins» (движок:
+-- user_folder, рядом с собранной игрой; в Play-режиме — в папке данных
+-- игры): новые файлы подхватываются на лету. K — следующий скин, выбор —
+-- в настройках (Skin: …) и запоминается для всех миров.
 -- ---------------------------------------------------------------------------
 local Avatar = {}
 
@@ -21,23 +24,109 @@ Avatar.skinIndex = 1
 local phase, amount = 0, 0
 local headYaw = 0
 
-local function loadSkins()
-    skins = {}
-    local candidates = {"assets/skins/default.png", "assets/skins/custom.png"}
-    for i = 1, 9 do candidates[#candidates + 1] = "assets/skins/skin" .. i .. ".png" end
-    local arg = LaunchArg("skin")
-    if arg and arg ~= "" then table.insert(candidates, 1, arg) end
-    for _, path in ipairs(candidates) do
-        local ok, tex = pcall(texture.load, path, "skin:" .. path)
-        if ok and tex.width >= 64 and (tex.height == 64 or tex.height == 32) then
-            tex.nearest = true
-            tex.apply()
-            skins[#skins + 1] = {path = path, name = "skin:" .. path}
+-- 64×32 -> 64×64 (ImageBufferDownload.parseUserSkin 1.8): прямоугольники
+-- {dx1, dy1, dx2, dy2, sx1, sy1, sx2, sy2}; dx1 > dx2 — зеркально по X.
+local LEGACY = {
+    {24, 48, 20, 52, 4, 16, 8, 20}, {28, 48, 24, 52, 8, 16, 12, 20}, {20, 52, 16, 64, 8, 20, 12, 32},
+    {24, 52, 20, 64, 4, 20, 8, 32}, {28, 52, 24, 64, 0, 20, 4, 32}, {32, 52, 28, 64, 12, 20, 16, 32},
+    {40, 48, 36, 52, 44, 16, 48, 20}, {44, 48, 40, 52, 48, 16, 52, 20}, {36, 52, 32, 64, 48, 20, 52, 32},
+    {40, 52, 36, 64, 44, 20, 48, 32}, {44, 52, 40, 64, 40, 20, 44, 32}, {48, 52, 44, 64, 52, 20, 56, 32},
+}
+local function upgradeLegacy(src, name)
+    local out = texture(name, 64, 64)
+    -- Строки холста — снизу вверх: строка картинки r — y = высота − 1 − r.
+    local function getP(x, r) return src.get(x, 31 - r) end
+    local function setP(x, r, c) out.set(x, 63 - r, c) end
+    for r = 0, 63 do
+        for x = 0, 63 do setP(x, r, r < 32 and getP(x, r) or Vec4(0, 0, 0, 0)) end
+    end
+    for _, q in ipairs(LEGACY) do
+        local dx1, dy1, dx2, dy2, sx1, sy1 = q[1], q[2], q[3], q[4], q[5], q[6]
+        local w, h = math.abs(dx2 - dx1), dy2 - dy1
+        for yy = 0, h - 1 do
+            for xx = 0, w - 1 do
+                local dx = dx1 < dx2 and dx1 + xx or dx1 - 1 - xx
+                setP(dx, dy1 + yy, getP(sx1 + xx, sy1 + yy))
+            end
         end
     end
+    return out
 end
 
-local function applySkin()
+-- Добавить скин из файла path (key — как его помнить; title — подпись).
+local function addSkin(path, key, title, stamp)
+    local name = "skin:" .. key .. (stamp and (":" .. stamp) or "")
+    local ok, tex = pcall(texture.load, path, name)
+    if not ok or not tex or tex.width ~= 64 or (tex.height ~= 64 and tex.height ~= 32) then
+        if ok and tex then log("Skin skipped (needs 64x64 or 64x32): " .. path) end
+        return
+    end
+    if tex.height == 32 then
+        name = name .. ":64"
+        tex = upgradeLegacy(tex, name)
+    end
+    tex.nearest = true
+    tex.apply()
+    skins[#skins + 1] = {path = path, key = key, name = name, title = title}
+end
+
+local function hasUserFolder()
+    return user_folder ~= nil and pcall(user_folder.path, "skins")
+end
+
+local function loadSkins()
+    skins = {}
+    local arg = LaunchArg("skin")
+    if arg and arg ~= "" then addSkin(arg, arg, arg:match("([^/\\]+)$") or arg) end
+    addSkin("assets/skins/default.png", "assets/skins/default.png", "Default")
+    if hasUserFolder() then
+        for _, f in ipairs(user_folder.list("skins")) do
+            addSkin(f.path, "user:" .. f.relative, f.name:gsub("%.[^.]+$", ""), math.floor(f.modified))
+        end
+        user_folder.changed("skins")   -- отпечаток «как сейчас»: дальше — только новые правки
+    end
+    log("Skins: " .. #skins .. (hasUserFolder() and (" (own skins folder: " .. user_folder.path("skins") .. ")") or ""))
+end
+
+-- Выбрать скин по ключу (не нашёлся — первый).
+local function selectKey(key)
+    Avatar.skinIndex = 1
+    for i, s in ipairs(skins) do if s.key == key then Avatar.skinIndex = i end end
+end
+
+Avatar.skins = function() return skins end
+
+-- Список скинов без модели (настройки на титульном экране).
+function Avatar.prepareSkins()
+    if #skins == 0 then
+        loadSkins()
+        selectKey(require("menu").options.skin)
+    end
+end
+function Avatar.skinTitle() local s = skins[Avatar.skinIndex]; return s and s.title or "-" end
+
+-- Открыть папку своих скинов в проводнике.
+function Avatar.openSkinsFolder()
+    if hasUserFolder() then return user_folder.open("skins") end
+    return false
+end
+
+-- Папка поменялась (положили, убрали, перезаписали файл) — перечитать,
+-- оставив выбранный скин, если он ещё есть.
+local checkTimer = 0
+function Avatar.watchSkins(dt)
+    checkTimer = checkTimer + dt
+    if checkTimer < 1 or not hasUserFolder() then return end
+    checkTimer = 0
+    if not user_folder.changed("skins") then return end
+    local key = skins[Avatar.skinIndex] and skins[Avatar.skinIndex].key
+    loadSkins()
+    selectKey(key)
+    if Avatar._applied then Avatar.applySkin() end
+    log("Skins reloaded: " .. #skins)
+end
+
+function Avatar.applySkin()
     if LaunchFlag("fileskin") then return end   -- проверка: материал из самого файла модели
     local s = skins[Avatar.skinIndex]
     if not s or not obj then return end
@@ -55,8 +144,11 @@ local function applySkin()
     -- Превью в рюкзаке — свой материал: ровный свет, а не свет клетки.
     material("sagecraft_skin_preview", {texture = s.name, nearest = true, cutoff = 0.05, double_sided = true, unlit = true})
     if Avatar.previewObj then SetMaterial(Avatar.previewObj, "sagecraft_skin_preview") end
-    Avatar.skinPath = s.path
+    Avatar.skinPath = s.key
+    Avatar._lr = nil            -- новый материал — свет заново
+    Avatar._applied = true
 end
+local applySkin = Avatar.applySkin
 
 -- Персонаж для рюкзака: копия модели вдали от мира и съёмка её в текстуру
 -- (AddRenderTexture). Снимается каждый кадр, только пока рюкзак открыт.
@@ -114,17 +206,21 @@ function Avatar.init(playerObj)
     AddAnimatedModel(obj, MODEL)
     initPreview()
     loadSkins()
+    -- Выбор — общий для всех миров (настройки), у старых сохранений — свой.
     local Save = require "save"
-    local want = Save.data and Save.data.skin
-    for i, s in ipairs(skins) do if s.path == want then Avatar.skinIndex = i end end
+    local arg = LaunchArg("skin")
+    local want = (arg ~= nil and arg ~= "") and arg or require("menu").options.skin or (Save.data and Save.data.skin)
+    selectKey(want)
     applySkin()
 end
 
 function Avatar.nextSkin()
+    if #skins == 0 then loadSkins() end
     if #skins == 0 then return end
     Avatar.skinIndex = Avatar.skinIndex % #skins + 1
+    require("menu").options.skin = skins[Avatar.skinIndex].key
     applySkin()
-    log("Skin: " .. skins[Avatar.skinIndex].path)
+    log("Skin: " .. skins[Avatar.skinIndex].key)
 end
 
 -- --- Поза ModelBiped 1.7.10 -------------------------------------------------
@@ -298,6 +394,7 @@ end
 -- visible — вид от третьего лица; heldId — что в руке.
 function Avatar.update(dt, P, visible, heldId)
     if not obj then return end
+    Avatar.watchSkins(dt)
     Avatar.light(P)   -- и без вида от третьего лица: этот материал у рук от первого лица
     obj.Transform.Scale = visible and Vec3(1, 1, 1) or Vec3(0.0001, 0.0001, 0.0001)
     if not heldObj then
