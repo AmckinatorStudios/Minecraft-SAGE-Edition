@@ -84,11 +84,11 @@ jobs:
           game="out/SAGE Craft"
           test -f "$game/game.sagepak" || { echo "::error::нет game.sagepak"; exit 1; }
           test -f "$game/SAGE Craft.exe" || { echo "::error::нет SAGE Craft.exe"; exit 1; }
-          # Лицензия набора текстур обязана ехать с игрой.
-          cp LICENSE-Faithful.txt "$game/"
+          # Набор Faithful больше не используется (текстуры сменились в
+          # cdce9d8) — его лицензия и упоминание из выпуска убраны: копия
+          # удалённого файла роняла выпуск на последнем шаге.
           printf '%s\r\n' "SAGE Craft — запустите «SAGE Craft.exe»." \
-            "Управление и описание: https://github.com/${{ github.repository }}" \
-            "Текстуры — Classic Faithful 32x (см. LICENSE-Faithful.txt)." > "$game/README.txt"
+            "Управление и описание: https://github.com/${{ github.repository }}" > "$game/README.txt"
           ls -la "$game"
           (cd out && 7z a -tzip ../SAGE-Craft-Windows.zip "SAGE Craft" >/dev/null)
 
@@ -101,6 +101,5 @@ jobs:
           body: |
             Распакуйте SAGE-Craft-Windows.zip и запустите «SAGE Craft.exe». Это собранная игра (game.sagepak), исходники проекта — сам репозиторий.
             Собрано из ${{ github.sha }}. Движок SAGE Engine ${{ env.ENGINE_SHA }} (windows-latest).
-            Текстуры — Classic Faithful 32x, faithfulpack.net (см. LICENSE-Faithful.txt).
           files: SAGE-Craft-Windows.zip
           make_latest: true
