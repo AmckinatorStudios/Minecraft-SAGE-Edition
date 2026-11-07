@@ -161,7 +161,8 @@ end
 -- сетка рюкзака с 88,26, результат 144,36). Координаты из более новых версий
 -- (98,18 / 154,28) клали предметы между клетками.
 local LAYOUT = {
-    inventory = {armor = {8, 8}, craft = {88, 26}, result = {144, 36}, preview = {26, 8, 49, 70}},
+    -- preview — кадр персонажа (avatar.lua: ноги в 51,75, 30 пикселей на блок).
+    inventory = {armor = {8, 8}, craft = {88, 26}, result = {144, 36}, preview = {21, 5, 60, 80}},
     table = {craft = {30, 17}, result = {124, 35}},
     -- Печь (1.7): вход, топливо, результат; огонь и стрелка — куски справа
     -- той же картинки, ложатся на свои места окна по мере горения и плавки.
@@ -223,8 +224,27 @@ local function addRegion(kind, index, x, y, s)
     return s
 end
 
+-- Надпись окна: x, y — левый верх в пикселях окна (x = nil — по центру
+-- окна, как у печи). Цвет 0x404040 без тени — так оригинал пишет заголовки.
+local function title(parent, text, x, y)
+    local S = U.WIN
+    local centered = x == nil
+    local o, e = U.label(parent, "Window Title " .. text, UIAnchor.Center, 0, 0, 10, 10, text, S / 2, centered)
+    e.TextScale = S
+    e.TextColor = Vec4(0x40 / 255, 0x40 / 255, 0x40 / 255, 1)
+    e.TextShadowColor = Vec4(0, 0, 0, 0)
+    -- Положение элемента — его центр (якорь Center): ящик надписи от
+    -- (x, y) шириной w и высотой строки 9.
+    local w = centered and 176 or 120
+    local left = centered and 0 or x
+    e.Position = Vec2((left + w / 2 - 88) * S, (y + 4.5 - 83) * S)
+    e.Size = Vec2(w * S, 9 * S)
+    return o
+end
+
 -- Окно: картинка набора и ячейки на её клетках. which: "inventory" | "table".
 local windows = {}
+local highlight
 local function buildWindow(which)
     local S = U.WIN
     local root = SpawnObject("Window " .. which)
@@ -265,6 +285,8 @@ local function buildWindow(which)
             list.slots[#list.slots + 1] = {bg = o}
             return {obj = o, e = e, x = r[1], y = r[2], w = r[3], h = r[4]}
         end
+        list.title = title(screenRoot, "Furnace", nil, 6)
+        list.title2 = title(screenRoot, "Inventory", 8, LAYOUT.H - 96 + 2)
         list.flame = bar("Flame", L.flame)
         list.arrow = bar("Arrow", L.arrow)
         windows[which] = list
@@ -272,6 +294,13 @@ local function buildWindow(which)
     end
     local L = which == "table" and LAYOUT.table or LAYOUT.inventory
     local n = which == "table" and 3 or 2
+    -- Заголовки (drawGuiContainerForegroundLayer): цвет 0x404040, без тени.
+    if which == "inventory" then
+        list.title = title(screenRoot, "Crafting", 86, 16)        -- container.crafting
+    else
+        list.title = title(screenRoot, "Crafting", 28, 6)
+        list.title2 = title(screenRoot, "Inventory", 8, LAYOUT.H - 96 + 2)
+    end
     for r = 0, n - 1 do
         for c = 0, n - 1 do slot("craft", r * 3 + c + 1, L.craft[1] + c * 18, L.craft[2] + r * 18) end
     end
@@ -279,6 +308,20 @@ local function buildWindow(which)
     rs.size = 24 * S
     list.result = rs
     if which == "inventory" then
+        -- Броня: пустая ячейка показывает силуэт своей части (SlotArmor ->
+        -- items/empty_armor_slot_*.png), сверху вниз — шлем, нагрудник,
+        -- поножи, ботинки.
+        list.armorIcons = {}
+        for i, part in ipairs({"helmet", "chestplate", "leggings", "boots"}) do
+            local x, y = LAYOUT.inventory.armor[1], LAYOUT.inventory.armor[2] + (i - 1) * 18
+            local cx, cy = at(x, y)
+            local io, ie = U.base(screenRoot, "Armor Silhouette " .. part, UIAnchor.Center, cx, cy, 16 * S, 16 * S)
+            ie.Type = UIKind.Image
+            ie.Color = Vec4(1, 1, 1, 1)
+            SetUIImage(io, "assets/textures/items/empty_armor_slot_" .. part .. ".png", true)
+            list.armorIcons[i] = io
+            list.slots[#list.slots + 1] = {bg = io}
+        end
         for i = 0, 3 do slot("inv", Inv.ARMOR + i, LAYOUT.inventory.armor[1], LAYOUT.inventory.armor[2] + i * 18) end
         local p = LAYOUT.inventory.preview
         local px, py = (p[1] + p[3] / 2 - LAYOUT.W / 2) * S, (p[2] + p[4] / 2 - LAYOUT.H / 2) * S
@@ -297,6 +340,12 @@ function Inv.buildScreen()
     buildWindow("inventory")
     buildWindow("table")
     buildWindow("furnace")
+    -- Подсветка ячейки под курсором (GuiContainer): белый 0x80FFFFFF поверх
+    -- внутренних 16×16 — и поверх предмета, рамка ячейки не меняется.
+    local hl, hle = U.fill(screenRoot, "Slot Highlight", UIAnchor.Center, 0, 0, 16 * U.WIN, 16 * U.WIN,
+                           Vec4(1, 1, 1, 128 / 255))
+    highlight = {obj = hl, e = hle}
+    U.show(hl, false)
     heldSlot = U.slot(screenRoot, "Held", UIAnchor.TopLeft, 0, 0, 16 * U.WIN)
     U.show(screenRoot, false)
 end
@@ -307,6 +356,8 @@ local function showWindow(which)
         U.show(w.win, on)
         for _, s in ipairs(w.slots) do U.show(s.bg, on) end
         if w.preview then U.show(w.preview, on) end
+        if w.title then U.show(w.title, on) end
+        if w.title2 then U.show(w.title2, on) end
     end
     Inv.window = which
 end
@@ -518,6 +569,71 @@ function Inv.updateFurnaceBars()
     end
 end
 
+-- --- Перетаскивание, сбор, выброс из ячейки ---------------------------------
+
+local drag, lastClick
+
+-- Можно ли положить стопку из руки в ячейку при перетаскивании
+-- (func_94527_a): пусто или тот же предмет с местом. Результат — нельзя.
+local function canDragInto(region)
+    if region.kind == "result" or (region.kind == "furnace" and region.index == 3) then return false end
+    local h = Inv.held
+    if not h then return false end
+    local s = store(region.kind)[gridIndex(region)]
+    return s == nil or (s.id == h.id and not s.wear and not h.wear and s.n < stackMax(s.id))
+end
+
+-- Разложить стопку руки по ячейкам: поровну (ЛКМ) или по одному (ПКМ);
+-- остаток — в руке.
+local function spread(set, right)
+    local h = Inv.held
+    local each = right and 1 or math.floor(h.n / #set)
+    if each < 1 then return end
+    for _, r in ipairs(set) do
+        local t, idx = store(r.kind), gridIndex(r)
+        local s = t[idx]
+        local room = s and (stackMax(h.id) - s.n) or stackMax(h.id)
+        local k = math.min(each, room, h.n)
+        if k > 0 then
+            if s then s.n = s.n + k else t[idx] = {id = h.id, n = k, wear = h.wear} end
+            h.n = h.n - k
+        end
+    end
+    if h.n <= 0 then Inv.held = nil end
+end
+
+-- Собрать в руку такие же предметы (рюкзак, сетка крафта), пока есть место.
+local function gather()
+    local h = Inv.held
+    if not h or h.wear then return end
+    local function take(t, n)
+        for i = 1, n do
+            local s = t[i]
+            if h.n >= stackMax(h.id) then return end
+            if s and s.id == h.id and not s.wear then
+                local k = math.min(s.n, stackMax(h.id) - h.n)
+                h.n = h.n + k
+                s.n = s.n - k
+                if s.n == 0 then t[i] = nil end
+            end
+        end
+    end
+    take(Inv.grid, 9)
+    take(Inv.slots, Inv.SIZE)
+end
+
+-- Выбросить из ячейки один предмет или всю стопку (Q / Ctrl+Q).
+local function dropFromSlot(region, all)
+    if region.kind == "result" then return end
+    local t, idx = store(region.kind), gridIndex(region)
+    local s = t[idx]
+    if not s then return end
+    local n = all and s.n or 1
+    require("drops").throwFromPlayer(s.id, n, s.wear)
+    s.n = s.n - n
+    if s.n <= 0 then t[idx] = nil end
+end
+
 function Inv.update(dt)
     for i = 1, 9 do U.setSlot(hotbar[i], Inv.slots[i]) end
     selFrame.Position = Vec2((-91 - 1 + (Inv.selected - 1) * 20 + 12) * U.HUD, -1 * U.HUD)
@@ -535,7 +651,13 @@ function Inv.update(dt)
     if not Inv.screenOpen then return end
     for _, s in ipairs(regions) do
         if s.window == Inv.window then
-            if s.kind == "inv" then U.setSlot(s, Inv.slots[s.index])
+            if s.kind == "inv" then
+                U.setSlot(s, Inv.slots[s.index])
+                local icons = windows[Inv.window].armorIcons
+                if icons and s.index >= Inv.ARMOR then
+                    local io = icons[s.index - Inv.ARMOR + 1]
+                    if io then U.show(io, Inv.slots[s.index] == nil) end
+                end
             elseif s.kind == "craft" then U.setSlot(s, Inv.grid[gridIndex(s)])
             elseif s.kind == "furnace" then U.setSlot(s, Inv.furnace.slots[s.index]) end
         end
@@ -553,16 +675,56 @@ function Inv.update(dt)
     local left = Input.is_mouse_pressed("left")
     local right = Input.is_mouse_pressed("right")
     local shift = Input.is_key_down("LeftShift") or Input.is_key_down("Shift")
-    if left or right then
-        local region = hit(mx, my)
+    local region = hit(mx, my)
+    -- Курсор за пределами окна 176×166 (GuiContainer: слот −999).
+    local outside = math.abs(mx) >= LAYOUT.W / 2 * U.WIN or math.abs(my) >= LAYOUT.H / 2 * U.WIN
+
+    -- Подсветка ячейки под курсором.
+    if highlight then
+        U.show(highlight.obj, region ~= nil)
+        if region then highlight.e.Position = Vec2(region.cx, region.cy) end
+    end
+
+    -- Перетаскивание стопки по ячейкам (func_146977_a): ЛКМ — поровну,
+    -- ПКМ — по одному в каждую. Решается при отпускании: одна ячейка —
+    -- обычный клик.
+    if drag then
+        local down = Input.is_mouse_down(drag.right and "right" or "left")
+        if down and region and canDragInto(region) and not drag.seen[region] and Inv.held
+            and #drag.set < Inv.held.n then
+            drag.seen[region] = true
+            drag.set[#drag.set + 1] = region
+        end
+        if not down then
+            local d = drag
+            drag = nil
+            if #d.set == 1 then
+                clickStore(store(d.set[1].kind), gridIndex(d.set[1]), d.right, false, d.set[1].kind)
+            elseif #d.set > 1 and Inv.held then
+                spread(d.set, d.right)
+            end
+        end
+    elseif left or right then
         if region and region.kind == "result" then
             clickResult(shift)
         elseif region and region.kind == "furnace" and region.index == 3 then
             clickFurnaceOut(right, shift)
+        elseif region and Inv.held and not shift and canDragInto(region) then
+            drag = {right = right, set = {region}, seen = {[region] = true}}
         elseif region then
-            clickStore(store(region.kind), gridIndex(region), right, shift, region.kind)
-        elseif Inv.held then
-            -- Мимо окна — выбросить.
+            local now = Time.total()
+            local idx = gridIndex(region)
+            -- Двойной клик ЛКМ по ячейке со стопкой в руке — собрать в руку
+            -- такие же предметы со всего окна (func_146983_a).
+            if left and not shift and lastClick and lastClick.region == region and now - lastClick.t < 0.25
+                and Inv.held then
+                gather()
+            else
+                clickStore(store(region.kind), idx, right, shift, region.kind)
+            end
+            lastClick = {region = region, t = now}
+        elseif Inv.held and outside then
+            -- За окном — выбросить: ЛКМ — всю стопку, ПКМ — один предмет.
             require("drops").throwFromPlayer(Inv.held.id, right and 1 or Inv.held.n, Inv.held.wear)
             if right then
                 Inv.held.n = Inv.held.n - 1
@@ -572,8 +734,52 @@ function Inv.update(dt)
             end
         end
     end
+
+    -- Q над ячейкой — выбросить предмет из неё, Ctrl+Q — всю стопку
+    -- (GuiContainer.keyTyped -> handleMouseClick(…, 4)).
+    if WasActionPressed("Drop") and region and not Inv.held then
+        local ctrl = Input.is_key_down("LeftControl") or Input.is_key_down("Control")
+        dropFromSlot(region, ctrl)
+    end
     U.setSlot(heldSlot, Inv.held)
     heldSlot.bge.Position = Vec2(cursor.x - 8 * U.WIN, cursor.y - 8 * U.WIN)
+end
+
+-- Самопроверка (--gencheck, строка INVCHECK): правила окна без мыши.
+function Inv.selfCheck()
+    local D = require "drops"
+    local savedSlots, savedHeld, savedThrow = Inv.slots, Inv.held, D.throwFromPlayer
+    local thrown = 0
+    D.throwFromPlayer = function(_, n) thrown = thrown + n end
+    Inv.slots = {}
+    local stone = B.byName.cobblestone.id
+    local function reg(i) return {kind = "inv", index = i} end
+    -- Перетаскивание ЛКМ: 64 по трём ячейкам — по 21, 1 остаётся в руке.
+    Inv.held = {id = stone, n = 64}
+    spread({reg(10), reg(11), reg(12)}, false)
+    local even = Inv.slots[10].n == 21 and Inv.slots[12].n == 21 and Inv.held and Inv.held.n == 1
+    -- ПКМ: по одному в каждую.
+    Inv.held = {id = stone, n = 5}
+    spread({reg(13), reg(14)}, true)
+    local ones = Inv.slots[13].n == 1 and Inv.held.n == 3
+    -- В ячейку с другим предметом перетаскивать нельзя.
+    Inv.slots[15] = {id = B.byName.dirt.id, n = 1}
+    local blocked = not canDragInto(reg(15)) and canDragInto(reg(16))
+    -- Двойной клик: собрать такие же в руку (до 64).
+    Inv.held = {id = stone, n = 1}
+    gather()
+    local gathered = Inv.held.n == 64 and Inv.slots[10] == nil
+    -- Q — один, Ctrl+Q — вся стопка.
+    Inv.slots[20] = {id = stone, n = 10}
+    dropFromSlot(reg(20), false)
+    local q1 = Inv.slots[20].n == 9 and thrown == 1
+    dropFromSlot(reg(20), true)
+    local q2 = Inv.slots[20] == nil and thrown == 10
+    Inv.slots, Inv.held, D.throwFromPlayer = savedSlots, savedHeld, savedThrow
+    local ok = even and ones and blocked and gathered and q1 and q2
+    return string.format("INVCHECK: %s поровну=%s по_одному=%s чужая=%s сбор=%s Q=%s CtrlQ=%s",
+        ok and "PASS" or "FAIL", tostring(even), tostring(ones), tostring(blocked), tostring(gathered),
+        tostring(q1), tostring(q2))
 end
 
 return Inv

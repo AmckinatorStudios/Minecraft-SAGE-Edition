@@ -231,6 +231,7 @@ local function startGame()
         log(Anim.selfCheck())
         log(Sky.selfCheck())
         log(require("lightmap").selfCheck())
+        log(Inv.selfCheck())
         -- Свет факела в открытом воздухе: 14, 13, … — по одному за клетку.
         -- (Очередь волны с дырой обрывала свет через три клетки.)
         do
@@ -600,7 +601,7 @@ function OnUpdate(entity, dt)
     local heldId = held and held.id or 0
     Map.heldNumber = held and held.id == B.byName.filled_map.id and held.wear or nil
     Avatar.update(dt, P, thirdPerson ~= 0, heldId)
-    Avatar.updatePreview()
+    Avatar.updatePreview(P, heldId)
     Hand.update(dt, thirdPerson == 0 and not hidePlayerHand, P, heldId)
     placeCamera()
     Hud.update(dt)

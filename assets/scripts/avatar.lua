@@ -142,7 +142,9 @@ function Avatar.applySkin()
     SetMaterial(obj, mat)
     require("hand").setMaterial(mat)
     -- Превью в рюкзаке — свой материал: ровный свет, а не свет клетки.
-    material("sagecraft_skin_preview", {texture = s.name, nearest = true, cutoff = 0.05, double_sided = true, unlit = true})
+    -- Освещено «студийным» светом съёмки: у оригинала существо в интерфейсе —
+    -- со светом standardItemLighting (лицо светлее боков), а не плоское.
+    material("sagecraft_skin_preview", {texture = s.name, nearest = true, cutoff = 0.05, double_sided = true, roughness = 1})
     if Avatar.previewObj then SetMaterial(Avatar.previewObj, "sagecraft_skin_preview") end
     Avatar.skinPath = s.key
     Avatar._lr = nil            -- новый материал — свет заново
@@ -150,50 +152,46 @@ function Avatar.applySkin()
 end
 local applySkin = Avatar.applySkin
 
--- Персонаж для рюкзака: копия модели вдали от мира и съёмка её в текстуру
--- (AddRenderTexture). Снимается каждый кадр, только пока рюкзак открыт.
+-- Персонаж в рюкзаке (GuiInventory.func_147046_a 1.7.10): копия модели
+-- вдали от мира снимается ОРТОГРАФИЧЕСКОЙ камерой в текстуру, как интерфейс
+-- оригинала рисует существо: 30 пикселей интерфейса на блок, ноги — в точке
+-- (51, 75) окна. Кадр — прямоугольник окна PREVIEW_RECT; текстура — по
+-- пикселю экрана на пиксель (масштаб окна U.WIN), без растяжения.
 local PREVIEW_AT = Vec3(0, -400, 0)
+local PREVIEW_SCALE = 30
+Avatar.PREVIEW_RECT = {21, 5, 60, 80}          -- x, y, ширина, высота в пикселях окна
+Avatar.PREVIEW_FEET = {51, 75}
 Avatar.previewTexture = "sagecraft_preview"
 local previewCam
 local previewJoints = {}
+local previewHeld, previewHeldKey
 
 local function initPreview()
     local o = SpawnObject("Preview Model")
     o.Transform.Position = PREVIEW_AT
     AddAnimatedModel(o, MODEL)
-    for _, name in ipairs({"Head", "Right Arm", "Left Arm"}) do previewJoints[name] = JointIndex(o, name) end
     Avatar.previewObj = o
+    previewHeld = SpawnObject("Preview Held Item")
+    previewHeld:SetParent(o)
+    previewHeld.Transform.Scale = Vec3(0.0001, 0.0001, 0.0001)
     previewCam = SpawnObject("Preview Camera")
+    local r, f = Avatar.PREVIEW_RECT, Avatar.PREVIEW_FEET
+    -- Центр кадра над ногами: (центр − ноги) пикселей окна / 30 блоков.
+    local up = (f[2] - (r[2] + r[4] / 2)) / PREVIEW_SCALE
+    local S = require("ui").WIN
     -- Модель смотрит на −Z: камера стоит перед ней.
-    previewCam.Transform.Position = Vec3(PREVIEW_AT.x, PREVIEW_AT.y + 1.05, PREVIEW_AT.z - 3.1)
-    AddRenderTexture(previewCam, {name = Avatar.previewTexture, width = 256, height = 384, fov = 38,
-                                  look = Vec3(PREVIEW_AT.x, PREVIEW_AT.y + 0.95, PREVIEW_AT.z),
-                                  studio = true, ambient = 0.9, continuous = false, clear = Vec4(0, 0, 0, 0)})
+    previewCam.Transform.Position = Vec3(PREVIEW_AT.x, PREVIEW_AT.y + up, PREVIEW_AT.z - 10)
+    AddRenderTexture(previewCam, {name = Avatar.previewTexture, width = r[3] * S, height = r[4] * S,
+                                  ortho = true, size = r[4] / 2 / PREVIEW_SCALE, near = 0.1, far = 30,
+                                  look = Vec3(PREVIEW_AT.x, PREVIEW_AT.y + up, PREVIEW_AT.z),
+                                  -- RenderHelper.enableStandardItemLighting: свет спереди-сверху.
+                                  studio = true, ambient = 0.6, lightIntensity = 1.4, lightDir = Vec3(-0.3, -0.5, 1),
+                                  continuous = false, clear = Vec4(0, 0, 0, 0)})
 end
 
 function Avatar.setPreview(on)
     Avatar.previewOn = on
     if previewCam then AddRenderTexture(previewCam, {continuous = on}) end
-end
-
--- Превью смотрит на курсор: голова и тело поворачиваются за мышью.
-function Avatar.updatePreview()
-    if not Avatar.previewOn or not Avatar.previewObj then return end
-    local c, size = UICursor(), UIScreenSize()
-    local dx = (c.x - size.x / 2) / size.x
-    local dy = (c.y - size.y / 2) / size.y
-    local o = Avatar.previewObj
-    -- Номера костей — когда модель загрузится (см. resolveJoints).
-    for _, name in ipairs({"Head", "Right Arm", "Left Arm"}) do
-        if (previewJoints[name] or -1) < 0 then previewJoints[name] = JointIndex(o, name) end
-    end
-    o.Transform.Rotation = Vec3(0, dx * 40, 0)
-    local j = previewJoints["Head"]
-    if j and j >= 0 then SetJointRotation(o, j, dy * 40, dx * 50, 0) end
-    local t = Time.total()
-    local ra, la = previewJoints["Right Arm"], previewJoints["Left Arm"]
-    if ra and ra >= 0 then SetJointRotation(o, ra, math.sin(t * 1.3) * 3, 0, 4) end
-    if la and la >= 0 then SetJointRotation(o, la, -math.sin(t * 1.3) * 3, 0, -4) end
 end
 
 function Avatar.init(playerObj)
@@ -454,6 +452,83 @@ function Avatar.update(dt, P, visible, heldId)
         end
         if heldKey ~= want then heldKey = want; Hand.setItemMesh(heldObj, want) end
         M.applyTo(heldObj, heldItemMatrix(a, held, action))
+    end
+end
+
+-- Каждый кадр, пока открыт рюкзак: углы от курсора (func_147046_a) —
+--   mx = (guiLeft + 51) − мышь X, my = (guiTop + 75 − 50) − мышь Y;
+--   вся модель наклоняется на −atan(my/40)·20° (вокруг ног),
+--   тело — atan(mx/40)·20°, взгляд — atan(mx/40)·40° (голова — разность),
+--   наклон взгляда — −atan(my/40)·20°.
+-- Остальная поза (руки, ноги, взмах, предмет, присед) — та же, что у модели
+-- в мире: ModelBiped по числам anim.lua. Настоящий игрок не трогается —
+-- у превью своя копия модели.
+function Avatar.updatePreview(P, heldId)
+    if not Avatar.previewOn or not Avatar.previewObj or not P then return end
+    local o = Avatar.previewObj
+    local S = require("ui").WIN
+    local c, size = UICursor(), UIScreenSize()
+    local guiLeft, guiTop = size.x / 2 - 88 * S, size.y / 2 - 83 * S
+    local mouseX, mouseY = (c.x - guiLeft) / S, (c.y - guiTop) / S
+    local mx = Avatar.PREVIEW_FEET[1] - mouseX
+    local my = Avatar.PREVIEW_FEET[2] - 50 - mouseY
+    local tilt = -math.atan(my / 40) * 20
+    local bodyYaw = math.atan(mx / 40) * 20
+    local viewYaw = math.atan(mx / 40) * 40
+    local pitch = -math.atan(my / 40) * 20
+    -- Вся модель: наклон вокруг ног (снаружи), затем поворот тела. Знаки —
+    -- в осях движка: модель смотрит на −Z, к камере; мышь левее — поворот
+    -- к левому краю экрана (+X), мышь выше — верх модели уходит от камеры.
+    local m = M.identity()
+    M.translate(m, PREVIEW_AT.x, PREVIEW_AT.y, PREVIEW_AT.z)
+    M.rotate(m, -tilt, 1, 0, 0)
+    M.rotate(m, -bodyYaw, 0, 1, 0)
+    -- RenderPlayer.preRenderCallback: игрок рисуется в 0.9375 своего размера.
+    M.scale(m, 0.9375, 0.9375, 0.9375)
+    for _, name in ipairs(JOINTS) do
+        if (previewJoints[name] or -1) < 0 then previewJoints[name] = JointIndex(o, name) end
+    end
+    local held = heldId or 0
+    local u = Anim.use
+    local action = u and u.id == held and u.action or nil
+    local limb, amount = Anim.limbs()
+    local a = bipedAngles(limb, amount, Anim.age(), viewYaw - bodyYaw, pitch,
+                          Anim.swingProgress(), Anim.sneak,
+                          held == 0 and 0 or (action == "block" and 3 or 1), action == "bow")
+    local function poseP(name, x, y, z)
+        local j = previewJoints[name]
+        if not j or j < 0 then return end
+        local ex, ey, ez = M.eulerOf(M.modelRotation(-x, -y, z))
+        SetJointRotation(o, j, ex, ey, ez)
+    end
+    local function shiftP(name, dx, dy, dz)
+        local j = previewJoints[name]
+        if j and j >= 0 then SetJointOffset(o, j, -dx / 16, -dy / 16, dz / 16) end
+    end
+    poseP("Head", a.headX, a.headY, 0)
+    shiftP("Head", 0, a.headPY, 0)
+    poseP("Body", a.bodyX, a.bodyY, 0)
+    poseP("Right Arm", a.rArmX, a.rArmY, a.rArmZ)
+    poseP("Left Arm", a.lArmX, a.lArmY, a.lArmZ)
+    shiftP("Right Arm", a.rArmPX + 5, 0, a.rArmPZ)
+    shiftP("Left Arm", a.lArmPX - 5, 0, a.lArmPZ)
+    poseP("Right Leg", a.rLegX, 0, 0)
+    poseP("Left Leg", a.lLegX, 0, 0)
+    shiftP("Right Leg", 0, a.legPY - 12, a.legPZ)
+    shiftP("Left Leg", 0, a.legPY - 12, a.legPZ)
+    M.translate(m, 0, -(12 - a.legPY) / 16, 0)
+    M.applyTo(o, m)
+    -- Предмет в руке — тот же, что у модели в мире.
+    if held == 0 then
+        previewHeld.Transform.Scale = Vec3(0.0001, 0.0001, 0.0001)
+        previewHeldKey = nil
+    else
+        if previewHeldKey ~= held then
+            previewHeldKey = held
+            require("hand").setItemMesh(previewHeld, held)
+            previewHeld:GetRenderer().Layer = ""
+        end
+        M.applyTo(previewHeld, heldItemMatrix(a, held, action))
     end
 end
 
