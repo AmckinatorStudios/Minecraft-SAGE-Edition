@@ -2,6 +2,11 @@
   "cull": "none",
   "vertexShader": "assets/shaders/chunk.vert",
   "fragmentShader": "assets/shaders/chunk.frag",
-  "textures": {"uAtlas": "sagecraft_icons"},
-  "params": {}
+  "textures": {
+    "uAtlas": "sagecraft_icons",
+    "uLightCells": "sagecraft_lightmap"
+  },
+  "params": {
+    "uEntityLight": 1
+  }
 }

@@ -66,8 +66,8 @@ end
 
 -- Начать использовать предмет (ПКМ): action — "eat", "drink", "block", "bow".
 -- max — сколько тиков до конца (еда — 32; лук и меч — 72000, «пока держат»).
-function A.startUse(id, action, max, onFinish)
-    A.use = {id = id, action = action, max = max, count = max, onFinish = onFinish}
+function A.startUse(id, action, max, onFinish, onTick)
+    A.use = {id = id, action = action, max = max, count = max, onFinish = onFinish, onTick = onTick}
 end
 
 function A.stopUse()

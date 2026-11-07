@@ -137,6 +137,12 @@ function Map.placeInHand(obj, m, n, layer)
         inHand.fg:GetRenderer().Layer = layer or ""
     end
     M.applyTo(obj, m)
+    local lv = require("hand").lightLevels
+    if lv then
+        local Light = require "lightmap"
+        Light.applyColor(inHand.bg, lv[1], lv[2])
+        Light.applyColor(inHand.fg, lv[1], lv[2])
+    end
     n = n or Map.heldNumber
     if n and Map.maps[n] then
         local c = canvas(n)

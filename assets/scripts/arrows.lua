@@ -105,6 +105,8 @@ function Ar.update(dt, P)
         M.scale(m, 0.7)
         M.translate(m, -0.5, -0.5, 1 / 32)
         M.applyTo(a.obj, m)
+        local Light = require "lightmap"
+        Light.applyLevels(a.obj, Light.levels(a.x, a.y, a.z))
     end
 end
 

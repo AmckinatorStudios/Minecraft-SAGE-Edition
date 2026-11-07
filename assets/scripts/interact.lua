@@ -318,6 +318,21 @@ end
 
 -- --- Использование предметов (ПКМ) ----------------------------------------
 
+-- Звук еды или питья у игрока (EntityPlayer.updateItemUse).
+local function useSound(kind)
+    local x, y, z = require("player").eye()
+    if kind == "eat" then Snd.eat(x, y, z) else Snd.drink(x, y, z) end
+end
+
+-- Каждый тик использования: звук, когда до конца осталось не больше 25
+-- тиков и их число кратно 4 (EntityPlayer.onUpdate) — при 32 тиках это
+-- 24, 20, 16, 12, 8, 4 и ещё один в конце (onItemUseFinish).
+local function useTick(kind)
+    return function(u)
+        if u.count <= 25 and u.count % 4 == 0 then useSound(kind) end
+    end
+end
+
 -- Начать использовать: еда и питьё — 32 тика, лук и меч — пока держат.
 function Act.startUse(stack, d)
     if d.use == "eat" then
@@ -325,16 +340,21 @@ function Act.startUse(stack, d)
         -- Сытый не ест (canEat); без голода в игре — ест всегда.
         if Hud.HUNGER and Hud.food >= 20 then return end
         Anim.startUse(stack.id, "eat", 32, function()
+            -- onItemUseFinish: ещё один звук еды, затем onEaten — отрыжка.
+            useSound("eat")
             Hud.eat(d.food)
             Inv.useOne()
-        end)
+            local x, y, z = require("player").eye()
+            Snd.burp(x, y, z)
+        end, useTick("eat"))
     elseif d.use == "drink" then
         Anim.startUse(stack.id, "drink", 32, function()
+            useSound("drink")
             -- Выпитая бутылка с водой — пустая бутылка (ItemPotion.onEaten).
             Inv.useOne()
             if Inv.current() then Inv.add(B.byName.glass_bottle.id, 1)
             else Inv.slots[Inv.selected] = {id = B.byName.glass_bottle.id, n = 1} end
-        end)
+        end, useTick("drink"))
     elseif d.use == "block" then
         Anim.startUse(stack.id, "block", 72000)
     elseif d.use == "bow" then

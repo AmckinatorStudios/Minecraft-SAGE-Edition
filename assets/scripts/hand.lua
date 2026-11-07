@@ -267,6 +267,14 @@ function Hand.update(dt, visible, P, heldId)
     end
     local eq, shown = Anim.equip()
     local sw = Anim.swingProgress()
+    -- Свет руки и предмета — клетки глаз игрока (renderItemInFirstPerson:
+    -- getLightBrightnessForSkyBlocks у posY игрока); рука — материалом скина
+    -- (avatar.lua), предмет — уровнями в цвете объекта, карта — цветом карты.
+    local Light = require "lightmap"
+    local ex, ey, ez = P.eye()
+    local ls, lb = Light.levels(ex, ey, ez)
+    Light.applyLevels(item, ls, lb)
+    Hand.lightLevels = {ls, lb}
     local base = Hand.bobMatrix()
     -- Отставание руки от взгляда: (взгляд − отставший)·0.1 (знаки Minecraft:
     -- наклон вниз — плюс, рыскание — в другую сторону, чем у игры).

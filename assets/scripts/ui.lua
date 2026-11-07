@@ -11,7 +11,11 @@ local U = {}
 
 -- Шрифт и масштаб: окна интерфейса (картинки набора текстур) рисуются
 -- в WIN экранных пикселей на пиксель раскладки 256×256, панель — в HUD.
-U.FONT = "assets/fonts/Minecraftia-Regular.ttf"
+-- Шрифт — картинка ascii.png набора (сетка 16×16, ширины символов — по
+-- пикселям, как у FontRenderer); порядок символов — ascii.chars рядом.
+-- Высота строки у него — 9 пикселей шрифта на 8 у символа (FONT_HEIGHT),
+-- поэтому кегль везде — 9 × масштаб: тогда символ ровно 8 × масштаб.
+U.FONT = "assets/fonts/ascii.png"
 U.WIN = 3
 U.HUD = 2
 
@@ -69,7 +73,7 @@ function U.label(parent, name, anchor, x, y, w, h, text, scale, centered)
     e.Text = text or ""
     e.Font = U.FONT
     e.FontFilter = "nearest"
-    e.FontPixelHeight = math.floor(8 * (scale or 1) + 0.5) * 2
+    e.FontPixelHeight = math.floor(9 * (scale or 1) * 2 + 0.5)
     e.TextCentered = centered or false
     e.TextColor = U.TEXT
     e.TextShadowOffset = Vec2(2, 2)

@@ -196,6 +196,7 @@ function Menu.applyOptions()
     local o = Menu.options
     if not tonumber(LaunchArg("view") or "") then C.radius = o.render end
     MOUSE_SENS = 0.24 * o.sensitivity + 0.01
+    require("lightmap").gamma = o.gamma or 0
     SetMasterVolume(o.master)
     Music.setVolume(o.music)
     local c = cameraObj and cameraObj:GetCamera()
@@ -206,6 +207,7 @@ local function startGame()
     bindControls()
     playerObj = FindObject("Player")
     cameraObj = FindObject("Player Camera")
+    require("lightmap").init()   -- до первого материала, который её читает
     -- Кадр — проходами, как у EntityRenderer 1.7.10: небо (своя дальность,
     -- светила на 100 блоках при любой прорисовке), поверх — светила и звёзды,
     -- потом мир со сброшенной глубиной, последней — рука от первого лица со
@@ -224,6 +226,7 @@ local function startGame()
         log(G.selfCheck())
         log(Anim.selfCheck())
         log(Sky.selfCheck())
+        log(require("lightmap").selfCheck())
         -- Свет факела в открытом воздухе: 14, 13, … — по одному за клетку.
         -- (Очередь волны с дырой обрывала свет через три клетки.)
         do

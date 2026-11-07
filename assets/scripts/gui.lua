@@ -99,6 +99,7 @@ function Gui.button(parent, text, onClick)
             le.TextColor = not b.enabled and Gui.GRAY or (over and Gui.HOVER or Gui.BUTTON)
         end
         if b.enabled and e.Clicked and b.onClick then
+            require("sounds").click()
             b.onClick()
             return true
         end
@@ -119,7 +120,7 @@ function Gui.field(parent, text, maxLen)
     e.MaxLength = maxLen or 32
     e.Font = U.FONT
     e.FontFilter = "nearest"
-    e.FontPixelHeight = 16
+    e.FontPixelHeight = 18
     e.TextColor = Gui.BUTTON
     e.TextShadowOffset = Vec2(2, 2)
     e.TextShadowColor = Vec4(0.22, 0.22, 0.22, 1)
@@ -169,6 +170,7 @@ function Gui.slider(parent, value, format, onChange)
         local c = UICursor()
         local mx = c.x / S
         if e.Pressed or (s.dragging and UIMouseDown()) then
+            if not s.dragging then require("sounds").click() end
             s.dragging = true
             local v = math.max(0, math.min(1, (mx - s.x - 4) / (s.w - 8)))
             if v ~= s.value then

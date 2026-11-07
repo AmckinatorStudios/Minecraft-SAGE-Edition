@@ -279,9 +279,26 @@ end
 
 local heldObj, heldKey
 
+-- Свет модели — цвет световой карты (lightmap.lua) при уровнях клетки, где
+-- она стоит (Entity.getBrightnessForRender: ноги + рост 1.8 × 0.66). Каждый
+-- кадр и без ступенек округления: карта сама плавно меняется со временем
+-- суток, погодой и мерцанием факелов. Тот же материал у рук от первого лица.
+function Avatar.light(P)
+    if not Avatar.material then return end
+    local Light = require "lightmap"
+    local s, b = Light.levels(P.pos.x, P.pos.y + 1.8 * 0.66, P.pos.z)
+    local r, g, bl = Light.at(s, b)
+    if r ~= Avatar._lr or g ~= Avatar._lg or bl ~= Avatar._lb then
+        Avatar._lr, Avatar._lg, Avatar._lb = r, g, bl
+        material.Set(Avatar.material, "albedo", Vec3(r, g, bl))
+    end
+    if heldObj then Light.applyLevels(heldObj, s, b) end
+end
+
 -- visible — вид от третьего лица; heldId — что в руке.
 function Avatar.update(dt, P, visible, heldId)
     if not obj then return end
+    Avatar.light(P)   -- и без вида от третьего лица: этот материал у рук от первого лица
     obj.Transform.Scale = visible and Vec3(1, 1, 1) or Vec3(0.0001, 0.0001, 0.0001)
     if not heldObj then
         heldObj = SpawnObject("Held Item")
@@ -290,21 +307,6 @@ function Avatar.update(dt, P, visible, heldId)
     if not visible then
         heldObj.Transform.Scale = Vec3(0.0001, 0.0001, 0.0001)
         return
-    end
-    if Avatar.material then
-        local W = require "world"
-        local Sky = require "sky"
-        local bx, by, bz = math.floor(P.pos.x), math.floor(P.pos.y + 1), math.floor(P.pos.z)
-        -- Та же кривая, что в шейдере участка: уровни 0..15 -> яркость.
-        local function curve(l) return (l / 15) ^ 2.65 end
-        local sky = curve(W.sky(bx, by, bz)) * Sky.daylight
-        local blk = curve(W.blockLight(bx, by, bz))
-        local k = math.max(0.05, sky, blk)
-        local key = math.floor(k * 50)
-        if key ~= Avatar._lightKey then
-            Avatar._lightKey = key
-            material.Set(Avatar.material, "albedo", Vec3(k, k, k * (blk > sky and 0.85 or 1)))
-        end
     end
 
     -- Тело повёрнуто по renderYawOffset; голова — на разность со взглядом.

@@ -84,6 +84,42 @@ function S.step(id, x, y, z)
     end
 end
 
+-- --- Звуки random.* (assets/sounds/random) ----------------------------------
+
+local R = "assets/sounds/random/"
+local rnd = math.random
+S.count.eat, S.count.drink, S.count.burp, S.count.pop, S.count.click = 0, 0, 0, 0, 0
+
+-- random.eat (EntityPlayer.updateItemUse): громкость 0.5 или 1, тон ±0.2.
+function S.eat(x, y, z)
+    PlaySound3D(R .. "eat" .. rnd(3) .. ".ogg", Vec3(x, y, z), 0.5 + 0.5 * rnd(0, 1), (rnd() - rnd()) * 0.2 + 1)
+    S.count.eat = S.count.eat + 1
+end
+
+-- random.drink: громкость 0.5, тон 0.9..1.
+function S.drink(x, y, z)
+    PlaySound3D(R .. "drink.ogg", Vec3(x, y, z), 0.5, rnd() * 0.1 + 0.9)
+    S.count.drink = S.count.drink + 1
+end
+
+-- random.burp (ItemFood.onEaten): громкость 0.5, тон 0.9..1.
+function S.burp(x, y, z)
+    PlaySound3D(R .. "burp.ogg", Vec3(x, y, z), 0.5, rnd() * 0.1 + 0.9)
+    S.count.burp = S.count.burp + 1
+end
+
+-- random.pop (EntityItem.onCollideWithPlayer): 0.2, ((r − r)·0.7 + 1)·2.
+function S.pop(x, y, z)
+    PlaySound3D(R .. "pop.ogg", Vec3(x, y, z), 0.2, ((rnd() - rnd()) * 0.7 + 1) * 2)
+    S.count.pop = S.count.pop + 1
+end
+
+-- random.click — нажатие кнопки интерфейса (GuiButton.func_146113_a): 0.25, тон 1.
+function S.click()
+    PlaySound(R .. "click.ogg", 0.25, 1)
+    S.count.click = S.count.click + 1
+end
+
 -- Сколько вариантов у материала — для проверки, что файлы на месте.
 S.VARIANTS = VARIANTS
 S.kindOf = info
