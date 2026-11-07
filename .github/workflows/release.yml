@@ -84,9 +84,6 @@ jobs:
           game="out/SAGE Craft"
           test -f "$game/game.sagepak" || { echo "::error::нет game.sagepak"; exit 1; }
           test -f "$game/SAGE Craft.exe" || { echo "::error::нет SAGE Craft.exe"; exit 1; }
-          # Набор Faithful больше не используется (текстуры сменились в
-          # cdce9d8) — его лицензия и упоминание из выпуска убраны: копия
-          # удалённого файла роняла выпуск на последнем шаге.
           printf '%s\r\n' "SAGE Craft — запустите «SAGE Craft.exe»." \
             "Управление и описание: https://github.com/${{ github.repository }}" > "$game/README.txt"
           ls -la "$game"
