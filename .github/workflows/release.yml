@@ -70,11 +70,14 @@ jobs:
       - name: Сборка игры
         if: env.SKIP != '1'
         run: |
-          curl -fsSL -o engine.zip \
+          # Движок — ВНЕ папки проекта: иначе сборщик считает его файлы
+          # ассетами игры и кладёт их в пакет.
+          eng="$(cygpath -u "$RUNNER_TEMP")/engine"
+          curl -fsSL -o "$eng.zip" \
             https://github.com/AmckinatorStudios/SAGE-Engine/releases/download/windows-latest/SageEditor-Windows.zip
-          mkdir engine && unzip -q engine.zip -d engine
-          tool=$(find engine -iname 'sage_build.exe' | head -1)
-          player=$(find engine -ipath '*runtime*' -iname 'SagePlayer.exe' | head -1)
+          mkdir -p "$eng" && unzip -q "$eng.zip" -d "$eng"
+          tool=$(find "$eng" -iname 'sage_build.exe' | head -1)
+          player=$(find "$eng" -ipath '*runtime*' -iname 'SagePlayer.exe' | head -1)
           test -n "$tool" || { echo "::error::в релизе движка нет sage_build.exe"; exit 1; }
           test -n "$player" || { echo "::error::в релизе движка нет SagePlayer.exe"; exit 1; }
           "$tool" --project . --player "$player" --out out
