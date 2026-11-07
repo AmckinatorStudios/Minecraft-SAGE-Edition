@@ -1,0 +1,8 @@
+{
+  "cull": "none",
+  "opacity": 0.99,
+  "vertexShader": "assets/shaders/sprite.vert",
+  "fragmentShader": "assets/shaders/sprite.frag",
+  "textures": {"uTex": "assets/textures/particle/happy_villager.png"},
+  "params": {}
+}

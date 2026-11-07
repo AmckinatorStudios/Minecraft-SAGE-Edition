@@ -146,6 +146,7 @@ local function openWorld(w)
     C.edits = loaded and loaded.edits or {}
     Furn.load(loaded and loaded.furnaces)
     Map.load(loaded and loaded.maps)
+    require("plants").load(loaded and loaded.plants)
     C.radius = tonumber(LaunchArg("view") or "") or C.radius
 
     local sx, sy, sz = G.spawnPoint()
@@ -170,7 +171,9 @@ local function openWorld(w)
         end
     end
     if LaunchFlag("kit") then
-        for _, n in ipairs({"torch", "glowstone", "planks", "diamond_sword", "stone_pickaxe", "cobblestone", "log", "stick", "iron_pickaxe"}) do
+        for _, n in ipairs({"torch", "glowstone", "planks", "diamond_sword", "stone_pickaxe", "cobblestone", "log", "stick", "iron_pickaxe",
+                            "oak_sapling", "spruce_sapling", "birch_sapling", "jungle_sapling", "acacia_sapling",
+                            "dark_oak_sapling", "bone_meal", "shears"}) do
             Inv.add(B.byName[n].id, B.byName[n].stack)
         end
     end
@@ -197,6 +200,7 @@ function Menu.applyOptions()
     if not tonumber(LaunchArg("view") or "") then C.radius = o.render end
     MOUSE_SENS = 0.24 * o.sensitivity + 0.01
     require("lightmap").gamma = o.gamma or 0
+    require("shadows").fancy = o.fancy ~= false
     SetMasterVolume(o.master)
     Music.setVolume(o.music)
     local c = cameraObj and cameraObj:GetCamera()
@@ -242,6 +246,7 @@ local function startGame()
                 bad == 0 and "PASS" or "FAIL", bad, W.blockLight(x, y + 6, z)))
             -- Печь: 2 руды и уголь — два слитка через 20 с; пока огонь —
             -- горящая печь, уголь (80 с) прогорел — снова обычная.
+            log(require("plants").selfCheck())
             local fx, fy, fz = 4, W.surface(4, 4) + 1, 4
             Act.setBlock(fx, fy, fz, B.byName.furnace.id)
             local f = Furn.at(fx, fy, fz)
@@ -439,6 +444,22 @@ function OnUpdate(entity, dt)
             Act.forceSwing = LaunchFlag("forceswing")
             if LaunchArg("slot") and LaunchArg("slot") ~= "" then Inv.select(tonumber(LaunchArg("slot"))) end
             -- Для снимков: печь рядом — руда плавится, уголь горит, окно открыто.
+            -- Для снимков: все породы деревьев из саженцев в ряд к северу (−Z).
+            if LaunchFlag("treedemo") then
+                local Pl = require "plants"
+                local kinds = {"oak", "birch", "spruce", "jungle", "acacia", "dark_oak", "spruce", "jungle"}
+                for i, kind in ipairs(kinds) do
+                    local x, z = math.floor(P.pos.x + (i - 4.5) * 9), math.floor(P.pos.z) - 22
+                    local y = W.surface(x, z) + 1
+                    local two = i >= 6
+                    local sid = B.byName[kind .. "_sapling"].id
+                    for _, d in ipairs(two and {{0, 0}, {1, 0}, {0, 1}, {1, 1}} or {{0, 0}}) do
+                        Act.setBlock(x + d[1], y - 1, z + d[2], B.byName.grass.id)
+                        Act.setBlock(x + d[1], y, z + d[2], sid)
+                    end
+                    for _ = 1, 30 do if Pl.growTree(x, y, z) then break end end
+                end
+            end
             if LaunchFlag("furnacedemo") then
                 local dx, _, dz = P.lookDir()
                 local x, z = math.floor(P.pos.x + dx * 2.5), math.floor(P.pos.z + dz * 2.5)
@@ -552,7 +573,18 @@ function OnUpdate(entity, dt)
             Snd.step(W.get(fx, fy, fz), P.pos.x, P.pos.y, P.pos.z)
         end
     end
-    if fall and fall > 3.5 then Hud.damage(math.floor(fall - 3)) end
+    if fall then
+        -- EntityLivingBase.fall: урон — ceil(высота − 3); звук поверхности
+        -- приземления — блок ПОД НОГАМИ в момент касания (posY − 0.2), громкость
+        -- stepVolume·0.5, тон stepPitch·0.75. Обычный прыжок (подъём до 1.25
+        -- блока и обратно) приземлением с высоты не считается.
+        local dmg = math.ceil(fall - 3)
+        if fall > 1.3 then
+            Snd.land(W.get(math.floor(P.pos.x), math.floor(P.pos.y - 0.2), math.floor(P.pos.z)),
+                     P.pos.x, P.pos.y, P.pos.z)
+        end
+        if dmg > 0 then Hud.damage(dmg) end
+    end
 
     C.update(P.pos.x, P.pos.z, C.budgetMs)
 
@@ -560,6 +592,7 @@ function OnUpdate(entity, dt)
     Drops.update(dt)
     Fall.update(dt)
     Furn.update(dt)
+    require("plants").update(dt)
     Sky.update(dt, P)
     Clouds.update(dt, P)
     Arrows.update(dt, P)

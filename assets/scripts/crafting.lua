@@ -34,10 +34,12 @@ local function shapeless(out, n, items, opts)
     list[#list + 1] = r
 end
 
-local PLANKS = {"planks", "birch_planks"}
+local PLANKS = {"planks", "birch_planks", "spruce_planks", "jungle_planks", "acacia_planks", "dark_oak_planks"}
 
 shapeless("planks", 4, {"log"})
 shapeless("birch_planks", 4, {"birch_log"})
+for _, w in ipairs({"spruce", "jungle", "acacia", "dark_oak"}) do shapeless(w .. "_planks", 4, {w .. "_log"}) end
+shaped("shears", 1, {" I", "I "}, {I = "iron_ingot"})
 shaped("stick", 4, {"P", "P"}, {P = PLANKS})
 shaped("crafting_table", 1, {"PP", "PP"}, {P = PLANKS})
 shaped("torch", 4, {"C", "S"}, {C = "coal", S = "stick"})
@@ -76,7 +78,8 @@ end
 -- Переплавка в печи: что положили сверху -> что выйдет справа.
 R.SMELT = {}
 for from, to in pairs({iron_ore = "iron_ingot", gold_ore = "gold_ingot", sand = "glass",
-                       cobblestone = "stone", clay = "brick", log = "coal", birch_log = "coal",
+                       cobblestone = "stone", clay = "brick", log = "coal", birch_log = "coal", spruce_log = "coal",
+                       jungle_log = "coal", acacia_log = "coal", dark_oak_log = "coal",
                        -- Руды, добытые «Шёлковым касанием» в оригинале, плавятся в свой
                        -- предмет; здесь их не добыть целыми, но рецепт тот же.
                        coal_ore = "coal", diamond_ore = "diamond", redstone_ore = "redstone",
@@ -88,7 +91,10 @@ end
 -- то есть восемь переплавок по 10 с; дерево — 15 с, палка — 5 с).
 R.FUEL = {}
 for name, sec in pairs({coal = 80, coal_block = 800, log = 15, birch_log = 15, planks = 15,
-                        birch_planks = 15, stick = 5, crafting_table = 15, bookshelf = 15,
+                        birch_planks = 15, spruce_log = 15, jungle_log = 15, acacia_log = 15, dark_oak_log = 15,
+                        spruce_planks = 15, jungle_planks = 15, acacia_planks = 15, dark_oak_planks = 15,
+                        oak_sapling = 5, spruce_sapling = 5, birch_sapling = 5, jungle_sapling = 5,
+                        acacia_sapling = 5, dark_oak_sapling = 5, stick = 5, crafting_table = 15, bookshelf = 15,
                         wood_pickaxe = 10, wood_axe = 10, wood_shovel = 10, wood_sword = 10}) do
     if B.byName[name] then R.FUEL[id(name)] = sec end
 end

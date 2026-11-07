@@ -304,10 +304,15 @@ function Avatar.update(dt, P, visible, heldId)
         heldObj = SpawnObject("Held Item")
         heldObj:SetParent(obj)
     end
+    -- Тень игрока (RenderPlayer: shadowSize 0.5) — только когда модель видна.
+    local Sh = require "shadows"
+    Avatar.shadow = Avatar.shadow or Sh.new("Player Shadow")
     if not visible then
         heldObj.Transform.Scale = Vec3(0.0001, 0.0001, 0.0001)
+        Sh.hide(Avatar.shadow)
         return
     end
+    Sh.place(Avatar.shadow, P.pos.x, P.pos.y, P.pos.z, 0.5, 1, Sh.camera())
 
     -- Тело повёрнуто по renderYawOffset; голова — на разность со взглядом.
     -- Рыскание Minecraft идёт в обратную сторону, наклон вниз — плюс.
@@ -333,6 +338,10 @@ function Avatar.update(dt, P, visible, heldId)
     pose("Left Leg", a.lLegX, 0, 0)
     shift("Right Leg", 0, a.legPY - 12, a.legPZ)
     shift("Left Leg", 0, a.legPY - 12, a.legPZ)
+    -- Присед поднимает ноги на 3 пикселя модели (rotationPointY 12 -> 9), и
+    -- без сдвига всей модели вниз ступни висели над землёй — «игрок в
+    -- воздухе». Модель опускается ровно на подъём ног: ступни на блоке.
+    obj.Transform.Position = Vec3(0, -(12 - a.legPY) / 16, 0)
 
     if held == 0 then
         heldObj.Transform.Scale = Vec3(0.0001, 0.0001, 0.0001)

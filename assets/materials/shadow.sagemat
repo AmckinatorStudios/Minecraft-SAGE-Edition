@@ -1,0 +1,8 @@
+{
+  "cull": "none",
+  "opacity": 0.99,
+  "vertexShader": "assets/shaders/shadow.vert",
+  "fragmentShader": "assets/shaders/shadow.frag",
+  "textures": {"uTex": "assets/textures/misc/shadow.png"},
+  "params": {}
+}

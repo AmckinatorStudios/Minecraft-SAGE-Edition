@@ -42,6 +42,7 @@ local function land(e, y)
     local Act = require "interact"
     Act.setBlock(e.x, y, e.z, e.id)
     DestroyObject(e.obj)
+    if e.shadow then require("shadows").destroy(e.shadow) end
 end
 
 function F.update(dt)
@@ -73,6 +74,10 @@ function F.update(dt)
             e.obj.Transform.Position = Vec3(e.x + 0.5, y + 0.5, e.z + 0.5)
             local Light = require "lightmap"
             Light.applyLevels(e.obj, Light.levels(e.x + 0.5, y + 0.98 * 0.66, e.z + 0.5))
+            -- Тень падающего блока (RenderFallingBlock: shadowSize 0.5).
+            local Sh = require "shadows"
+            e.shadow = e.shadow or Sh.new("Falling Shadow")
+            Sh.place(e.shadow, e.x + 0.5, y, e.z + 0.5, 0.5, 1, Sh.camera())
             i = i + 1
         end
     end

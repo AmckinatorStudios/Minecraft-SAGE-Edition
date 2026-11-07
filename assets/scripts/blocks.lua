@@ -26,7 +26,7 @@ local defs = {
     {id = 4,  name = "cobblestone",  title = "Cobblestone",          tex = "cobblestone", hard = 2.0, tool = "pickaxe", need = 1},
     {id = 5,  name = "planks",       title = "Oak Planks",             tex = "planks_oak", hard = 2.0, tool = "axe"},
     {id = 6,  name = "log",          title = "Oak Log",            top = "log_oak_top", side = "log_oak", hard = 2.0, tool = "axe"},
-    {id = 7,  name = "leaves",       title = "Oak Leaves",            tex = "leaves_oak!", draw = "cutout", hard = 0.2, drop = "none", apple = 0.03, opacityLight = 1},
+    {id = 7,  name = "leaves",       title = "Oak Leaves",            tex = "leaves_oak!", draw = "cutout", hard = 0.2, drop = "none", opacityLight = 1},
     {id = 8,  name = "sand",         title = "Sand",             tex = "sand", hard = 0.5, tool = "shovel", falls = true},
     {id = 9,  name = "gravel",       title = "Gravel",            tex = "gravel", hard = 0.6, tool = "shovel", falls = true, flint = 0.1},
     {id = 10, name = "bedrock",      title = "Bedrock",   tex = "bedrock", hard = -1},
@@ -75,6 +75,26 @@ local defs = {
     {id = 50, name = "emerald_ore",  title = "Emerald Ore", tex = "emerald_ore", hard = 3.0, tool = "pickaxe", need = 3, drop = "emerald", xp = {3, 7}},
     -- Сахарный тростник (WorldGenReed): у воды, крестом; из него бумага.
     {id = 51, name = "reeds",        title = "Sugar Canes", tex = "reeds", draw = "cross", hard = 0, solid = false, opacityLight = 0},
+    -- Породы 1.7.10 (log/log2, leaves/leaves2, sapling, planks): ель, тропическое
+    -- дерево, акация, тёмный дуб. Листва роняет саженцы и яблоки (plants.lua).
+    {id = 52, name = "spruce_log",   title = "Spruce Wood",   top = "log_spruce_top", side = "log_spruce", hard = 2.0, tool = "axe"},
+    {id = 53, name = "jungle_log",   title = "Jungle Wood",   top = "log_jungle_top", side = "log_jungle", hard = 2.0, tool = "axe"},
+    {id = 54, name = "acacia_log",   title = "Acacia Wood",   top = "log_acacia_top", side = "log_acacia", hard = 2.0, tool = "axe"},
+    {id = 55, name = "dark_oak_log", title = "Dark Oak Wood", top = "log_big_oak_top", side = "log_big_oak", hard = 2.0, tool = "axe"},
+    {id = 56, name = "spruce_leaves",   title = "Spruce Leaves",   tex = "leaves_spruce!", draw = "cutout", hard = 0.2, drop = "none", opacityLight = 1},
+    {id = 57, name = "jungle_leaves",   title = "Jungle Leaves",   tex = "leaves_jungle!", draw = "cutout", hard = 0.2, drop = "none", opacityLight = 1},
+    {id = 58, name = "acacia_leaves",   title = "Acacia Leaves",   tex = "leaves_acacia!", draw = "cutout", hard = 0.2, drop = "none", opacityLight = 1},
+    {id = 59, name = "dark_oak_leaves", title = "Dark Oak Leaves", tex = "leaves_big_oak!", draw = "cutout", hard = 0.2, drop = "none", opacityLight = 1},
+    {id = 60, name = "oak_sapling",      title = "Oak Sapling",      tex = "sapling_oak", draw = "cross", hard = 0, solid = false, opacityLight = 0},
+    {id = 61, name = "spruce_sapling",   title = "Spruce Sapling",   tex = "sapling_spruce", draw = "cross", hard = 0, solid = false, opacityLight = 0},
+    {id = 62, name = "birch_sapling",    title = "Birch Sapling",    tex = "sapling_birch", draw = "cross", hard = 0, solid = false, opacityLight = 0},
+    {id = 63, name = "jungle_sapling",   title = "Jungle Sapling",   tex = "sapling_jungle", draw = "cross", hard = 0, solid = false, opacityLight = 0},
+    {id = 64, name = "acacia_sapling",   title = "Acacia Sapling",   tex = "sapling_acacia", draw = "cross", hard = 0, solid = false, opacityLight = 0},
+    {id = 65, name = "dark_oak_sapling", title = "Dark Oak Sapling", tex = "sapling_roofed_oak", draw = "cross", hard = 0, solid = false, opacityLight = 0},
+    {id = 66, name = "spruce_planks",   title = "Spruce Wood Planks",   tex = "planks_spruce", hard = 2.0, tool = "axe"},
+    {id = 67, name = "jungle_planks",   title = "Jungle Wood Planks",   tex = "planks_jungle", hard = 2.0, tool = "axe"},
+    {id = 68, name = "acacia_planks",   title = "Acacia Wood Planks",   tex = "planks_acacia", hard = 2.0, tool = "axe"},
+    {id = 69, name = "dark_oak_planks", title = "Dark Oak Wood Planks", tex = "planks_big_oak", hard = 2.0, tool = "axe"},
     {id = 47, name = "lit_furnace",  title = "Furnace",              top = "furnace_top", side = "furnace_side", front = "furnace_front_on", bottom = "furnace_top", hard = 3.5, tool = "pickaxe", need = 1, light = 13, drop = "furnace"},
 }
 
@@ -103,6 +123,11 @@ local items = {
     {id = 287, name = "paper",           title = "Paper",            tex = "paper"},
     {id = 288, name = "compass",         title = "Compass",          tex = "compass"},
     {id = 289, name = "empty_map",       title = "Empty Map",        tex = "map_empty"},
+    {id = 294, name = "wheat_seeds",     title = "Seeds",            tex = "seeds_wheat"},
+    -- Костная мука (dye 15): ускоряет рост саженца (ItemDye.applyBonemeal).
+    {id = 295, name = "bone_meal",       title = "Bone Meal",        tex = "dye_powder_white"},
+    -- Ножницы: листва и трава — целым блоком (BlockLeaves/BlockTallGrass.harvestBlock).
+    {id = 296, name = "shears",          title = "Shears",           tex = "shears", stack = 1, uses = 238, shears = true},
     {id = 290, name = "filled_map",      title = "Map",              tex = "map_filled", map = true, stack = 1},
     -- Кадры натяжения лука (ItemBow.getItemIconForUseDuration) — только картинки.
     {id = 291, name = "bow_pulling_0",   title = "Bow", tex = "bow_pulling_0", hidden = true, stack = 1},
@@ -163,6 +188,22 @@ for _, d in ipairs(defs) do
     B.emit[d.id] = d.light or 0
     if d.draw == "solid" then B.absorb[d.id] = 15
     else B.absorb[d.id] = 1 + (d.opacityLight or 0) end
+end
+
+-- Группы для листвы и деревьев (plants.lua, trees.lua): что держит листву
+-- (бревно), что листва, что саженец и какой породы.
+B.isLog, B.isLeaves, B.isSapling = {}, {}, {}
+B.sapling = {}      -- [id саженца] = порода
+for _, n in ipairs({"log", "birch_log", "spruce_log", "jungle_log", "acacia_log", "dark_oak_log"}) do
+    B.isLog[B.byName[n].id] = true
+end
+for _, n in ipairs({"leaves", "birch_leaves", "spruce_leaves", "jungle_leaves", "acacia_leaves", "dark_oak_leaves"}) do
+    B.isLeaves[B.byName[n].id] = true
+end
+for kind, n in pairs({oak = "oak_sapling", spruce = "spruce_sapling", birch = "birch_sapling",
+                      jungle = "jungle_sapling", acacia = "acacia_sapling", dark_oak = "dark_oak_sapling"}) do
+    B.isSapling[B.byName[n].id] = true
+    B.sapling[B.byName[n].id] = kind
 end
 
 for _, it in ipairs(items) do

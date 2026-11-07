@@ -120,6 +120,16 @@ function S.click()
     S.count.click = S.count.click + 1
 end
 
+-- Приземление с высоты на блок id (EntityLivingBase.fall): звук шага его
+-- материала, громкость ×0.5, тон ×0.75.
+function S.land(id, x, y, z)
+    local kind, pitch = info(id)
+    if kind then
+        PlaySound3D(file("step", kind), Vec3(x, y, z), 0.5, pitch * 0.75)
+        S.count.land = (S.count.land or 0) + 1
+    end
+end
+
 -- Сколько вариантов у материала — для проверки, что файлы на месте.
 S.VARIANTS = VARIANTS
 S.kindOf = info
