@@ -2,13 +2,20 @@
 -- mesher.lua — меш секции 16×16×16 из клеток мира.
 --
 -- Рисуются только грани, смотрящие в непрозрачное-не-глухое: внутренность
--- горы не стоит ни одного треугольника. Свет вершины — среднее четырёх клеток
--- перед гранью у этого угла (сглаженный свет), затенение угла — по трём
--- соседям (два ребра и угол): это то самое мягкое затемнение в стыках блоков.
+-- горы не стоит ни одного треугольника. Сглаженный свет — как у
+-- renderStandardBlockWithAmbientOcclusion 1.7.10: у каждого угла грани четыре
+-- клетки (перед гранью, два ребра, диагональ). Яркость угла — их среднее,
+-- причём глухая или совсем тёмная клетка берёт значение клетки перед гранью
+-- (getAoBrightness); оба ребра глухие — диагональ не видна, вместо неё
+-- ребро. Затенение угла — среднее их getAmbientOcclusionLightValue: 0.2 у
+-- глухого блока, 1.0 у остальных.
 --
 -- Вершина несёт во втором UV-канале (uv2) два уровня света 0..15: неба и
--- блоков, уже умноженные на затенение угла. Сторону грани (верх светлее
--- боков) шейдер берёт из нормали. Так один и тот же меш верен и днём, и ночью.
+-- блоков (дробные — среднее). Затенение угла — длина нормали: нормаль грани
+-- одна на все четыре угла, и её длина между ними меняется ровно линейно, как
+-- цвет вершины у оригинала. Сторону грани (верх 1, низ 0.5, X 0.6, Z 0.8)
+-- шейдер берёт из направления нормали. Так один и тот же меш верен и днём,
+-- и ночью: дневной свет — в световой карте (lightmap.lua).
 --
 -- Результат — массивы для m.arrays{...}: один вызов на секцию вместо тысяч
 -- вызовов по вершине.
@@ -64,7 +71,6 @@ for fi, f in ipairs(FACES) do
     end
 end
 
-local AO = {0.45, 0.62, 0.8, 1.0}
 
 -- Смещения в окне (см. widx) одним числом: соседа клетки ищем сложением
 -- индексов, а не вызовом функции с тремя координатами — это внутренний цикл
@@ -115,7 +121,7 @@ local function batch()
     return {position = {}, normal = {}, uv = {}, uv2 = {}, index = {}, n = 0}
 end
 
-local function addQuad(b, ox, oy, oz, corners, nrm, uvs, L, tile, flip)
+local function addQuad(b, ox, oy, oz, corners, nrm, uvs, L, tile, flip, ao)
     local pos, nor, uv, uv2, idx = b.position, b.normal, b.uv, b.uv2, b.index
     local base = b.n
     local tu, tv, ts = A.tileOrigin(tile)
@@ -124,7 +130,8 @@ local function addQuad(b, ox, oy, oz, corners, nrm, uvs, L, tile, flip)
         local p = corners[k]
         local pi = (base + k - 1) * 3
         pos[pi + 1] = ox + p[1]; pos[pi + 2] = oy + p[2]; pos[pi + 3] = oz + p[3]
-        nor[pi + 1] = nx; nor[pi + 2] = ny; nor[pi + 3] = nz
+        local a = ao and ao[k] or 1
+        nor[pi + 1] = nx * a; nor[pi + 2] = ny * a; nor[pi + 3] = nz * a
         local ui = (base + k - 1) * 2
         local q = uvs[k]
         uv[ui + 1] = tu + q[1] * ts; uv[ui + 2] = tv + q[2] * ts
@@ -145,31 +152,42 @@ end
 
 local function cellLight(v) return (v >> SKY) & 15, (v >> BLK) & 15 end
 
--- Свет четырёх углов грани: среднее по прозрачным из четырёх клеток и
--- затенение угла. Пишется в общий буфер LB (небо, блоки — по углам подряд):
--- новая таблица на каждую грань стоила бы мешеру сборщика мусора больше,
--- чем сам подсчёт.
+-- Свет и затенение четырёх углов грани — в общие буферы LB (небо, блоки —
+-- по углам подряд) и AOB: новая таблица на каждую грань стоила бы мешеру
+-- сборщика мусора больше, чем сам подсчёт.
 local LB = {0, 0, 0, 0, 0, 0, 0, 0}
+local AOB = {1, 1, 1, 1}
+-- Свет клетки для угла: глухая клетка света не несёт (0), а нулевая
+-- яркость заменяется клеткой перед гранью — так у оригинала (getAoBrightness).
+local function lightOr(v, solid, s0, b0)
+    local s, b = (v >> SKY) & 15, (v >> BLK) & 15
+    if solid or (s == 0 and b == 0) then return s0, b0 end
+    return s, b
+end
+
 local function cornerLights(f, wi)
     local fi = wi + f.dn
     local front = win[fi]
     local s0, b0 = (front >> SKY) & 15, (front >> BLK) & 15
+    local aoF = opaque[front & ID_MASK] and 0.2 or 1
     local dnb = f.dnb
     for k = 1, 4 do
         local d = dnb[k]
         local v1, v2, vc = win[fi + d[1]], win[fi + d[2]], win[fi + d[3]]
         local o1, o2, oc = opaque[v1 & ID_MASK], opaque[v2 & ID_MASK], opaque[vc & ID_MASK]
-        local sky, blk, n = s0, b0, 1
-        if not o1 then sky = sky + ((v1 >> SKY) & 15); blk = blk + ((v1 >> BLK) & 15); n = n + 1 end
-        if not o2 then sky = sky + ((v2 >> SKY) & 15); blk = blk + ((v2 >> BLK) & 15); n = n + 1 end
-        if not oc and not (o1 and o2) then sky = sky + ((vc >> SKY) & 15); blk = blk + ((vc >> BLK) & 15); n = n + 1 end
-        local ao
-        if o1 and o2 then ao = AO[1]
-        else ao = AO[4 - ((o1 and 1 or 0) + (o2 and 1 or 0) + (oc and 1 or 0))] end
-        LB[k * 2 - 1] = sky / n * ao
-        LB[k * 2] = blk / n * ao
+        -- Оба ребра глухие — угол закрыт, вместо диагонали берётся ребро.
+        if o1 and o2 then vc, oc = v1, o1 end
+        local s1, b1 = lightOr(v1, o1, s0, b0)
+        local s2, b2 = lightOr(v2, o2, s0, b0)
+        local sc, bc = lightOr(vc, oc, s0, b0)
+        local sky, blk = s0 + s1 + s2 + sc, b0 + b1 + b2 + bc
+        LB[k * 2 - 1] = sky / 4
+        LB[k * 2] = blk / 4
+        AOB[k] = (aoF + (o1 and 0.2 or 1) + (o2 and 0.2 or 1) + (oc and 0.2 or 1)) / 4
     end
-    return LB[1] + LB[2] + LB[5] + LB[6] < LB[3] + LB[4] + LB[7] + LB[8]
+    local a = (LB[1] + LB[2]) * AOB[1] + (LB[5] + LB[6]) * AOB[3]
+    local c = (LB[3] + LB[4]) * AOB[2] + (LB[7] + LB[8]) * AOB[4]
+    return a < c
 end
 
 -- Должна ли грань блока id рисоваться против соседа nid.
@@ -284,7 +302,7 @@ function M.build(cx, sy, cz)
                                         corners[k] = q
                                     end
                                 end
-                                addQuad(b, x, y, z, corners, f.n, f.uv, LB, tiles[f.tile], flip)
+                                addQuad(b, x, y, z, corners, f.n, f.uv, LB, tiles[f.tile], flip, AOB)
                             end
                         end
                     end

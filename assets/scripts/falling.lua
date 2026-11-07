@@ -29,9 +29,11 @@ function F.spawn(id, x, y, z)
     local o = SpawnObject("Falling " .. id)
     -- Кубик — тот же, что у выпавшего блока, но во всю клетку.
     require("drops").cubeMesh(id, 1.0).apply(o)
-    SetMaterial(o, "assets/materials/chunk.sagemat")
+    SetMaterial(o, "assets/materials/entity_block.sagemat")
     local e = {id = id, x = x, z = z, y = y, prevY = y, vy = 0, acc = 0, obj = o}
     o.Transform.Position = Vec3(x + 0.5, y + 0.5, z + 0.5)
+    local Light = require "lightmap"
+    Light.applyLevels(o, Light.levels(x + 0.5, y + 0.5, z + 0.5))
     list[#list + 1] = e
 end
 
@@ -69,6 +71,8 @@ function F.update(dt)
         else
             local y = e.prevY + (e.y - e.prevY) * (e.acc / TICK)
             e.obj.Transform.Position = Vec3(e.x + 0.5, y + 0.5, e.z + 0.5)
+            local Light = require "lightmap"
+            Light.applyLevels(e.obj, Light.levels(e.x + 0.5, y + 0.98 * 0.66, e.z + 0.5))
             i = i + 1
         end
     end

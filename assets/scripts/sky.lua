@@ -21,6 +21,7 @@
 -- ---------------------------------------------------------------------------
 local Mat = require "mat"
 local Weather = require "weather"
+local Light = require "lightmap"
 
 local Sky = {}
 
@@ -292,6 +293,7 @@ local function tick(P)
     local n = 0
     for _ in pairs(require("world").chunks) do n = n + 1 end
     Weather.tick(n)
+    Light.tick()
     if Sky.flashFlag then Weather.lastBolt = 2 end
     Sky.cloudTicks = Sky.cloudTicks + 1
     -- updateRenderer: яркость тумана догоняет свет в глазу на 10% за тик.
@@ -326,6 +328,8 @@ function Sky.update(dt, P)
     -- Свет неба для блоков (updateLightmap): getSunBrightness·0.95 + 0.05,
     -- во вспышку молнии — полный.
     Sky.daylight = Weather.lastBolt > 0 and 1 or Sky.sunBrightness(angle, rain, thunder) * 0.95 + 0.05
+    Sky.sunBright = Sky.sunBrightness(angle, rain, thunder)
+    Light.update(Sky.sunBright, Weather.lastBolt > 0)
 
     local ex, ey, ez = 0, 64, 0
     if P then ex, ey, ez = P.eye() end

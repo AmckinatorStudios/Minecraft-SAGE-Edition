@@ -32,7 +32,7 @@ Menu.screen = nil
 Menu.onOpenWorld = nil    -- function(world) — из game.lua
 Menu.onQuitToTitle = nil
 Menu.onResume = nil
-Menu.options = {fov = 70, render = 6, master = 1, music = 1, sensitivity = 0.5}
+Menu.options = {fov = 70, render = 6, master = 1, music = 1, sensitivity = 0.5, gamma = 0}
 
 local screens = {}
 local lastW, lastH = 0, 0
@@ -141,7 +141,9 @@ local function buildTitle()
         local W = Gui.size()
         local f = 1.8 - math.abs(math.sin((t % 1) * math.pi * 2) * 0.1)
         f = f * 100 / (#s.splashText * 6 + 32)
-        sp.FontPixelHeight = math.floor(8 * S * f + 0.5)
+        -- Размер — масштаб текста: 2 — обычные 8 пикселей интерфейса (масштаб
+        -- надписи движка по умолчанию), надпись крупнее в f раз (glScalef).
+        sp.TextScale = 2 * f
         Gui.place(sp, W / 2 + 90 - 150, 70 - 20, 300, 40)
     end
     return s
@@ -444,6 +446,11 @@ local function buildOptions()
             local p = math.floor(v * 200 + 0.5)
             return "Sensitivity: " .. (p == 0 and "*yawn*" or (p == 200 and "HYPERSPEED!!!" or (p .. "%")))
         end, function(v) o.sensitivity = v; apply() end),
+        -- Brightness (gammaSetting): 0 — Moody, 1 — Bright, между — +N%.
+        Gui.slider(s.root, o.gamma or 0, function(v)
+            local p = math.floor(v * 100 + 0.5)
+            return "Brightness: " .. (p == 0 and "Moody" or (p == 100 and "Bright" or ("+" .. p .. "%")))
+        end, function(v) o.gamma = v; apply() end),
     }
     local done = s.button("Done", function()
         saveOptions()

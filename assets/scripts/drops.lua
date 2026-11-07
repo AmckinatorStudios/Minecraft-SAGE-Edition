@@ -17,7 +17,8 @@ local list = {}
 local bits = {}
 local meshCache = {}
 local ICON_MAT = "sagecraft_icon_mat"
-local CHUNK_MAT = "assets/materials/chunk.sagemat"
+local Light = require "lightmap"
+local BLOCK_MAT = "assets/materials/entity_block.sagemat"   -- кубик со светом своей клетки
 
 function D.init()
     material(ICON_MAT, {texture = A.ICONS, unlit = true, cutoff = 0.5, double_sided = true, nearest = true})
@@ -102,7 +103,7 @@ local function spawnObject(id)
     if isCube(id) then
         meshCache[id] = meshCache[id] or cubeMesh(id, 0.25, 1, 0, 0)
         meshCache[id].apply(o)
-        SetMaterial(o, CHUNK_MAT)
+        SetMaterial(o, BLOCK_MAT)
     else
         D.itemMesh(id, 0.42).apply(o)
         SetMaterial(o, D.ITEM_MAT)
@@ -138,7 +139,7 @@ function D.burst(id, x, y, z)
     for i = 1, 8 do
         local o = SpawnObject("Bit")
         cubeMesh(id, 0.09, 0.2, math.random() * 0.8, math.random() * 0.8).apply(o)
-        SetMaterial(o, CHUNK_MAT)
+        SetMaterial(o, BLOCK_MAT)
         bits[#bits + 1] = {obj = o, x = x + (math.random() - 0.5) * 0.6, y = y + (math.random() - 0.5) * 0.6,
                            z = z + (math.random() - 0.5) * 0.6, vx = (math.random() - 0.5) * 3,
                            vy = math.random() * 3 + 1, vz = (math.random() - 0.5) * 3, life = 0.5 + math.random() * 0.4}
@@ -194,7 +195,10 @@ function D.update(dt)
                 else
                     left = Inv.add(e.id, e.n)
                 end
-                if left < e.n then require("interact").stats.picked = require("interact").stats.picked + (e.n - left) end
+                if left < e.n then
+                    require("interact").stats.picked = require("interact").stats.picked + (e.n - left)
+                    require("sounds").pop(px, py, pz)
+                end
                 e.n = left
                 if left == 0 then removed = true end
             end
@@ -219,6 +223,8 @@ function D.update(dt)
             e.spin = (e.spin + dt * 70) % 360
             local bob = math.sin(e.age * 2.5) * 0.06 + 0.1
             e.obj.Transform.Position = Vec3(e.x, e.y + bob, e.z)
+            -- Свет клетки предмета (getBrightnessForRender: высота 0.25 × 0.66).
+            Light.applyLevels(e.obj, Light.levels(e.x, e.y + 0.165, e.z))
             e.obj.Transform.Rotation = Vec3(0, e.spin, 0)
             i = i + 1
         end
@@ -233,6 +239,7 @@ function D.update(dt)
             table.remove(bits, i)
         else
             b.obj.Transform.Position = Vec3(b.x, b.y, b.z)
+            Light.applyLevels(b.obj, Light.levels(b.x, b.y, b.z))
             i = i + 1
         end
     end
