@@ -8,6 +8,17 @@
     "company": "Amckinator Studios",
     "version": "0.1.0",
     "copyright": "© 2026 Amckinator Studios",
-    "icon": "assets/icon.png"
+    "icon": "assets/icon.png",
+    "userFolders": [
+      {
+        "name": "skins",
+        "title": "Skins",
+        "description": "Your own player skins: PNG images 64x64 (or the classic 64x32). Choose one in Options > Skin, or press K in game. New files show up while the game is running.",
+        "extensions": [
+          ".png"
+        ],
+        "location": "game"
+      }
+    ]
   }
 }

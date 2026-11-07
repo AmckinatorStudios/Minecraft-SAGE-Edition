@@ -460,6 +460,22 @@ local function buildOptions()
         graphics.set(graphicsText())
         apply()
     end)
+    -- Свой скин: выбор (по кругу) и папка, куда класть PNG (пользовательская
+    -- папка игры «skins» — рядом с игрой).
+    local Avatar = require "avatar"
+    local function skinText() return "Skin: " .. Avatar.skinTitle() end
+    local skin
+    skin = s.button(skinText(), function()
+        Avatar.nextSkin()
+        skin.set(skinText())
+        saveOptions()
+    end)
+    local skinsFolder = s.button("Open Skins Folder", function() Avatar.openSkinsFolder() end)
+    s.skin = skin
+    function s.onOpen()
+        Avatar.prepareSkins()
+        skin.set(skinText())
+    end
     local done = s.button("Done", function()
         saveOptions()
         Menu.go(Menu.optionsBack or "title")
@@ -473,6 +489,10 @@ local function buildOptions()
             sl.place(W / 2 - 155 + (k % 2) * 160, H / 6 - 12 + 24 * (k // 2), 150)
         end
         graphics.place(W / 2 - 155 + (#sliders % 2) * 160, H / 6 - 12 + 24 * (#sliders // 2), 150)
+        local k = #sliders + 1
+        skin.place(W / 2 - 155 + (k % 2) * 160, H / 6 - 12 + 24 * (k // 2), 150)
+        k = k + 1
+        skinsFolder.place(W / 2 - 155 + (k % 2) * 160, H / 6 - 12 + 24 * (k // 2), 150)
         done.place(W / 2 - 100, H / 6 + 168, 200)
     end
     function s.tick() for _, sl in ipairs(sliders) do sl.update() end end
