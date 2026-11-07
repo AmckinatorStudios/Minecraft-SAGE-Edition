@@ -26,6 +26,7 @@ local Furn   = require "furnace"
 local Menu   = require "menu"
 local Fall   = require "falling"
 local Music  = require "music"
+local Snd    = require "sounds"
 
 local playerObj, cameraObj
 local started = false
@@ -335,7 +336,18 @@ function OnUpdate(entity, dt)
         if wheel ~= 0 then Inv.select(((Inv.selected - 1 - (wheel > 0 and 1 or -1)) % 9) + 1) end
     end
 
+    local walkedBefore = P.walkDist
     local fall = P.update(inp, dt)
+    -- Шаги — как у 1.7.10: путь по земле копится с множителем 0.6, звук —
+    -- при каждом переходе через целое (то есть раз в 1/0.6 блока); в воде
+    -- и в полёте тихо. Материал — у блока под ногами.
+    if P.onGround and not P.flying and not P.inWater then
+        local before, after = math.floor(walkedBefore * 0.6), math.floor(P.walkDist * 0.6)
+        if after > before then
+            local fx, fy, fz = math.floor(P.pos.x), math.floor(P.pos.y - 0.2), math.floor(P.pos.z)
+            Snd.step(W.get(fx, fy, fz), P.pos.x, P.pos.y, P.pos.z)
+        end
+    end
     if fall and fall > 3.5 then Hud.damage(math.floor(fall - 3)) end
 
     C.update(P.pos.x, P.pos.z, C.budgetMs)

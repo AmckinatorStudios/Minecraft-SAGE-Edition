@@ -12,6 +12,7 @@
 -- блока с плиткой стадии из атласа.
 -- ---------------------------------------------------------------------------
 local W = require "world"
+local Snd = require "sounds"
 local B = require "blocks"
 local A = require "atlas"
 local L = require "light"
@@ -159,6 +160,8 @@ local function breakBlock(t)
     local id = t.id
     Act.stats.broken = Act.stats.broken + 1
     local _, ok = Act.breakTime(id)
+    -- Звук поломки — до того, как клетка опустеет (материал — у блока).
+    Snd.dig(id, t.x, t.y, t.z)
     -- Содержимое печи — на землю, как в Minecraft.
     if require("furnace").isFurnace(id) then require("furnace").broken(t.x, t.y, t.z) end
     Act.setBlock(t.x, t.y, t.z, 0)
@@ -212,6 +215,7 @@ local function place(t)
     if (d.draw == "cross" or d.draw == "torch") and not B.opaque[W.get(x, y - 1, z)] then return end
     if Act.setBlock(x, y, z, held.id) then
         Act.stats.placed = Act.stats.placed + 1
+        Snd.place(held.id, x, y, z)
         Inv.useOne()
         Act.swing = 1
         settle(x, y - 1, z)
@@ -239,10 +243,16 @@ function Act.update(dt, actions)
 
     if breaking and target and breakCooldown == 0 then
         if Act.swing < 0.3 then Act.swing = 1 end
+        -- Другой блок под прицелом — прогресс и счёт ударов заново (1.7.10).
         if not mining or mining.x ~= target.x or mining.y ~= target.y or mining.z ~= target.z then
-            mining = {x = target.x, y = target.y, z = target.z, t = 0}
+            mining = {x = target.x, y = target.y, z = target.z, t = 0, nextHit = 0}
         end
         mining.t = mining.t + dt
+        -- Удар — каждые 4 игровых тика (0.2 с), первый — сразу.
+        while mining.t >= mining.nextHit do
+            Snd.hit(target.id, target.x, target.y, target.z)
+            mining.nextHit = mining.nextHit + 4 / 20
+        end
         local need = Act.breakTime(target.id)
         local stage = math.min(9, math.floor(mining.t / need * 10))
         mining.stage = stage
@@ -250,7 +260,8 @@ function Act.update(dt, actions)
         if mining.t >= need then
             breakBlock(target)
             mining = nil
-            breakCooldown = 0.15
+            -- Пауза перед следующим блоком — 5 тиков, как у 1.7.10.
+            breakCooldown = 5 / 20
             crack.Transform.Position = Vec3(0, -100, 0)
         end
     else

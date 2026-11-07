@@ -109,9 +109,12 @@ function Auto.update(dt)
             local rebuilt = require("chunks").stats.rebuilt or 0
             local ok = st.broken >= 1 and st.picked >= 1 and st.placed >= 1 and chunks > 0 and Auto.lookOk
                 and Auto.sprintOk and Auto.stopOk
+            -- Звуки: удары при добыче, поломка, шаги — хоть по разу.
+            local snd = require("sounds").count
+            ok = ok and snd.hit > 0 and snd.dig > 0 and snd.step > 0
                 and rebuilt >= st.broken + st.placed
-            log(string.format("AUTOPILOT: %s участков=%d сломано=%d подобрано=%d поставлено=%d пересобрано=%d кадров_в_с=%.0f бег=%.2f обзор=%s позиция=%.1f,%.1f,%.1f",
-                ok and "PASS" or "FAIL", chunks, st.broken, st.picked, st.placed, rebuilt, Auto.frames / math.max(Auto.time, 0.001), Auto.sprintSpeed or 0, Auto.lookOk and "верно" or "ПЕРЕВЁРНУТ", P.pos.x, P.pos.y, P.pos.z))
+            log(string.format("AUTOPILOT: %s участков=%d сломано=%d подобрано=%d поставлено=%d пересобрано=%d кадров_в_с=%.0f бег=%.2f звуки=%d/%d/%d обзор=%s позиция=%.1f,%.1f,%.1f",
+                ok and "PASS" or "FAIL", chunks, st.broken, st.picked, st.placed, rebuilt, Auto.frames / math.max(Auto.time, 0.001), Auto.sprintSpeed or 0, snd.hit, snd.dig, snd.step, Auto.lookOk and "верно" or "ПЕРЕВЁРНУТ", P.pos.x, P.pos.y, P.pos.z))
             if LaunchFlag("quit") then game.Quit() end
             Auto.active = false
         end
