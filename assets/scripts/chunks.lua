@@ -41,14 +41,18 @@ end
 local function applyEdits(c)
     local e = C.edits[W.ckey(c.cx, c.cz)]
     if not e then return end
-    for idx, id in pairs(e) do
+    for idx, v in pairs(e) do
         local lx, lz, y = idx % 16, (idx // 16) % 16, idx // 256
-        W.setId(c.cx * 16 + lx, y, c.cz * 16 + lz, id)
+        local x, z = c.cx * 16 + lx, c.cz * 16 + lz
+        -- Правка = номер блока + метаданные × 1024 (ориентация факела).
+        W.setId(x, y, z, v & 0x3FF)
+        if v >= 1024 then W.setMeta(x, y, z, v >> 10) end
     end
 end
 
 -- Запомнить правку игрока (её и только её пишет сохранение).
-function C.recordEdit(x, y, z, id)
+function C.recordEdit(x, y, z, id, meta)
+    if meta and meta > 0 then id = id | (meta << 10) end
     local key = W.ckey(x // 16, z // 16)
     local e = C.edits[key]
     if not e then e = {}; C.edits[key] = e end

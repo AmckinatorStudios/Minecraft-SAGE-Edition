@@ -230,27 +230,61 @@ local function emitCross(b, x, y, z, v, tile)
     end
 end
 
+-- Факел — RenderBlocks.renderTorchAtAngle 1.7.10. Четыре плоскости картинки
+-- во всю клетку на ±1/16 от оси (палочка — середина картинки, остальное
+-- отрезает альфа), низ сдвинут на (dx, dz): у настенного факела основание
+-- у стены, верх наклонён наружу. Верх палочки — квадрат 2×2 пикселя
+-- картинки (u 7..9, v 6..8) на высоте 0.625, низ — (u 7..9, v 13..15).
+-- Метаданные: 1 — опора X−, 2 — X+, 3 — Z−, 4 — Z+, 5 (и 0) — пол:
+-- настенный — от (0.5 ∓ 0.1, 0.2, 0.5) с наклоном 0.4.
+local function torchQuad(b, x, y, z, corners, uvs, out, lt, tile)
+    -- Обход вершин — против часовой снаружи (лицом к out): так плоскость
+    -- видна со своей стороны при отсечении задних граней.
+    local a, c, d = corners[1], corners[2], corners[3]
+    local e1 = {c[1] - a[1], c[2] - a[2], c[3] - a[3]}
+    local e2 = {d[1] - a[1], d[2] - a[2], d[3] - a[3]}
+    local n = {e1[2] * e2[3] - e1[3] * e2[2], e1[3] * e2[1] - e1[1] * e2[3], e1[1] * e2[2] - e1[2] * e2[1]}
+    if n[1] * out[1] + n[2] * out[2] + n[3] * out[3] < 0 then
+        corners = {corners[4], corners[3], corners[2], corners[1]}
+        uvs = {uvs[4], uvs[3], uvs[2], uvs[1]}
+    end
+    -- Нормаль — вверх: факел без оттенка стороны (renderBlockTorch — цвет 1).
+    addQuad(b, x, y, z, corners, {0, 1, 0}, uvs, lt, tile, false)
+end
+
 local function emitTorch(b, x, y, z, v, tile)
     local lt = flatLight(v)
-    for fi = 1, 6 do
-        local f = FACES[fi]
-        if fi ~= 2 then
-            local corners, uvs = {}, {}
-            for k = 1, 4 do
-                local p = f.c[k]
-                local px = T0 + p[1] * (T1 - T0)
-                local pz = T0 + p[3] * (T1 - T0)
-                local py = p[2] * TH
-                corners[k] = {px, py, pz}
-                if fi == 1 then uvs[k] = {px, 0.5 + p[3] * 0.125}
-                else
-                    local u = (fi == 3 or fi == 4) and pz or px
-                    uvs[k] = {u, py}
-                end
-            end
-            addQuad(b, x, y, z, corners, f.n, uvs, lt, tile, false)
-        end
-    end
+    local meta = (v >> W.META_SHIFT) & 15
+    local d0, d1, d2 = 0.4, 0.1, 0.2
+    local ox, oy, oz, dx, dz = 0, 0, 0, 0, 0
+    if meta == 1 then ox, oy, dx = -d1, d2, -d0
+    elseif meta == 2 then ox, oy, dx = d1, d2, d0
+    elseif meta == 3 then oz, oy, dz = -d1, d2, -d0
+    elseif meta == 4 then oz, oy, dz = d1, d2, d0 end
+    local cx, cz = 0.5 + ox, 0.5 + oz
+    local e = 0.0625
+    local h = 0.625
+    -- v картинки — сверху (как у оригинала); у плитки атласа — снизу.
+    local function V(px) return 1 - px / 16 end
+    local u7, u9 = 7 / 16, 9 / 16
+    -- Верх.
+    local tx, tz = cx + dx * (1 - h), cz + dz * (1 - h)
+    torchQuad(b, x, y, z, {{tx - e, oy + h, tz - e}, {tx - e, oy + h, tz + e}, {tx + e, oy + h, tz + e}, {tx + e, oy + h, tz - e}},
+              {{u7, V(6)}, {u7, V(8)}, {u9, V(8)}, {u9, V(6)}}, {0, 1, 0}, lt, tile)
+    -- Низ.
+    torchQuad(b, x, y, z, {{cx + e + dx, oy, cz - e + dz}, {cx + e + dx, oy, cz + e + dz}, {cx - e + dx, oy, cz + e + dz}, {cx - e + dx, oy, cz - e + dz}},
+              {{u9, V(13)}, {u9, V(15)}, {u7, V(15)}, {u7, V(13)}}, {0, -1, 0}, lt, tile)
+    -- Четыре боковые плоскости во всю картинку.
+    local z0, z1, x0, x1 = cz - 0.5, cz + 0.5, cx - 0.5, cx + 0.5
+    local full = {{0, 1}, {0, 0}, {1, 0}, {1, 1}}
+    torchQuad(b, x, y, z, {{cx - e, oy + 1, z0}, {cx - e + dx, oy, z0 + dz}, {cx - e + dx, oy, z1 + dz}, {cx - e, oy + 1, z1}},
+              full, {-1, 0, 0}, lt, tile)
+    torchQuad(b, x, y, z, {{cx + e, oy + 1, z1}, {cx + e + dx, oy, z1 + dz}, {cx + e + dx, oy, z0 + dz}, {cx + e, oy + 1, z0}},
+              full, {1, 0, 0}, lt, tile)
+    torchQuad(b, x, y, z, {{x0, oy + 1, cz + e}, {x0 + dx, oy, cz + e + dz}, {x1 + dx, oy, cz + e + dz}, {x1, oy + 1, cz + e}},
+              full, {0, 0, 1}, lt, tile)
+    torchQuad(b, x, y, z, {{x1, oy + 1, cz - e}, {x1 + dx, oy, cz - e + dz}, {x0 + dx, oy, cz - e + dz}, {x0, oy + 1, cz - e}},
+              full, {0, 0, -1}, lt, tile)
 end
 
 -- Меш секции: две пачки — глухое+вырез (один материал с отбрасыванием по

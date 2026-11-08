@@ -3,6 +3,10 @@
   "opacity": 0.99,
   "vertexShader": "assets/shaders/celestial.vert",
   "fragmentShader": "assets/shaders/celestial.frag",
-  "textures": {"uTex": "assets/textures/environment/moon_phases.png"},
-  "params": {}
+  "textures": {
+    "uTex": "assets/textures/environment/moon_phases.png"
+  },
+  "params": {},
+  "blend": "additive",
+  "filtering": "nearest"
 }

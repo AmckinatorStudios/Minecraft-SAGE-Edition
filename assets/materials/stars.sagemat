@@ -3,5 +3,9 @@
   "opacity": 0.99,
   "vertexShader": "assets/shaders/celestial.vert",
   "fragmentShader": "assets/shaders/celestial.frag",
-  "params": {"uTextured": 0}
+  "params": {
+    "uTextured": 0
+  },
+  "blend": "additive",
+  "filtering": "nearest"
 }

@@ -14,6 +14,7 @@
 local W = require "world"
 local Snd = require "sounds"
 local Plants = require "plants"
+local Torch = require "torch"
 local B = require "blocks"
 local A = require "atlas"
 local L = require "light"
@@ -153,9 +154,10 @@ end
 Act.settle = settle
 
 -- Поставить блок в мир: клетка, свет, пересборка, запись правки.
-function Act.setBlock(x, y, z, id)
+function Act.setBlock(x, y, z, id, meta)
     if not W.setId(x, y, z, id) then return false end
-    C.recordEdit(x, y, z, id)
+    if meta then W.setMeta(x, y, z, meta) end
+    C.recordEdit(x, y, z, id, meta)
     L.update(x, y, z)
     W.markDirty(x, y, z)
     return true
@@ -174,11 +176,13 @@ local function breakBlock(t)
     -- Растение над сломанным блоком без опоры ломается само (checkAndDropBlock)
     -- и роняет то же, что при поломке рукой.
     local above = W.get(t.x, t.y + 1, t.z)
-    if B.drawKind[above] == 3 or B.drawKind[above] == 5 then
+    if B.drawKind[above] == 3 then   -- факел — Torch.checkAround (у него своя опора)
         Act.setBlock(t.x, t.y + 1, t.z, 0)
         Plants.onBreak(above, t.x, t.y + 1, t.z)
         Plants.spill(Plants.dropsOf(above, false) or {{B.dropOf(above), 1}}, t.x, t.y + 1, t.z)
     end
+    -- Факелы, державшиеся за этот блок, падают предметом.
+    Torch.checkAround(t.x, t.y, t.z)
     -- Соседняя вода затекает в дыру (одна клетка — без настоящего течения).
     for _, d in ipairs({{1,0,0},{-1,0,0},{0,0,1},{0,0,-1},{0,1,0}}) do
         if W.get(t.x + d[1], t.y + d[2], t.z + d[3]) == 11 then Act.setBlock(t.x, t.y, t.z, 11); break end
@@ -232,16 +236,23 @@ local function place(t)
     -- Трава, цветы, саженцы — на траву или землю (BlockBush.canPlaceBlockOn);
     -- тростник и факел — на твёрдую опору.
     local below = W.get(x, y - 1, z)
+    local meta
     if d.draw == "cross" and d.name ~= "reeds" then
         if not Plants.soil(below) then return end
-    elseif (d.draw == "cross" or d.draw == "torch") and not B.opaque[below] then return end
-    if Act.setBlock(x, y, z, held.id) then
+    elseif d.draw == "torch" then
+        -- Факел: ориентация — по грани клика (на стену или на пол), опора
+        -- обязана держать этой стороной.
+        meta = Torch.metaFor(x, y, z, t.nx, t.ny, t.nz)
+        if not meta then return end
+    elseif d.draw == "cross" and not B.opaque[below] then return end
+    if Act.setBlock(x, y, z, held.id, meta) then
         Act.stats.placed = Act.stats.placed + 1
         Snd.place(held.id, x, y, z)
         Plants.onPlace(held.id, x, y, z)
         Inv.useOne()
         Anim.swingItem()
         settle(x, y - 1, z)
+        Torch.checkAround(x, y, z)
     end
 end
 
@@ -259,7 +270,10 @@ function Act.update(dt, actions)
         showCrack(Act.forceCrack, target)
     end
     if target then
-        outline.Transform.Position = Vec3(target.x, target.y, target.z)
+        -- Рамка — по границам блока (у факела — его рамка выбора).
+        local bx = target.box or {0, 0, 0, 1, 1, 1}
+        outline.Transform.Position = Vec3(target.x + bx[1], target.y + bx[2], target.z + bx[3])
+        outline.Transform.Scale = Vec3(bx[4] - bx[1], bx[5] - bx[2], bx[6] - bx[3])
     else
         outline.Transform.Position = Vec3(0, -100, 0)
     end

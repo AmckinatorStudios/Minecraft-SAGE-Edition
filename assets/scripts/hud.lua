@@ -78,57 +78,8 @@ Hud.debug = false
 local fps, fpsTimer, frames = 0, 0, 0
 local flashTimer = 0
 
--- ЧАТ — строки сообщений внизу слева, как в Minecraft 1.7.10 (GuiNewChat):
--- новые снизу, до 10 строк, каждая видна 10 с и гаснет в последнюю секунду
--- (непрозрачность (1 - возраст/10 с)·10, в квадрате), под текстом — полоса
--- чёрного с альфой 0.5. Полоса шириной 320 пикселей игры.
-local CHAT_ROWS, CHAT_LIFE = 10, 10
-local chatRows, chatLines, chatPending = {}, {}, {}
-
-local function buildChat()
-    local S = U.HUD
-    for i = 1, CHAT_ROWS do
-        -- Строка i — от 48 пикселей игры над низом экрана вверх по 9 (GuiNewChat).
-        local y = (48 + (i - 1) * 9) * S
-        local bg = U.fill(root, "Chat Back " .. i, "bottom_left", 0, y, 324 * S, 9 * S, Vec4(0, 0, 0, 0))
-        local tx = U.label(root, "Chat " .. i, "bottom_left", 2 * S, y + 1 * S, 320 * S, 8 * S, "", 1)
-        bg.visible, tx.visible = false, false
-        chatRows[i] = {bg = bg, text = tx}
-    end
-end
-
--- Сообщение в чат. Показывается со СЛЕДУЮЩЕГО кадра: так снимок экрана по F2
--- (снимается в конце кадра) выходит без своей же надписи, как в оригинале.
-function Hud.chat(text)
-    chatPending[#chatPending + 1] = text
-end
-
-local function updateChat(dt)
-    for _, t in ipairs(chatPending) do
-        table.insert(chatLines, 1, {text = t, age = -dt})
-        if #chatLines > 100 then chatLines[#chatLines] = nil end
-    end
-    chatPending = {}
-    for i, row in ipairs(chatRows) do
-        local line = chatLines[i]
-        local a = 0
-        if line then
-            line.age = line.age + dt
-            a = math.max(0, math.min(1, (1 - line.age / CHAT_LIFE) * 10))
-            a = a * a
-        end
-        row.bg.visible, row.text.visible = a > 0.02, a > 0.02
-        if a > 0.02 then
-            row.text.text = line.text
-            row.text.text_color = Vec4(1, 1, 1, a)
-            row.text.shadow_color = Vec4(0.25, 0.25, 0.25, a)
-            row.bg.color = Vec4(0, 0, 0, 0.5 * a)
-        end
-    end
-    -- Возраст идёт и у строк за пределами экрана.
-    for i = #chatRows + 1, #chatLines do chatLines[i].age = chatLines[i].age + dt end
-end
-Hud.chatLines = chatLines
+-- Чат — chat.lua (GuiNewChat/GuiChat); здесь — только вход для сообщений.
+function Hud.chat(text) require("chat").add(text) end
 
 function Hud.init()
     root = U.screen("HUD", 4)
@@ -142,7 +93,6 @@ function Hud.init()
     flash = U.fill(root, "Damage Flash", "top_left", 0, 0, 10, 10, Vec4(0.8, 0, 0, 0))
     flash.stretch = "both"
 
-    buildChat()
 
     debugLabel = U.label(root, "Debug", "top_left", 8, 8, 600, 160, "", 1.1)
     debugLabel.visible = false
@@ -185,7 +135,6 @@ function Hud.damage(n)
 end
 
 function Hud.update(dt)
-    updateChat(dt)
     frames = frames + 1
     fpsTimer = fpsTimer + dt
     if fpsTimer >= 0.5 then
