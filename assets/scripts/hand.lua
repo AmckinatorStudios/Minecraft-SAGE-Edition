@@ -147,7 +147,7 @@ end
 -- факел, тростник — плоской иконкой.
 function Hand.isCube(id)
     local d = B.byId[id]
-    return d and d.isBlock and d.draw ~= "cross" and d.draw ~= "torch"
+    return d and d.isBlock and d.draw ~= "cross" and d.draw ~= "torch" and d.draw ~= "ladder"
 end
 
 -- Поставить объекту меш предмета id (куб или плоский) и его материал.

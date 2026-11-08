@@ -31,6 +31,7 @@ local JUMP = 9.0
 -- Скорости Minecraft, блоков в секунду: шаг 4.317, бег 5.612, присед
 -- 1.31, полёт 10.92.
 local WALK, SPRINT, SNEAK, FLY = 4.317, 5.612, 1.31, 10.92
+local LADDER_TICK = 0.15   -- предел скорости на лестнице, блоков за тик
 -- Пересекает ли коробка игрока (ноги в x, y, z) коробки столкновения блоков
 -- (bounds.lua: у кактуса — уже клетки, у факела и растений — никакой).
 -- Клетки берутся и на одну ниже: коробка столкновения может торчать вверх
@@ -133,6 +134,20 @@ function P.update(input, dt)
         if input.jump and P.onGround then v.y = JUMP end
     end
 
+    -- Лестница (EntityLivingBase.isOnLadder: клетка ног — лестница;
+    -- moveEntityWithHeading): по горизонтали не быстрее 0.15 за тик, вниз —
+    -- не быстрее 0.15 за тик, в приседе не съезжают, падение не копится.
+    local ladder = not P.flying and B.drawKind[W.get(math.floor(p.x), math.floor(p.y), math.floor(p.z))] == 7
+    P.onLadder = ladder
+    if ladder then
+        local lim = LADDER_TICK * 20
+        v.x = math.max(-lim, math.min(lim, v.x))
+        v.z = math.max(-lim, math.min(lim, v.z))
+        v.y = math.max(v.y, -lim)
+        if P.sneaking and v.y < 0 then v.y = 0 end
+        P.fallStart = nil
+    end
+
     local wasGround = P.onGround
     local beforeX, beforeZ = p.x, p.z
     local yOk = moveAxis("y", v.y * dt)
@@ -152,6 +167,10 @@ function P.update(input, dt)
     end
     -- Упёрся в стену — бег сбит (как в Minecraft).
     P.blocked = blocked
+    -- Упёрся в стену на лестнице — лезет вверх: motionY = 0.2, затем тяжесть
+    -- тика (−0.08, ×0.98) — 0.1176 блока за тик, 2.35 блока в секунду. Тяжесть
+    -- следующего кадра вычтется сама — она прибавлена заранее.
+    if ladder and blocked then v.y = (0.2 - 0.08) * 0.98 * 20 + GRAVITY * dt end
     if blocked and P.sprinting and not P.flying then P.sprinting = false end
     if P.flying and P.onGround then P.flying = false end
 
@@ -162,7 +181,7 @@ function P.update(input, dt)
 
     -- Высота падения: от верхней точки полёта до приземления.
     local landed = nil
-    if not P.onGround and not P.flying and not P.inWater then
+    if not P.onGround and not P.flying and not P.inWater and not ladder then
         if not P.fallStart or p.y > P.fallStart then P.fallStart = p.y end
     else
         if P.onGround and not wasGround and P.fallStart then landed = P.fallStart - p.y end

@@ -21,6 +21,7 @@ local B = require "blocks"
 local L = {}
 
 local ID_MASK, SKY, BLK = W.ID_MASK, W.SKY_SHIFT, W.BLK_SHIFT
+local LIGHT_BITS = (15 << SKY) | (15 << BLK)
 local absorb, emit = B.absorb, B.emit
 local raw, setRaw = W.raw, W.setRaw
 
@@ -134,7 +135,10 @@ function L.lightChunk(c)
                 if a >= 15 then level = 0
                 elseif a > 1 then level = math.max(0, level - a) end
                 local e = emit[id]
-                s[i] = id | (level << SKY) | (e << BLK)
+                -- Свет пишется поверх, метаданные клетки (ориентация факела,
+                -- двери, печи) остаются: раньше здесь собиралось «номер | свет»,
+                -- и после загрузки мира настенный факел вставал на пол.
+                s[i] = (v & ~LIGHT_BITS) | (level << SKY) | (e << BLK)
                 if e > 0 then blkQ[#blkQ + 1] = pack(bx + lx, y, bz + lz) end
             end
         end
@@ -232,5 +236,31 @@ end
 -- Для проверки: свет точки заново, полным пересчётом участка, — им самопроверка
 -- сверяет результат пошаговых правок.
 L.pack, L.unpackXYZ = pack, unpackXYZ
+
+-- Самопроверка (--gencheck, строка METACHECK): первичный свет участка не
+-- стирает метаданные клеток — иначе после загрузки мира настенный факел
+-- оказывался на полу, а открытая дверь — закрытой.
+function L.metaSelfCheck()
+    local P = require "player"
+    local B = require "blocks"
+    local x, z = math.floor(P.pos.x) + 3, math.floor(P.pos.z) + 3
+    local c = W.chunks[W.ckey(x // 16, z // 16)]
+    if not c then return "METACHECK: FAIL нет участка" end
+    local y = W.surface(x, z) + 1
+    local torch = B.byName.torch.id
+    W.setId(x, y, z, torch)
+    W.setMeta(x, y, z, 3)
+    local saved = L.markDirty
+    L.markDirty = false
+    L.lightChunk(c)
+    L.markDirty = saved
+    local kept = W.get(x, y, z) == torch and W.meta(x, y, z) == 3
+    W.setLight(x, y, z, 15, 14)
+    local keptLight = W.meta(x, y, z) == 3
+    W.setId(x, y, z, 0)
+    L.lightChunk(c)
+    return string.format("METACHECK: %s свет_участка=%s setLight=%s", (kept and keptLight) and "PASS" or "FAIL",
+        tostring(kept), tostring(keptLight))
+end
 
 return L

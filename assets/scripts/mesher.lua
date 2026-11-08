@@ -41,6 +41,9 @@ local FACES = {
     {n = {0, 0, -1}, c = {{0,0,0},{0,1,0},{1,1,0},{1,0,0}}, tile = "side"},
 }
 
+-- Сторона оригинала (0 низ, 1 верх, 2 −Z, 3 +Z, 4 −X, 5 +X) у грани FACES.
+local FACE_SIDE = {1, 0, 5, 4, 3, 2}
+
 -- UV угла по его координатам: картинка стоит прямо, если смотреть на грань
 -- снаружи (на боковых гранях v — это высота, u — «вправо» для смотрящего).
 local function faceUV(f, p)
@@ -351,6 +354,32 @@ local function emitDoor(b, x, y, z, full, tiles, override, lightOf)
 end
 M.emitDoor = emitDoor
 
+-- Лестница — RenderBlocks.renderBlockLadder 1.7.10: одна плоскость
+-- картинки в 0.05 от опоры (f4), во всю клетку, лицом от стены; свет — своей
+-- клетки, оттенок 1 (нормаль «вверх» с долей настоящей — см. torchQuad:
+-- движок разворачивает треугольник, чья нормаль против геометрической).
+local function emitLadder(b, x, y, z, v, tile, lt)
+    local meta = (v >> W.META_SHIFT) & 15
+    local f4 = 0.05
+    local c, uv, n
+    -- (u, v) оригинала: min — 0, max — 1 по плитке; v атласа — снизу.
+    local u0, u1, vt, vb = 0, 1, 1, 0
+    if meta == 5 then
+        c = {{f4, 1, 1}, {f4, 0, 1}, {f4, 0, 0}, {f4, 1, 0}}
+        uv = {{u0, vt}, {u0, vb}, {u1, vb}, {u1, vt}}; n = {1, 0, 0}
+    elseif meta == 4 then
+        c = {{1 - f4, 0, 1}, {1 - f4, 1, 1}, {1 - f4, 1, 0}, {1 - f4, 0, 0}}
+        uv = {{u1, vb}, {u1, vt}, {u0, vt}, {u0, vb}}; n = {-1, 0, 0}
+    elseif meta == 3 then
+        c = {{1, 0, f4}, {1, 1, f4}, {0, 1, f4}, {0, 0, f4}}
+        uv = {{u1, vb}, {u1, vt}, {u0, vt}, {u0, vb}}; n = {0, 0, 1}
+    else
+        c = {{1, 1, 1 - f4}, {1, 0, 1 - f4}, {0, 0, 1 - f4}, {0, 1, 1 - f4}}
+        uv = {{u0, vt}, {u0, vb}, {u1, vb}, {u1, vt}}; n = {0, 0, -1}
+    end
+    addQuad(b, x, y, z, c, {n[1] * 0.6, 1.2, n[3] * 0.6}, uv, lt or flatLight(v), tile, false)
+end
+
 -- Меш секции: две пачки — глухое+вырез (один материал с отбрасыванием по
 -- альфе) и жидкость (полупрозрачный материал).
 function M.build(cx, sy, cz)
@@ -370,6 +399,8 @@ function M.build(cx, sy, cz)
                         emitCross(solid, x, y, z, v, tiles.side)
                     elseif kind == 5 then
                         emitTorch(solid, x, y, z, v, tiles.side)
+                    elseif kind == 7 then
+                        emitLadder(solid, x, y, z, v, tiles.side)
                     elseif kind == 6 then
                         -- Дверь рисуется, только если на месте вторая половина.
                         local wi = rowBase + x + 1
@@ -411,7 +442,15 @@ function M.build(cx, sy, cz)
                                         corners[k] = q
                                     end
                                 end
-                                addQuad(b, x, y, z, corners, f.n, f.uv, LB, tiles[f.tile], flip, AOB)
+                                local tileKey = f.tile
+                                -- Лицо печи и тыквы — по метаданным, а не на одной
+                                -- стороне (BlockFurnace/BlockPumpkin.getIcon).
+                                local front = B.facing[id] and B.frontSide(id, (v >> W.META_SHIFT) & 15)
+                                if front then
+                                    if FACE_SIDE[fi] == front then tileKey = "front"
+                                    elseif fi > 2 then tileKey = "side" end
+                                end
+                                addQuad(b, x, y, z, corners, f.n, f.uv, LB, tiles[tileKey], flip, AOB)
                             end
                         end
                     end
@@ -435,6 +474,8 @@ function M.single(id, meta, tile, wx, wy, wz)
         emitCross(b, 0, 0, 0, v, tile)
     elseif kind == 5 then
         emitTorch(b, 0, 0, 0, v, tile)
+    elseif kind == 7 then
+        emitLadder(b, 0, 0, 0, v, tile, ZERO_LT)
     elseif kind == 6 then
         local full = wx and require("door").fullMeta(wx, wy, wz) or (meta or 0)
         emitDoor(b, 0, 0, 0, full, nil, tile, function() return ZERO_LT end)

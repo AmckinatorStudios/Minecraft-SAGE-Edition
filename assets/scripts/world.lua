@@ -133,7 +133,8 @@ end
 function W.setLight(x, y, z, sky, blk)
     local v = W.raw(x, y, z)
     if v == nil or y < 0 or y >= W.HEIGHT then return end
-    W.setRaw(x, y, z, (v & ID_MASK) | (sky << SKY_SHIFT) | (blk << BLK_SHIFT))
+    -- Метаданные остаются: свет к ориентации блока отношения не имеет.
+    W.setRaw(x, y, z, (v & (ID_MASK | META_MASK)) | (sky << SKY_SHIFT) | (blk << BLK_SHIFT))
 end
 
 -- Пометить секцию (и соседей, если клетка на её границе) на пересборку меша.

@@ -45,7 +45,8 @@ local defs = {
     {id = 23, name = "rose",         title = "Rose",              tex = "flower_rose", draw = "cross", hard = 0, solid = false, opacityLight = 0},
     {id = 24, name = "dandelion",    title = "Dandelion",         tex = "flower_dandelion", draw = "cross", hard = 0, solid = false, opacityLight = 0},
     {id = 25, name = "crafting_table", title = "Crafting Table",         top = "crafting_table_top", side = "crafting_table_side", front = "crafting_table_front", bottom = "planks_oak", hard = 2.5, tool = "axe"},
-    {id = 26, name = "furnace",      title = "Furnace",              top = "furnace_top", side = "furnace_side", front = "furnace_front_off", bottom = "furnace_top", hard = 3.5, tool = "pickaxe", need = 1},
+    -- facing — лицевая сторона по метаданным (см. B.frontSide/B.placeMeta).
+    {id = 26, name = "furnace",       facing = "furnace",      title = "Furnace",              top = "furnace_top", side = "furnace_side", front = "furnace_front_off", bottom = "furnace_top", hard = 3.5, tool = "pickaxe", need = 1},
     {id = 27, name = "obsidian",     title = "Obsidian",          tex = "obsidian", hard = 50, tool = "pickaxe", need = 4},
     {id = 28, name = "snow",         title = "Snow",              tex = "snow", hard = 0.2, tool = "shovel"},
     {id = 29, name = "ice",          title = "Ice",               tex = "ice", draw = "cutout", hard = 0.5, tool = "pickaxe", drop = "none", opacityLight = 2},
@@ -61,7 +62,7 @@ local defs = {
     {id = 39, name = "green_wool",   title = "Green Wool",    tex = "wool_colored_green", hard = 0.8},
     {id = 40, name = "mossy_cobblestone", title = "Mossy Cobblestone", tex = "cobblestone_mossy", hard = 2.0, tool = "pickaxe", need = 1},
     {id = 41, name = "cactus",       title = "Cactus",            top = "cactus_top", side = "cactus_side", bottom = "cactus_bottom", draw = "cutout", hard = 0.4, inset = 1 / 16, opacityLight = 0},
-    {id = 42, name = "pumpkin",      title = "Pumpkin",             top = "pumpkin_top", side = "pumpkin_side", front = "pumpkin_face_off", bottom = "pumpkin_top", hard = 1.0, tool = "axe"},
+    {id = 42, name = "pumpkin",       facing = "pumpkin",      title = "Pumpkin",             top = "pumpkin_top", side = "pumpkin_side", front = "pumpkin_face_off", bottom = "pumpkin_top", hard = 1.0, tool = "axe"},
     {id = 43, name = "coal_block",   title = "Block of Coal",     tex = "coal_block", hard = 5.0, tool = "pickaxe", need = 1},
     {id = 44, name = "iron_block",   title = "Block of Iron",     tex = "iron_block", hard = 5.0, tool = "pickaxe", need = 2},
     {id = 45, name = "gold_block",   title = "Block of Gold",      tex = "gold_block", hard = 3.0, tool = "pickaxe", need = 3},
@@ -98,8 +99,11 @@ local defs = {
     -- мешером по коробке полотна (renderBlockDoor). Не глухая, свет пропускает,
     -- роняет предмет «дверь» (нижняя половина).
     {id = 70, name = "door_wood",    title = "Wooden Door", tex = "door_wood_lower", upper = "door_wood_upper", draw = "door", hard = 3.0, tool = "axe", solid = false, opacityLight = 0, drop = "wooden_door", item = "wooden_door", hidden = true},
+    -- Лестница (BlockLadder): плоская картинка на стене, метаданные — сторона
+    -- (ladder.lua), лезут по ней (player.lua).
+    {id = 71, name = "ladder",       title = "Ladder", tex = "ladder", draw = "ladder", hard = 0.4, tool = "axe", solid = false, opacityLight = 0},
     {id = 69, name = "dark_oak_planks", title = "Dark Oak Wood Planks", tex = "planks_big_oak", hard = 2.0, tool = "axe"},
-    {id = 47, name = "lit_furnace",  title = "Furnace",              top = "furnace_top", side = "furnace_side", front = "furnace_front_on", bottom = "furnace_top", hard = 3.5, tool = "pickaxe", need = 1, light = 13, drop = "furnace"},
+    {id = 47, name = "lit_furnace",   facing = "furnace",  title = "Furnace",              top = "furnace_top", side = "furnace_side", front = "furnace_front_on", bottom = "furnace_top", hard = 3.5, tool = "pickaxe", need = 1, light = 13, drop = "furnace"},
 }
 
 -- Предметы, которые не ставятся в мир. Номера — с 256, чтобы не пересечься с
@@ -169,9 +173,10 @@ B.solid = {}       -- твёрдый для ходьбы
 B.drawKind = {}    -- 0 нет, 1 куб, 2 вырез, 3 крест, 4 жидкость, 5 факел
 B.emit = {}        -- свет блока 0..15
 B.absorb = {}      -- сколько свет теряет, проходя сквозь (1 — воздух)
+B.facing = {}     -- [id] = true — лицевая сторона по метаданным (печь, тыква)
 B.faceTile = {}    -- [id] = {верх, низ, север, юг, запад, восток} — номера плиток атласа
 
-local KIND = {solid = 1, cutout = 2, cross = 3, liquid = 4, torch = 5, door = 6}
+local KIND = {solid = 1, cutout = 2, cross = 3, liquid = 4, torch = 5, door = 6, ladder = 7}
 
 for i = 0, 1023 do
     B.opaque[i] = false
@@ -192,6 +197,7 @@ for _, d in ipairs(defs) do
     B.opaque[d.id] = d.draw == "solid"
     B.solid[d.id] = d.solid ~= false and d.draw ~= "cross"
     B.emit[d.id] = d.light or 0
+    B.facing[d.id] = d.facing ~= nil
     if d.draw == "solid" then B.absorb[d.id] = 15
     else B.absorb[d.id] = 1 + (d.opacityLight or 0) end
 end
@@ -259,6 +265,53 @@ function B.faceNames(d)
         side = side,
         front = d.front or side,
     }
+end
+
+-- Блоки с лицевой стороной (печь, тыква): сторона оригинала 0..5 (низ,
+-- верх, −Z, +Z, −X, +X), на которой лицо при метаданных meta. Печь
+-- (BlockFurnace.getIcon) — лицо на стороне meta (2..5); старая печь без
+-- метаданных — как 3 (+Z, как рисовалась раньше). Тыква (BlockPumpkin) — 0 → +Z,
+-- 1 → −X, 2 → −Z, 3 → +X.
+local PUMPKIN_FRONT = {[0] = 3, [1] = 4, [2] = 2, [3] = 5}
+function B.frontSide(id, meta)
+    local d = B.byId[id]
+    if not d or not d.facing then return nil end
+    if d.facing == "furnace" then
+        if meta < 2 or meta > 5 then return 3 end
+        return meta
+    end
+    return PUMPKIN_FRONT[meta & 3]
+end
+
+-- Метаданные лица к игроку при постановке (onBlockPlacedBy): yaw — наш
+-- поворот (0 — смотрит в −Z), у оригинала rotationYaw = 180 − yaw.
+-- Печь: floor(rotationYaw·4/360 + 0.5) & 3 → 2, 5, 3, 4; тыква:
+-- floor(rotationYaw·4/360 + 2.5) & 3.
+local FURNACE_META = {[0] = 2, [1] = 5, [2] = 3, [3] = 4}
+function B.placeMeta(id, yaw)
+    local d = B.byId[id]
+    if not d or not d.facing then return nil end
+    local mc = 180 - yaw
+    if d.facing == "furnace" then return FURNACE_META[math.floor(mc * 4 / 360 + 0.5) & 3] end
+    return math.floor(mc * 4 / 360 + 2.5) & 3
+end
+
+-- Самопроверка (--gencheck, строка FACINGCHECK): печь лицом к игроку при
+-- любом из четырёх направлений взгляда; тыква — по своей таблице.
+function B.facingSelfCheck()
+    local f = B.byName.furnace.id
+    -- Игрок смотрит на −Z (yaw 0) — лицо на +Z (сторона 3) и т. д.
+    local want = {[0] = 3, [90] = 5, [180] = 2, [-90] = 4}
+    local ok = true
+    for yaw, side in pairs(want) do
+        if B.frontSide(f, B.placeMeta(f, yaw)) ~= side then ok = false end
+    end
+    local p = B.byName.pumpkin.id
+    local pumpkin = B.frontSide(p, B.placeMeta(p, 0)) == 3 and B.frontSide(p, B.placeMeta(p, 90)) == 5
+    local legacy = B.frontSide(f, 0) == 3
+    local all = ok and pumpkin and legacy
+    return string.format("FACINGCHECK: %s печь=%s тыква=%s старая=%s", all and "PASS" or "FAIL", tostring(ok),
+        tostring(pumpkin), tostring(legacy))
 end
 
 function B.title(id)

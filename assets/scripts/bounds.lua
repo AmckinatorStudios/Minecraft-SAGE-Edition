@@ -65,6 +65,13 @@ shape("door_wood", {
     collision = function(meta, x, y, z) return {doorBox(meta, x, y, z)} end,
 })
 
+-- Лестница (BlockLadder): пластина 2/16 у опоры — и столкновение, и выбор
+-- (ladder.lua); рисуется плоскостью в 0.05 от стены.
+shape("ladder", {
+    selected = function(meta) return require("ladder").box(meta) end,
+    collision = function(meta) return {require("ladder").box(meta)} end,
+})
+
 -- Факел (BlockTorch): столкновения нет, выбор — по ориентации (torch.lua).
 shape("torch", {
     selected = function(meta) return require("torch").bounds(meta) end,
