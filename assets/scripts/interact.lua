@@ -278,7 +278,7 @@ local function place(t)
     if t.id == tall then x, y, z = t.x, t.y, t.z end
     local cur = W.get(x, y, z)
     if cur ~= 0 and B.drawKind[cur] ~= 4 and cur ~= tall then return end
-    if y < 0 or y >= W.HEIGHT or not P.canPlace(x, y, z, held.id) then return end
+    if y < 0 or y >= W.HEIGHT then return end
     -- Трава, цветы, саженцы — на траву или землю (BlockBush.canPlaceBlockOn);
     -- тростник и факел — на твёрдую опору.
     local below = W.get(x, y - 1, z)
@@ -307,6 +307,11 @@ local function place(t)
         -- Печь, тыква — лицом к игроку (onBlockPlacedBy).
         meta = B.placeMeta(held.id, P.yaw)
     end
+    -- Внутрь игрока — нельзя, но мешает только НАСТОЯЩАЯ коробка столкновения
+    -- блока с его метаданными (canPlaceEntityOnSide): лестница — пластина у
+    -- стены, факел и растение — ничего. Раньше проверка шла до расчёта
+    -- стороны, и лестница считалась полным кубом: у соседней стены не ставилась.
+    if not P.canPlace(x, y, z, held.id, meta) then return end
     if Act.setBlock(x, y, z, held.id, meta) then
         Act.stats.placed = Act.stats.placed + 1
         Snd.place(held.id, x, y, z)

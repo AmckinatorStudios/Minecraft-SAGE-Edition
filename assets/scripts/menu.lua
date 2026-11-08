@@ -34,6 +34,44 @@ Menu.onQuitToTitle = nil
 Menu.onResume = nil
 Menu.options = {fov = 70, render = 6, master = 1, music = 1, sensitivity = 0.5, gamma = 0, fancy = true}
 
+-- Категории звука Minecraft 1.7.10 (SoundCategory) в порядке экрана
+-- «Music & Sounds» (GuiScreenOptionsSounds): шина движка и подпись.
+-- Громкость категории — в options.sound[шина], общая — options.master.
+Menu.SOUND_CATEGORIES = {
+    {"music", "Music"}, {"record", "Jukebox/Note Blocks"}, {"weather", "Weather"}, {"block", "Blocks"},
+    {"hostile", "Hostile Creatures"}, {"neutral", "Friendly Creatures"}, {"player", "Players"},
+    {"ambient", "Ambient/Environment"},
+}
+
+-- Самопроверка (--gencheck, строка SOUNDCHECK): регуляторы доходят до шин
+-- движка — категория своей шиной, музыка — шиной «music», старые настройки
+-- (options.music) подхватываются.
+function Menu.soundSelfCheck()
+    local o = Menu.options
+    local saved = {master = o.master, music = o.music, sound = o.sound}
+    o.sound = nil
+    o.music = 0.3
+    local migrated = Menu.soundVolume("music") == 0.3 and Menu.soundVolume("block") == 1
+    o.master = 0.2
+    o.sound.block, o.sound.player = 0.5, 0
+    if Menu.onOptions then Menu.onOptions(o) end
+    local applied = math.abs(audio.bus_volume("block") - 0.5) < 1e-6 and audio.bus_volume("player") == 0
+        and math.abs(audio.bus_volume("music") - 0.3) < 1e-6
+    o.master, o.music, o.sound = saved.master, saved.music, saved.sound
+    if Menu.onOptions then Menu.onOptions(o) end
+    local ok = migrated and applied
+    return string.format("SOUNDCHECK: %s старые=%s шины=%s", ok and "PASS" or "FAIL", tostring(migrated),
+        tostring(applied))
+end
+
+-- Громкость категории (0..1): старые настройки хранили музыку в options.music.
+function Menu.soundVolume(bus)
+    local o = Menu.options
+    o.sound = o.sound or {}
+    if o.sound[bus] == nil then o.sound[bus] = (bus == "music" and o.music) or 1 end
+    return o.sound[bus]
+end
+
 local screens = {}
 local lastW, lastH = 0, 0
 local t = 0
@@ -430,12 +468,6 @@ local function buildOptions()
         Gui.slider(s.root, (o.render - 2) / 14, function(v)
             return "Render Distance: " .. math.floor(2 + v * 14 + 0.5) .. " chunks"
         end, function(v) o.render = math.floor(2 + v * 14 + 0.5); apply() end),
-        Gui.slider(s.root, o.master, function(v)
-            return "Master Volume: " .. (v == 0 and "OFF" or (math.floor(v * 100 + 0.5) .. "%"))
-        end, function(v) o.master = v; apply() end),
-        Gui.slider(s.root, o.music, function(v)
-            return "Music: " .. (v == 0 and "OFF" or (math.floor(v * 100 + 0.5) .. "%"))
-        end, function(v) o.music = v; apply() end),
         Gui.slider(s.root, o.sensitivity, function(v)
             local p = math.floor(v * 200 + 0.5)
             return "Sensitivity: " .. (p == 0 and "*yawn*" or (p == 200 and "HYPERSPEED!!!" or (p .. "%")))
@@ -480,6 +512,8 @@ local function buildOptions()
         Avatar.prepareSkins()
         skin.set(skinText())
     end
+    -- Music & Sounds… (GuiOptions → GuiScreenOptionsSounds): все категории.
+    local soundsBtn = s.button("Music & Sounds...", function() saveOptions(); Menu.go("sounds") end)
     local done = s.button("Done", function()
         saveOptions()
         Menu.go(Menu.optionsBack or "title")
@@ -499,6 +533,46 @@ local function buildOptions()
         skinsFolder.place(W / 2 - 155 + (k % 2) * 160, H / 6 - 12 + 24 * (k // 2), 150)
         k = k + 1
         full.place(W / 2 - 155 + (k % 2) * 160, H / 6 - 12 + 24 * (k // 2), 150)
+        k = k + 1
+        soundsBtn.place(W / 2 - 155 + (k % 2) * 160, H / 6 - 12 + 24 * (k // 2), 150)
+        done.place(W / 2 - 100, H / 6 + 168, 200)
+    end
+    function s.tick() for _, sl in ipairs(sliders) do sl.update() end end
+    return s
+end
+
+-- Music & Sound Options (GuiScreenOptionsSounds): общая громкость во всю
+-- ширину, под ней категории в два столбца; подпись — «Имя: N%» или «OFF».
+-- Ползунок меняет громкость шины сразу, пока его тянут.
+local function buildSounds()
+    local s = newScreen("sounds", 73)
+    backdrop(s)
+    local o = Menu.options
+    local title = Gui.label(s.root, "Music & Sound Options", "center")
+    local function pct(name, v) return name .. ": " .. (v == 0 and "OFF" or (math.floor(v * 100 + 0.5) .. "%")) end
+    local function apply() if Menu.onOptions then Menu.onOptions(o) end end
+    local master = Gui.slider(s.root, o.master, function(v) return pct("Master Volume", v) end,
+        function(v) o.master = v; apply() end)
+    local sliders = {master}
+    for _, c in ipairs(Menu.SOUND_CATEGORIES) do
+        local bus, name = c[1], c[2]
+        sliders[#sliders + 1] = Gui.slider(s.root, Menu.soundVolume(bus), function(v) return pct(name, v) end,
+            function(v)
+                o.sound[bus] = v
+                if bus == "music" then o.music = v end
+                apply()
+            end)
+    end
+    local done = s.button("Done", function() saveOptions(); Menu.go("options") end)
+    s.sliders = sliders
+    function s.layout(W, H)
+        s.layoutBack(W, H)
+        title.place(W / 2, 15)
+        master.place(W / 2 - 155, H / 6 - 12, 310)
+        for i = 2, #sliders do
+            local k = i                       -- общая занимает два места (0 и 1)
+            sliders[i].place(W / 2 - 155 + (k % 2) * 160, H / 6 - 12 + 24 * (k // 2), 150)
+        end
         done.place(W / 2 - 100, H / 6 + 168, 200)
     end
     function s.tick() for _, sl in ipairs(sliders) do sl.update() end end
@@ -564,6 +638,7 @@ function Menu.init(opts)
     buildRename()
     buildDelete()
     buildOptions()
+    buildSounds()
     buildPause()
     buildWorking("loading", "Loading world")
     buildWorking("saving", "Saving world")
@@ -648,6 +723,7 @@ function Menu.update(dt)
     if WasActionPressed("Pause") then
         if s.name == "pause" then Menu.resume()
         elseif s.name == "options" then Menu.go(Menu.optionsBack or "title")
+        elseif s.name == "sounds" then saveOptions(); Menu.go("options")
         elseif s.name == "select" then Menu.go("title")
         elseif s.name == "create" or s.name == "rename" or s.name == "delete" then Menu.go("select") end
     end

@@ -22,10 +22,11 @@ local EPS = 0.25 / SIZE    -- отступ внутрь плитки: ближа
 
 A.TEXTURE = "sagecraft_atlas"
 A.ICONS = "sagecraft_icons"
--- Пикселей на иконку: 96 делится нацело на оба размера показа — 48 в окнах
--- (16 × 3) и 32 на панели (16 × 2). Иконка 64 в 48 — дробный масштаб, и
--- ближайший пиксель то выбрасывал, то дублировал строки: «битые» пиксели.
-A.ICON = 96
+-- Пикселей на иконку: 128. Плоская иконка из картинки 16×16 — ровно 8×8 на
+-- пиксель, и на экране 48 (окна, 16 × 3) и 32 (панель, 16 × 2) каждый её
+-- пиксель ложится в целые 3 и 2 экранных пикселя. Объёмная (куб) считается
+-- по пикселю ячейки — чем крупнее ячейка, тем ровнее рёбра при уменьшении.
+A.ICON = 128
 A.ICON_COLS = 16
 A.blockTiles = {}          -- [id] = {top=, bottom=, side=, front=} номера плиток
 A.icon = {}                -- [id] = номер иконки (с нуля)
@@ -164,8 +165,12 @@ function A.build()
     local icons = texture(A.ICONS, A.ICON * A.ICON_COLS, A.ICON * rows)
     icons.nearest = true
     A.iconRows = rows
+    -- Пустой лист — сразу: интерфейс обращается к нему с первого кадра, а
+    -- иконки дорисовываются порциями (A.stepIcons).
+    icons.apply()
 
     local slot = 0
+    local jobs = {}
     for _, d in ipairs(B.list) do
         local names = B.faceNames(d)
         local t = {}
@@ -179,24 +184,46 @@ function A.build()
         if d.upper then t.upper = tileFor(atlas, d.upper) end
         A.blockTiles[d.id] = t
         A.icon[d.id] = slot
+        local s0 = slot
         if d.draw == "cross" or d.draw == "torch" or d.draw == "ladder" then
-            flatIcon(icons, slot, sources[faceSrc.side[1]], faceSrc.side[2])
+            jobs[#jobs + 1] = function() flatIcon(icons, s0, sources[faceSrc.side[1]], faceSrc.side[2]) end
         else
-            cubeIcon(icons, slot, {top = faceSrc.top, right = faceSrc.side, left = faceSrc.front}, d.itemBox)
+            jobs[#jobs + 1] = function()
+                cubeIcon(icons, s0, {top = faceSrc.top, right = faceSrc.side, left = faceSrc.front}, d.itemBox)
+            end
         end
         slot = slot + 1
     end
     for _, it in ipairs(B.itemList) do
         local src = texture.load("assets/textures/items/" .. it.tex .. ".png", "item_" .. it.name)
         A.icon[it.id] = slot
-        flatIcon(icons, slot, src)
+        local s0 = slot
+        jobs[#jobs + 1] = function() flatIcon(icons, s0, src) end
         slot = slot + 1
     end
     for i = 0, 9 do A.destroyTile[i] = tileFor(atlas, "destroy_stage_" .. i) end
     atlas.apply()
-    icons.apply()
     A.iconCanvas = icons
     A.iconSheetHeight = A.ICON * rows
+    A.iconJobs = jobs
+    A.iconsReady = false
+end
+
+-- Иконки 128×128 считаются попиксельно — все сразу это секунды в одном
+-- вызове скрипта (и предел его времени). Поэтому по нескольку за кадр
+-- (A.stepIcons из OnUpdate): лист выгружается после каждой порции, иконки
+-- появляются по мере готовности. true — все готовы.
+function A.stepIcons(n)
+    local jobs = A.iconJobs
+    if not jobs or A.iconsReady then return true end
+    for _ = 1, n or 4 do
+        local j = table.remove(jobs, 1)
+        if not j then break end
+        j()
+    end
+    A.iconCanvas.apply()
+    if #jobs == 0 then A.iconsReady = true end
+    return A.iconsReady
 end
 
 -- Прямоугольник иконки в листе — в пикселях от ЛЕВОГО ВЕРХНЕГО угла
@@ -208,6 +235,31 @@ function A.iconRect(id)
     local x = (slot % A.ICON_COLS) * S
     local yUp = (slot // A.ICON_COLS) * S
     return x, A.iconSheetHeight - yUp - S, S, S
+end
+
+-- Самопроверка (--gencheck, строка ICONCHECK): у каждого блока и предмета
+-- иконка не пустая (в ячейке есть непрозрачные пиксели). Пустая была у
+-- картинок 16×16 в объёмной иконке (печь, люк).
+function A.selfCheck()
+    local empty = {}
+    local S = A.ICON
+    local function filled(slot)
+        local ox, oy = (slot % A.ICON_COLS) * S, (slot // A.ICON_COLS) * S
+        for py = 0, S - 1, 4 do
+            for px = 0, S - 1, 4 do
+                if A.iconCanvas.get(ox + px, oy + py).w > 0.5 then return true end
+            end
+        end
+        return false
+    end
+    local n = 0
+    for id, slot in pairs(A.icon) do
+        n = n + 1
+        if not filled(slot) then empty[#empty + 1] = B.byId[id] and B.byId[id].name or tostring(id) end
+    end
+    table.sort(empty)
+    return string.format("ICONCHECK: %s иконок=%d размер=%d пустые=%s", #empty == 0 and "PASS" or "FAIL", n, S,
+        #empty == 0 and "нет" or table.concat(empty, ","))
 end
 
 return A

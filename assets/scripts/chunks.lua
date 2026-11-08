@@ -183,7 +183,10 @@ function C.update(px, pz, budget)
     end
     -- Изменённые секции (правки игрока, свет) — сразу, не в очередь: игрок
     -- должен видеть результат удара в тот же кадр.
-    for key in pairs(W.dirty) do
+    -- По снимку ключей: пересборка может пометить соседние секции.
+    local dirtyKeys = {}
+    for key in pairs(W.dirty) do dirtyKeys[#dirtyKeys + 1] = key end
+    for _, key in ipairs(dirtyKeys) do
         local sy = key % 16
         local ck = key // 16
         local cx, cz = ck // 65536 - 32768, ck % 65536 - 32768

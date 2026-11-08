@@ -276,16 +276,20 @@ end
 
 local acc = 0
 local CHANCE = 3 / 4096    -- случайный тик клетки за игровой тик
+local function keysOf(t) local out = {}; for k in pairs(t) do out[#out + 1] = k end; return out end
 
+-- Обход — по снимку ключей: опадание и рост дерева сами добавляют и убирают
+-- клетки этих таблиц, а новый ключ посреди обхода pairs ломает next
+-- («invalid key to 'next'» — игра падала после рубки дерева).
 local function tick()
-    for k in pairs(check) do
+    for _, k in ipairs(keysOf(check)) do
         if math.random() < CHANCE then
             local x, y, z = unkey(k)
             if W.chunk(x // 16, z // 16) then P.decayTick(x, y, z) end
         end
     end
-    for k in pairs(saplings) do
-        if math.random() < CHANCE then
+    for _, k in ipairs(keysOf(saplings)) do
+        if saplings[k] and math.random() < CHANCE then
             local x, y, z = unkey(k)
             if W.chunk(x // 16, z // 16) then P.saplingTick(x, y, z) end
         end
