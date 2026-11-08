@@ -218,9 +218,12 @@ function Menu.applyOptions()
     MOUSE_SENS = 0.24 * o.sensitivity + 0.01
     require("lightmap").gamma = o.gamma or 0
     require("shadows").fancy = o.fancy ~= false
+    -- Громкость (SoundManager 1.7.10): звук × категория × общая, всё 0..1.
     SetMasterVolume(o.master)
+    for _, c in ipairs(Menu.SOUND_CATEGORIES) do audio.set_bus_volume(c[1], Menu.soundVolume(c[1])) end
+    audio.set_bus_volume("master", 1)
     display.set_fullscreen(o.fullscreen == true)
-    Music.setVolume(o.music)
+    Music.setVolume(Menu.soundVolume("music"))
     local c = cameraObj and cameraObj:GetCamera()
     if c and not Pano.active then c.Fov = o.fov end
 end
@@ -273,6 +276,8 @@ local function startGame()
             -- времени вызова скрипта.
             deferredChecks = {
                 function() return require("bounds").selfCheck() end,
+                function() if not A.iconsReady then return nil end return A.selfCheck() end,
+                function() return Menu.soundSelfCheck() end,
                 function() return require("door").selfCheck() end,
                 function() return require("light").metaSelfCheck() end,
                 function() return require("ladder").selfCheck() end,
@@ -383,10 +388,17 @@ function OnUpdate(entity, dt)
             return
         end
     end
+    -- Иконки предметов — порциями (atlas.lua: A.stepIcons).
+    A.stepIcons(4)
     -- Отложенные самопроверки (--gencheck): по одной за кадр.
     if deferredChecks and #deferredChecks > 0 and worldOpen and not loading then
-        local ok, line = pcall(table.remove(deferredChecks, 1))
-        log(ok and line or ("CHECKERROR: " .. tostring(line)))
+        local fn = table.remove(deferredChecks, 1)
+        local ok, line = pcall(fn)
+        if ok and line == nil then
+            table.insert(deferredChecks, fn)       -- ещё не готово (иконки) — позже
+        else
+            log(ok and line or ("CHECKERROR: " .. tostring(line)))
+        end
     end
     dt = math.min(dt, 0.1)
     -- F11 — полный экран, как в Minecraft: в меню и в мире, запоминается.

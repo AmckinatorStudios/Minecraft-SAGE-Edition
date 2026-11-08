@@ -89,6 +89,12 @@ function L.selfCheck()
     -- со скоростью оригинала (0.1176 блока за тик ≈ 2.35 в секунду); в
     -- приседе не съезжает.
     local P = require "player"
+    -- Игрок стоит в клетке лестницы (не в пластине у стены) — поставить можно:
+    -- мешает только настоящая коробка лестницы, а не полный куб.
+    local sx, sy, sz = P.pos.x, P.pos.y, P.pos.z
+    P.pos.x, P.pos.y, P.pos.z = x + 0.5, y, z + 0.75
+    local besidePlayer = P.canPlace(x, y, z, ladderId(), 3) and not P.canPlace(x, y, z, B.byName.stone.id, 0)
+    P.pos.x, P.pos.y, P.pos.z = sx, sy, sz
     local save = {x = P.pos.x, y = P.pos.y, z = P.pos.z, vx = P.vel.x, vy = P.vel.y, vz = P.vel.z,
                   yaw = P.yaw, flying = P.flying, onGround = P.onGround}
     for yy = y, y + 6 do
@@ -110,9 +116,10 @@ function L.selfCheck()
     P.pos.x, P.pos.y, P.pos.z = save.x, save.y, save.z
     P.vel.x, P.vel.y, P.vel.z = save.vx, save.vy, save.vz
     P.yaw, P.flying, P.onGround, P.sneaking = save.yaw, save.flying, save.onGround, false
-    local ok = metaOk and boxOk and dropped and climbOk and holdOk
-    return string.format("LADDERCHECK: %s ориентация=%s коробка=%s падает=%s подъём=%.2f присед=%s",
-        ok and "PASS" or "FAIL", tostring(metaOk), tostring(boxOk), tostring(dropped), rise, tostring(holdOk))
+    local ok = metaOk and boxOk and dropped and climbOk and holdOk and besidePlayer
+    return string.format("LADDERCHECK: %s ориентация=%s коробка=%s падает=%s подъём=%.2f присед=%s рядом_с_игроком=%s",
+        ok and "PASS" or "FAIL", tostring(metaOk), tostring(boxOk), tostring(dropped), rise, tostring(holdOk),
+        tostring(besidePlayer))
 end
 
 return L

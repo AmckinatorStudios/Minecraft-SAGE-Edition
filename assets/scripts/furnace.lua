@@ -57,7 +57,13 @@ local function setLit(f, lit)
 end
 
 function F.update(dt)
-    for k, f in pairs(F.list) do
+    -- По снимку ключей: смена горящей/холодной печи ставит блок, а это может
+    -- менять список печей посреди обхода.
+    local ks = {}
+    for k in pairs(F.list) do ks[#ks + 1] = k end
+    for _, k in ipairs(ks) do
+        local f = F.list[k]
+        if not f then goto continue end
         local id = W.get(f.x, f.y, f.z)
         local loaded = W.chunk(f.x // 16, f.z // 16) ~= nil
         if loaded and not F.isFurnace(id) then
@@ -94,6 +100,7 @@ function F.update(dt)
                 setLit(f, burning)
             end
         end
+        ::continue::
     end
 end
 

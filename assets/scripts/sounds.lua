@@ -58,7 +58,7 @@ local function at(x, y, z) return Vec3(x + 0.5, y + 0.5, z + 0.5) end
 function S.hit(id, x, y, z)
     local kind, pitch = info(id)
     if kind then
-        PlaySound3D(file("step", kind), at(x, y, z), (1 + 1) / 8, pitch * 0.5)
+        PlaySound3D(file("step", kind), at(x, y, z), (1 + 1) / 8, pitch * 0.5, "block")
         S.count.hit = S.count.hit + 1
     end
 end
@@ -67,7 +67,7 @@ end
 function S.dig(id, x, y, z)
     local kind, pitch = info(id)
     if kind then
-        PlaySound3D(file("dig", kind), at(x, y, z), (1 + 1) / 2, pitch * 0.8)
+        PlaySound3D(file("dig", kind), at(x, y, z), (1 + 1) / 2, pitch * 0.8, "block")
         S.count.dig = S.count.dig + 1
     end
 end
@@ -79,7 +79,7 @@ S.place = S.dig
 function S.step(id, x, y, z)
     local kind, pitch = info(id)
     if kind then
-        PlaySound3D(file("step", kind), Vec3(x, y, z), 0.15, pitch)
+        PlaySound3D(file("step", kind), Vec3(x, y, z), 0.15, pitch, "neutral")
         S.count.step = S.count.step + 1
     end
 end
@@ -92,31 +92,31 @@ S.count.eat, S.count.drink, S.count.burp, S.count.pop, S.count.click = 0, 0, 0, 
 
 -- random.eat (EntityPlayer.updateItemUse): громкость 0.5 или 1, тон ±0.2.
 function S.eat(x, y, z)
-    PlaySound3D(R .. "eat" .. rnd(3) .. ".ogg", Vec3(x, y, z), 0.5 + 0.5 * rnd(0, 1), (rnd() - rnd()) * 0.2 + 1)
+    PlaySound3D(R .. "eat" .. rnd(3) .. ".ogg", Vec3(x, y, z), 0.5 + 0.5 * rnd(0, 1), (rnd() - rnd()) * 0.2 + 1, "player")
     S.count.eat = S.count.eat + 1
 end
 
 -- random.drink: громкость 0.5, тон 0.9..1.
 function S.drink(x, y, z)
-    PlaySound3D(R .. "drink.ogg", Vec3(x, y, z), 0.5, rnd() * 0.1 + 0.9)
+    PlaySound3D(R .. "drink.ogg", Vec3(x, y, z), 0.5, rnd() * 0.1 + 0.9, "player")
     S.count.drink = S.count.drink + 1
 end
 
 -- random.burp (ItemFood.onEaten): громкость 0.5, тон 0.9..1.
 function S.burp(x, y, z)
-    PlaySound3D(R .. "burp.ogg", Vec3(x, y, z), 0.5, rnd() * 0.1 + 0.9)
+    PlaySound3D(R .. "burp.ogg", Vec3(x, y, z), 0.5, rnd() * 0.1 + 0.9, "player")
     S.count.burp = S.count.burp + 1
 end
 
 -- random.pop (EntityItem.onCollideWithPlayer): 0.2, ((r − r)·0.7 + 1)·2.
 function S.pop(x, y, z)
-    PlaySound3D(R .. "pop.ogg", Vec3(x, y, z), 0.2, ((rnd() - rnd()) * 0.7 + 1) * 2)
+    PlaySound3D(R .. "pop.ogg", Vec3(x, y, z), 0.2, ((rnd() - rnd()) * 0.7 + 1) * 2, "player")
     S.count.pop = S.count.pop + 1
 end
 
 -- random.click — нажатие кнопки интерфейса (GuiButton.func_146113_a): 0.25, тон 1.
 function S.click()
-    PlaySound(R .. "click.ogg", 0.25, 1)
+    PlaySound(R .. "click.ogg", 0.25, 1, "master")
     S.count.click = S.count.click + 1
 end
 
@@ -125,7 +125,7 @@ end
 function S.land(id, x, y, z)
     local kind, pitch = info(id)
     if kind then
-        PlaySound3D(file("step", kind), Vec3(x, y, z), 0.5, pitch * 0.75)
+        PlaySound3D(file("step", kind), Vec3(x, y, z), 0.5, pitch * 0.75, "neutral")
         S.count.land = (S.count.land or 0) + 1
     end
 end

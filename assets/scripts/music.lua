@@ -15,12 +15,14 @@ local Music = {}
 
 local TRACKS = {"assets/music/menu1.ogg", "assets/music/menu2.ogg",
                 "assets/music/menu3.ogg", "assets/music/menu4.ogg"}
-local VOLUME = 0.8
+-- Трек — громкостью 1 (MusicTicker), регулятор «Music» — громкость шины
+-- «music» движка, общая — сверху: на нуле музыки не слышно вовсе.
+local VOLUME = 1.0
 local volume = 1      -- «Music» в настройках, 0..1
 
 function Music.setVolume(v)
     volume = v
-    if IsMusicPlaying() then SetMusicVolume(VOLUME * volume) end
+    audio.set_bus_volume("music", v)
 end
 local TICK = 1 / 20
 local MIN_DELAY, MAX_DELAY = 20, 600       -- тиков между треками (как у меню 1.7)
@@ -47,7 +49,7 @@ function Music.update(dt, wantMenu)
         end
         wait = wait - dt
         if wait <= 0 then
-            if volume > 0 then PlayMusic(nextTrack(), VOLUME * volume, false) end
+            if volume > 0 then PlayMusic(nextTrack(), VOLUME, false, 0, "music") end
             playingMenu = true
         end
     elseif playingMenu then
