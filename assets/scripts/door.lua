@@ -149,7 +149,7 @@ end
 -- door_close (громкость 1, высота rand·0.1 + 0.9 оригинала).
 local function sound(open, x, y, z)
     local f = open and "assets/sounds/random/door_open.ogg" or "assets/sounds/random/door_close.ogg"
-    PlaySound3D(f, Vec3(x + 0.5, y + 0.5, z + 0.5), 1.0, math.random() * 0.1 + 0.9, "block")
+    require("sounds").play3d(f, Vec3(x + 0.5, y + 0.5, z + 0.5), 1.0, math.random() * 0.1 + 0.9, "block")
 end
 D.sound = sound
 
