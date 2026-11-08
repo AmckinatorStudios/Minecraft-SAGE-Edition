@@ -75,9 +75,18 @@ function L.init()
 end
 
 -- Пересчитать карту: sun — getSunBrightness с долей тика, flash — идёт молния.
+-- Пересчёт — только когда входы поменялись (мерцание факелов меняется раз в
+-- тик, солнце — плавно): 256 точек и выгрузка текстуры каждый кадр стоили
+-- миллисекунды кадра впустую.
+local lastSun, lastFlash, lastGamma, lastFlicker
 function L.update(sun, flash)
     if not tex then L.init() end
     local gamma = L.gamma
+    if lastSun and math.abs(sun - lastSun) < 1e-4 and flash == lastFlash and gamma == lastGamma
+        and flicker == lastFlicker then
+        return
+    end
+    lastSun, lastFlash, lastGamma, lastFlicker = sun, flash, gamma, flicker
     for sky = 0, 15 do
         for blk = 0, 15 do
             local r, g, b = L.compute(sky, blk, sun, flash, gamma)

@@ -149,7 +149,7 @@ function Hud.init()
     flash.stretch = "both"
 
 
-    debugLabel = U.label(root, "Debug", "top_left", 8, 8, 600, 160, "", 1.1)
+    debugLabel = U.label(root, "Debug", "top_left", 8, 8, 640, 400, "", 1.1)
     debugLabel.visible = false
 
     local lp = U.screen("Loading", 50)
@@ -222,6 +222,23 @@ function Hud.damage(n)
     end
 end
 
+function Hud.profileText()
+    local Prof = require "profile"
+    local pigs, frozen = 0, 0
+    for _, p in ipairs(require("pig").list) do if p.frozen then frozen = frozen + 1 else pigs = pigs + 1 end end
+    local out = {string.format("\nScript %.2f ms (peak %.2f)  Lua %.1f MB  pigs %d (+%d asleep)",
+        Prof.frameAvg, Prof.framePeak, collectgarbage("count") / 1024, pigs, frozen)}
+    for _, line in ipairs(Prof.lines(8)) do out[#out + 1] = line end
+    -- Движок (если профилировщик включён: --profile=1 или SAGE_PROFILE=1):
+    -- кадр CPU/GPU, память процесса и его участки.
+    if Prof.engine then
+        out[#out + 1] = string.format("Engine: %s, RAM %.0f MB, task workers %d busy %.0f ms",
+            profile.summary(), profile.memory_mb(), tasks and tasks.workers() or 0, tasks and tasks.busy_ms() or 0)
+        for _, line in ipairs(Prof.engineLines(8)) do out[#out + 1] = line end
+    end
+    return table.concat(out, "\n")
+end
+
 function Hud.update(dt)
     frames = frames + 1
     fpsTimer = fpsTimer + dt
@@ -265,6 +282,9 @@ function Hud.update(dt)
             fps, P.pos.x, P.pos.y, P.pos.z, bx, by, bz, bx // 16, bz // 16,
             W.sky(bx, by + 1, bz), W.blockLight(bx, by + 1, bz), Sky.daylight,
             P.yaw, P.pitch, n, secs, C.radius, Sky.time, select(2, require("gen").column(bx, bz)))
+            -- Профилировщик (profile.lua): кадр скрипта, память Lua, существа и
+            -- самые дорогие системы — среднее / пик за 2 с, мс.
+            .. Hud.profileText()
     end
 end
 

@@ -73,8 +73,8 @@ end
 
 local function remove(i)
     local p = Pig.list[i]
-    PM.destroy(p.model)
-    require("shadows").destroy(p.shadow)
+    if p.model then PM.destroy(p.model) end
+    if p.shadow then require("shadows").destroy(p.shadow) end
     table.remove(Pig.list, i)
 end
 Pig.remove = remove
@@ -359,13 +359,19 @@ end
 
 -- Столкновения существ (applyEntityCollision): расталкиваются на 0.05.
 local function pushApart(P)
-    local list = Pig.list
+    -- Только живые свиньи загруженных участков: замёрзшие не двигаются, а
+    -- попарный обход всего списка (все встреченные за игру свиньи) рос
+    -- квадратом с каждым пройденным километром.
+    local list = {}
+    for _, p in ipairs(Pig.list) do
+        if not p.dead and not p.frozen then list[#list + 1] = p end
+    end
     for i = 1, #list do
         local a = list[i]
-        if not a.dead then
+        do
             for j = i + 1, #list do
                 local b = list[j]
-                if not b.dead then
+                do
                     local dx, dz = b.x - a.x, b.z - a.z
                     local wa, ha = Pig.size(a)
                     local wb = Pig.size(b)
@@ -504,7 +510,15 @@ local function render(p, t, cam)
     })
     -- Тень (Render.doRenderShadow): 0.7, у поросёнка вдвое меньше.
     local Sh = require "shadows"
-    Sh.place(p.shadow, x, y, z, p.age < 0 and 0.35 or 0.7, 1.0, cam[1], cam[2], cam[3])
+    -- Меш тени пересобирается, только если свинья или камера сдвинулись
+    -- заметно: каждый кадр новый меш на каждую свинью стоил выгрузки в
+    -- видеокарту на ровном месте.
+    local key = math.floor(x * 64) .. ":" .. math.floor(y * 64) .. ":" .. math.floor(z * 64) .. ":"
+        .. math.floor(cam[1] * 4) .. ":" .. math.floor(cam[2] * 4) .. ":" .. math.floor(cam[3] * 4) .. ":" .. tostring(p.age < 0)
+    if key ~= p.shadowKey then
+        p.shadowKey = key
+        Sh.place(p.shadow, x, y, z, p.age < 0 and 0.35 or 0.7, 1.0, cam[1], cam[2], cam[3])
+    end
 end
 
 function Pig.update(dt, P)
@@ -528,13 +542,20 @@ function Pig.update(dt, P)
     local cx, cy, cz = require("shadows").camera()
     for _, p in ipairs(Pig.list) do
         if p.frozen then
-            if not p.hidden then
-                p.model.root.Transform.Position = Vec3(0, -1000, 0)
-                require("shadows").hide(p.shadow)
-                p.hidden = true
+            -- Свинья выгруженного участка — только данные: модель и тень
+            -- удаляются, а не прячутся. Спрятанные копились в сцене (по
+            -- модели на каждую встреченную свинью), и движок обходил тысячи
+            -- невидимых объектов каждый кадр.
+            if p.model then
+                PM.destroy(p.model); p.model = nil
+                require("shadows").destroy(p.shadow); p.shadow = nil
+                p.shadowKey = nil
             end
         else
-            p.hidden = false
+            if not p.model then
+                p.model = PM.create()
+                p.shadow = require("shadows").new("Pig Shadow")
+            end
             render(p, p.ticks == 0 and 1 or t, {cx, cy, cz})
         end
     end

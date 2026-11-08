@@ -130,8 +130,8 @@ function PM.create()
 end
 
 function PM.destroy(r)
-    for _, o in ipairs(r.parts) do DestroyObject(o) end
-    DestroyObject(r.headGroup); DestroyObject(r.bodyGroup); DestroyObject(r.root)
+    -- Корнем — вся модель разом (части — его потомки), см. chestmodel.destroy.
+    DestroyObject(r.root)
 end
 
 -- Поза кадра. s: x, y, z — ноги; yaw — тело (наш поворот: 0 — на −Z);

@@ -84,9 +84,25 @@ function CM.create(kind)
     return r
 end
 
+-- Удаление — корнем: части уходят вместе с ним (вся ветка разом). Удалять
+-- их по одной, сначала дочерние, на Windows роняло игру (ветка иерархии
+-- рвалась посреди удаления), а одной операцией — и надёжнее, и дешевле.
 function CM.destroy(r)
     if not r then return end
-    DestroyObject(r.knob); DestroyObject(r.lid); DestroyObject(r.base); DestroyObject(r.root)
+    DestroyObject(r.root)
+end
+
+-- Сменить вид (одиночный ↔ половина пары) без пересоздания объектов: другие
+-- меши и материал на тех же частях.
+function CM.retarget(r, kind)
+    if r.kind == kind then return end
+    local ms = meshesOf(kind)
+    local mat = kind == "single" and CM.MAT or CM.MAT_DOUBLE
+    ms.base.apply(r.base); ms.lid.apply(r.lid); ms.knob.apply(r.knob)
+    for _, o in ipairs(r.parts) do SetMaterial(o, mat) end
+    local pv = DATA[kind].pivot
+    r.lid.Transform.Position = Vec3(pv[1], pv[2], pv[3])
+    r.kind = kind
 end
 
 -- Угол крышки оригинала (радианы, ≤ 0): a — доля открытия между тиками.

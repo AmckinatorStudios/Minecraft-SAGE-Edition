@@ -115,6 +115,70 @@ local function unloadChunk(c)
     W.chunks[W.ckey(c.cx, c.cz)] = nil
 end
 
+-- --- Генерация в фоновых задачах ------------------------------------------------
+--
+-- Участок строит genjob.lua в потоке воркера движка (tasks.run): главный поток
+-- только ставит задачи (ближние — первыми) и забирает готовые секции. Задач в
+-- полёте — по две на воркер: больше — лишняя память и устаревшие участки,
+-- если игрок быстро улетел; меньше — воркеры простаивают.
+C.pending = {}       -- [ключ участка] = номер задачи
+C.inFlight = 0
+C.orphans = {}
+C.stats.genAsync = 0
+
+function C.asyncGen()
+    if C.forceSync or LaunchFlag("syncgen") then return false end
+    return tasks ~= nil and tasks.run ~= nil and require("gen").seed ~= nil
+end
+
+function C.maxInFlight() return math.max(2, (tasks.workers() or 1) * 2) end
+
+function C.requestGenerate(cx, cz)
+    local id = tasks.run("genjob", "build", require("gen").seed, cx, cz)
+    C.pending[W.ckey(cx, cz)] = {id = id, cx = cx, cz = cz, seed = require("gen").seed}
+    C.inFlight = C.inFlight + 1
+end
+
+-- Забрать готовые участки (не больше нескольких за кадр — у каждого копия
+-- секций). Участок, от которого игрок уже далеко, или из старого мира
+-- (другое зерно), — выбрасывается.
+function C.collectGenerated(pcx, pcz, r)
+    local got = false
+    local taken = 0
+    for i = #C.orphans, 1, -1 do
+        if tasks.result(C.orphans[i]) ~= nil then table.remove(C.orphans, i) end
+    end
+    local keys = {}
+    for k in pairs(C.pending) do keys[#keys + 1] = k end
+    for _, k in ipairs(keys) do
+        local p = C.pending[k]
+        local ok, top, secs = tasks.result(p.id)
+        if ok ~= nil then
+            C.pending[k] = nil
+            C.inFlight = C.inFlight - 1
+            local dx, dz = p.cx - pcx, p.cz - pcz
+            if ok and p.seed == require("gen").seed and dx * dx + dz * dz <= (r + 3) * (r + 3)
+                and not W.chunk(p.cx, p.cz) then
+                local t = now()
+                local c = W.newChunk(p.cx, p.cz)
+                c.top = top
+                for sy = 0, top do c.sec[sy] = secs[sy + 1] end
+                c.generated = true
+                applyEdits(c)
+                C.stats.gen = C.stats.gen + (now() - t)
+                C.stats.genAsync = C.stats.genAsync + 1
+                got = true
+                taken = taken + 1
+            elseif not ok then
+                logError("SAGE Craft: chunk generation task failed: " .. tostring(top))
+                C.forceSync = true
+            end
+            if taken >= 4 then break end
+        end
+    end
+    return got
+end
+
 -- Порядок обхода — кольцами от центра.
 local order = {}
 local function buildOrder(r)
@@ -139,19 +203,45 @@ function C.update(px, pz, budget)
     local function overBudget()
         return budget and (now() - t0) * 1000 > budget
     end
+    -- Выгрузка далёких — ДО работы по бюджету: стояла в конце, и пока игрок
+    -- летит, бюджет кадра всегда кончался раньше (return true выше по
+    -- тексту) — участки не выгружались вовсе, память и обходы росли без
+    -- конца («чем дальше играть, тем хуже»). Правки игрока — в C.edits.
+    local far = (r + 3) * (r + 3)
+    for _, c in pairs(W.chunks) do
+        local dx, dz = c.cx - pcx, c.cz - pcz
+        if dx * dx + dz * dz > far then unloadChunk(c) end
+    end
 
-    for _, o in ipairs(order) do
-        local cx, cz, d2 = pcx + o[1], pcz + o[2], o[3]
-        if d2 <= (r + 2) * (r + 2) then
-            local c = W.chunk(cx, cz)
-            if not c then
-                local t = now()
-                c = W.newChunk(cx, cz)
-                G.generate(c)
-                applyEdits(c)
-                C.stats.gen = C.stats.gen + (now() - t)
+    -- Генерация: в фоновых задачах движка (tasks — свои потоки, по участку на
+    -- задачу), если они есть; иначе — здесь же, по бюджету.
+    if C.asyncGen() then
+        if C.collectGenerated(pcx, pcz, r) then busy = true end
+        local free = C.maxInFlight() - C.inFlight
+        for _, o in ipairs(order) do
+            if free <= 0 then break end
+            local cx, cz, d2 = pcx + o[1], pcz + o[2], o[3]
+            if d2 <= (r + 2) * (r + 2) and not W.chunk(cx, cz) and not C.pending[W.ckey(cx, cz)] then
+                C.requestGenerate(cx, cz)
+                free = free - 1
                 busy = true
-                if overBudget() then return true end
+            end
+        end
+        if C.inFlight > 0 then busy = true end
+    else
+        for _, o in ipairs(order) do
+            local cx, cz, d2 = pcx + o[1], pcz + o[2], o[3]
+            if d2 <= (r + 2) * (r + 2) then
+                local c = W.chunk(cx, cz)
+                if not c then
+                    local t = now()
+                    c = W.newChunk(cx, cz)
+                    G.generate(c)
+                    applyEdits(c)
+                    C.stats.gen = C.stats.gen + (now() - t)
+                    busy = true
+                    if overBudget() then return true end
+                end
             end
         end
     end
@@ -200,18 +290,16 @@ function C.update(px, pz, budget)
             W.dirty[key] = nil
         end
     end
-    -- Выгрузка далёких: правки игрока сохранены в C.edits и вернутся.
-    local far = (r + 4) * (r + 4)
-    for key, c in pairs(W.chunks) do
-        local dx, dz = c.cx - pcx, c.cz - pcz
-        if dx * dx + dz * dz > far then unloadChunk(c) end
-    end
     C._settled = (not busy) and W.ckey(pcx, pcz) or nil
     return busy
 end
 
 function C.clear()
     C._settled = nil
+    -- Задачи старого мира досчитаются, но их результат не нужен: номера — в
+    -- сироты, их забирают и выбрасывают (иначе копии копились бы в движке).
+    for _, p in pairs(C.pending) do C.orphans[#C.orphans + 1] = p.id end
+    C.pending, C.inFlight = {}, 0
     for _, c in pairs(W.chunks) do unloadChunk(c) end
     W.chunks = {}
     W.dirty = {}

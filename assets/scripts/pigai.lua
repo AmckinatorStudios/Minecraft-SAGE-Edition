@@ -169,14 +169,45 @@ function AI.findPath(p, tx, ty, tz, range, avoidWater)
     start.h = dist(sx, sy, sz, tx, ty, tz)
     start.f = start.h
     nodes[key(sx, sy, sz)] = start
-    local open = {start}
+    -- Открытый список — двоичная куча по f (Path.addPoint/dequeue оригинала):
+    -- выбор лучшего за log n, а не перебором — поиск пути стоил до 300 мс.
+    local heap = {start}
+    start.hi = 1
+    local function siftUp(i)
+        local nd = heap[i]
+        while i > 1 do
+            local p = i // 2
+            if heap[p].f <= nd.f then break end
+            heap[i] = heap[p]; heap[i].hi = i
+            i = p
+        end
+        heap[i] = nd; nd.hi = i
+    end
+    local function pop()
+        local top = heap[1]
+        local last = table.remove(heap)
+        if #heap > 0 then
+            local i, n = 1, #heap
+            while true do
+                local l, r = i * 2, i * 2 + 1
+                local m = i
+                local mf = last.f
+                if l <= n and heap[l].f < mf then m, mf = l, heap[l].f end
+                if r <= n and heap[r].f < mf then m = r end
+                if m == i then break end
+                heap[i] = heap[m]; heap[i].hi = i
+                i = m
+            end
+            heap[i] = last; last.hi = i
+        end
+        top.hi = nil
+        return top
+    end
     local best = start
     local budget = 600
-    while #open > 0 and budget > 0 do
+    while #heap > 0 and budget > 0 do
         budget = budget - 1
-        local bi = 1
-        for i = 2, #open do if open[i].f < open[bi].f then bi = i end end
-        local n = table.remove(open, bi)
+        local n = pop()
         n.closed = true
         if n.x == tx and n.y == ty and n.z == tz then best = n; break end
         if n.h < best.h then best = n end
@@ -194,9 +225,11 @@ function AI.findPath(p, tx, ty, tz, range, avoidWater)
                     m.h = dist(nx, ny, nz, tx, ty, tz)
                     m.f = g + m.h
                     nodes[k] = m
-                    open[#open + 1] = m
+                    heap[#heap + 1] = m
+                    siftUp(#heap)
                 elseif not m.closed and g < m.g then
                     m.g, m.f, m.parent = g, g + m.h, n
+                    if m.hi then siftUp(m.hi) end
                 end
             end
         end
