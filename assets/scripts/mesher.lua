@@ -233,6 +233,43 @@ local function emitCross(b, x, y, z, v, tile)
     end
 end
 
+-- Посевы — RenderBlocks.renderBlockCropsImpl 1.7.10: четыре плоскости
+-- картинки «решёткой» — две вдоль Z на x = 0.25 и 0.75, две вдоль X на
+-- z = 0.25 и 0.75, во всю клетку; весь блок опущен на 1/16
+-- (renderBlockCrops: y − 0.0625). Свет — своей клетки, без оттенка стороны.
+local CROPS = {
+    {{0.25, 0, 0}, {0.25, 0, 1}, {0.25, 1, 1}, {0.25, 1, 0}},
+    {{0.75, 0, 0}, {0.75, 0, 1}, {0.75, 1, 1}, {0.75, 1, 0}},
+    {{0, 0, 0.25}, {1, 0, 0.25}, {1, 1, 0.25}, {0, 1, 0.25}},
+    {{0, 0, 0.75}, {1, 0, 0.75}, {1, 1, 0.75}, {0, 1, 0.75}},
+}
+local function emitCrops(b, x, y, z, v, tiles, lt)
+    lt = lt or flatLight(v)
+    local stage = math.min(7, (v >> W.META_SHIFT) & 15)
+    local tile = tiles.stages and tiles.stages[stage + 1] or tiles.side
+    local oy = y - 0.0625
+    for _, q in ipairs(CROPS) do
+        addQuad(b, x, oy, z, q, {0, 1, 0}, CROSS_UV, lt, tile, false)
+        addQuad(b, x, oy, z, {q[4], q[3], q[2], q[1]}, {0, 1, 0}, {CROSS_UV[4], CROSS_UV[3], CROSS_UV[2], CROSS_UV[1]}, lt, tile, false)
+    end
+end
+M.emitCrops = emitCrops
+
+-- Грядка (BlockFarmland, renderStandardBlock по границам 0..15/16): верх
+-- опущен на 1/16, у боков срезан верхний ряд пикселей; верх — влажная
+-- картинка при влажности > 0 (getIcon по метаданным).
+local FARM_TOP = 15 / 16
+local function lowered(fi, corners)
+    local out, uvs = {}, {}
+    for k = 1, 4 do
+        local p = corners[k]
+        local q = {p[1], p[2] >= 1 and FARM_TOP or p[2], p[3]}
+        out[k] = q
+        uvs[k] = {faceUV(fi, q)}
+    end
+    return out, uvs
+end
+
 -- Факел — RenderBlocks.renderTorchAtAngle 1.7.10. Четыре плоскости картинки
 -- во всю клетку на ±1/16 от оси (палочка — середина картинки, остальное
 -- отрезает альфа), низ сдвинут на (dx, dz): у настенного факела основание
@@ -406,6 +443,8 @@ function M.build(cx, sy, cz)
                     local tiles = A.blockTiles[id]
                     if kind == 3 then
                         emitCross(solid, x, y, z, v, tiles.side)
+                    elseif kind == 10 then
+                        emitCrops(solid, x, y, z, v, tiles)
                     elseif kind == 5 then
                         emitTorch(solid, x, y, z, v, tiles.side)
                     elseif kind == 7 then
@@ -438,6 +477,11 @@ function M.build(cx, sy, cz)
                             elseif opaque[nid] then show = false
                             else show = faceVisible(id, kind, nid) end
                             if inset and fi > 2 then show = true end
+                            -- Грядка: верх ниже края — виден всегда; бок к такой же
+                            -- грядке (той же высоты) — не виден.
+                            if kind == 9 then
+                                if fi == 1 then show = true elseif fi > 2 and nid == id then show = false end
+                            end
                             if show then
                                 local flip = cornerLights(f, wi)
                                 local corners = f.c
@@ -456,6 +500,8 @@ function M.build(cx, sy, cz)
                                         corners[k] = q
                                     end
                                 end
+                                local uvs = f.uv
+                                if kind == 9 and fi ~= 2 then corners, uvs = lowered(fi, corners) end
                                 local tileKey = f.tile
                                 -- Лицо печи и тыквы — по метаданным, а не на одной
                                 -- стороне (BlockFurnace/BlockPumpkin.getIcon).
@@ -464,7 +510,9 @@ function M.build(cx, sy, cz)
                                     if FACE_SIDE[fi] == front then tileKey = "front"
                                     elseif fi > 2 then tileKey = "side" end
                                 end
-                                addQuad(b, x, y, z, corners, f.n, f.uv, LB, tiles[tileKey], flip, AOB)
+                                local tile = tiles[tileKey]
+                                if kind == 9 and fi == 1 and ((v >> W.META_SHIFT) & 15) > 0 then tile = tiles.wet end
+                                addQuad(b, x, y, z, corners, f.n, uvs, LB, tile, flip, AOB)
                             end
                         end
                     end
@@ -486,6 +534,8 @@ function M.single(id, meta, tile, wx, wy, wz)
     local v = id | ((meta or 0) << W.META_SHIFT)
     if kind == 3 then
         emitCross(b, 0, 0, 0, v, tile)
+    elseif kind == 10 then
+        emitCrops(b, 0, 0, 0, v, {side = tile}, ZERO_LT)
     elseif kind == 5 then
         emitTorch(b, 0, 0, 0, v, tile)
     elseif kind == 7 then
@@ -511,7 +561,9 @@ function M.single(id, meta, tile, wx, wy, wz)
                     corners[k] = q
                 end
             end
-            addQuad(b, 0, 0, 0, corners, f.n, f.uv, ZERO_LT, tile, false)
+            local uvs = f.uv
+            if kind == 9 and fi ~= 2 then corners, uvs = lowered(fi, corners) end
+            addQuad(b, 0, 0, 0, corners, f.n, uvs, ZERO_LT, tile, false)
         end
     end
     return b

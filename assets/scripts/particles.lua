@@ -29,10 +29,14 @@ local acc = 0
 local meshes = {}
 local rnd = math.random
 
--- Сторона 0..5 (вниз, вверх, Z−, Z+, X−, X+) — плитка блока этой стороны.
+-- Сторона 0..5 (вниз, вверх, Z−, Z+, X−, X+) — плитка блока этой стороны
+-- (getIcon(side, meta): у пшеницы — картинка стадии, у грядки — влажный верх).
+local curMeta = 0
 local function tileOfSide(id, side)
     local t = A.blockTiles[id]
     if not t then return nil end
+    if t.stages then return t.stages[math.min(7, curMeta) + 1] end
+    if side == 1 and t.wet and curMeta > 0 then return t.wet end
     if side == 0 then return t.bottom or t.side end
     if side == 1 then return t.top or t.side end
     return t.side
@@ -98,6 +102,7 @@ end
 -- — от центра блока к осколку; сторона текстуры — случайная.
 function Pt.destroy(id, meta, x, y, z)
     if B.drawKind[id] == 4 or not A.blockTiles[id] then return 0 end
+    curMeta = meta or 0
     local n = 0
     for i = 0, 3 do
         for j = 0, 3 do
@@ -115,6 +120,7 @@ end
 -- (multiplyVelocity: по вертикали (v − 0.1)·0.2 + 0.1), размер ×0.6.
 function Pt.hit(id, meta, x, y, z, side)
     if B.drawKind[id] == 4 then return nil end
+    curMeta = meta or 0
     local b = Bo.render(id, meta, x, y, z)
     local f = 0.1
     local px = x + rnd() * (b[4] - b[1] - f * 2) + f + b[1]

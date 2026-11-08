@@ -78,6 +78,20 @@ shape("trapdoor", {
     collision = function(meta) return {require("trapdoor").box(meta)} end,
 })
 
+-- Грядка (BlockFarmland): выбор и вид — 15/16 высоты, столкновение — полный
+-- куб (getCollisionBoundingBoxFromPool 1.7.10 — x..x+1, y..y+1).
+local FARM = {0, 0, 0, 1, 15 / 16, 1}
+shape("farmland", {
+    selected = function() return FARM end,
+    collision = function() return {FULL} end,
+    render = function() return FARM end,
+})
+-- Пшеница (BlockCrops): выбор — плита 1 × 0.25 × 1 на всех стадиях, столкновения нет.
+shape("wheat_crop", {
+    selected = function() return {0, 0, 0, 1, 0.25, 1} end,
+    collision = function() return NONE end,
+})
+
 -- Факел (BlockTorch): столкновения нет, выбор — по ориентации (torch.lua).
 shape("torch", {
     selected = function(meta) return require("torch").bounds(meta) end,

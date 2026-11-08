@@ -177,6 +177,7 @@ local function openWorld(w)
     Map.load(loaded and loaded.maps)
     require("plants").load(loaded and loaded.plants)
     -- Свиньи и участки, где животные уже появлялись (до генерации участков).
+    require("crops").load(loaded and loaded.crops)
     require("pig").load(loaded and loaded.pigs)
     require("pig").loadChunks(loaded and loaded.pigChunks)
     C.radius = tonumber(LaunchArg("view") or "") or C.radius
@@ -326,6 +327,7 @@ local function startGame()
                 function() return require("particles").selfCheck() end,
                 function() return require("pigmodel").selfCheck() end,
                 function() return require("pigcheck").selfCheck(P) end,
+                function() return require("cropcheck").selfCheck(P) end,
             }
             local fx, fy, fz = 4, W.surface(4, 4) + 1, 4
             Act.setBlock(fx, fy, fz, B.byName.furnace.id)
@@ -539,6 +541,32 @@ function OnUpdate(entity, dt)
                 end
                 for _, k in ipairs({{"carrot", 64}, {"carrot_on_a_stick", 1}, {"wood_sword", 1}, {"diamond_sword", 1},
                                     {"porkchop_raw", 16}, {"porkchop_cooked", 16}}) do
+                    Inv.add(B.byName[k[1]].id, k[2])
+                end
+            end
+            -- Для снимков пшеницы: поле 9×9 перед игроком с водой в середине
+            -- (как у 1.7.10 — вода увлажняет всё поле), ряды всех стадий 0..7,
+            -- сухая грядка с краю; мотыги, семена, костная мука в рюкзаке.
+            if LaunchFlag("farmdemo") then
+                local Cr = require "crops"
+                local dx, _, dz = P.lookDir()
+                local fx, fz = math.floor(P.pos.x + dx * 7), math.floor(P.pos.z + dz * 7)
+                local fy = W.surface(fx, fz)
+                for i = -4, 4 do
+                    for j = -4, 4 do
+                        local x, z = fx + i, fz + j
+                        for y = fy + 1, fy + 4 do Act.setBlock(x, y, z, 0) end
+                        Act.setBlock(x, fy, z, (i == 0 and j == 0) and 11 or Cr.FARMLAND, 7)
+                        if not (i == 0 and j == 0) and i > -4 then
+                            Act.setBlock(x, fy + 1, z, Cr.WHEAT, math.min(7, i + 3))
+                        end
+                    end
+                end
+                -- Сухая грядка без воды рядом — в шаге за полем.
+                Act.setBlock(fx - 6, fy, fz, Cr.FARMLAND, 0)
+                Act.setBlock(fx - 6, fy + 1, fz, 0)
+                for _, k in ipairs({{"wood_hoe", 1}, {"stone_hoe", 1}, {"iron_hoe", 1}, {"gold_hoe", 1}, {"diamond_hoe", 1},
+                                    {"wheat_seeds", 64}, {"bone_meal", 64}, {"wheat", 16}}) do
                     Inv.add(B.byName[k[1]].id, k[2])
                 end
             end
@@ -783,6 +811,9 @@ function OnUpdate(entity, dt)
                      P.pos.x, P.pos.y, P.pos.z)
         end
         if dmg > 0 then Hud.damage(dmg) end
+        -- Грядка под ногами (BlockFarmland.onFallenUpon): вытоптана с шансом
+        -- высота падения − 0.5 (прыжок на месте — около 3/4).
+        require("crops").fallenUpon(math.floor(P.pos.x), math.floor(P.pos.y - 0.2), math.floor(P.pos.z), fall)
     end
 
     C.update(P.pos.x, P.pos.z, C.budgetMs)
@@ -790,6 +821,7 @@ function OnUpdate(entity, dt)
     if not Inv.screenOpen and not chatting then Act.update(dt, Auto.active and Auto.actions() or nil) end
     Drops.update(dt)
     require("pig").update(dt, P)
+    require("crops").update(dt)
     require("needle").update(dt, P)
     require("particles").update(dt)
     Fall.update(dt)

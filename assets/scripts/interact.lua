@@ -173,6 +173,8 @@ function Act.setBlock(x, y, z, id, meta)
     C.recordEdit(x, y, z, id, meta)
     L.update(x, y, z)
     W.markDirty(x, y, z)
+    -- Грядка и пшеница: учёт клеток и соседи (onNeighborBlockChange).
+    require("crops").onSet(x, y, z, id)
     return true
 end
 
@@ -212,6 +214,8 @@ local function breakBlock(t)
     local Drops = require "drops"
     local heldNow = Inv.current()
     local special = Plants.dropsOf(id, heldNow and B.byId[heldNow.id] and B.byId[heldNow.id].shears)
+    -- Пшеница: семя, а зрелая — пшеница и до трёх семян (BlockCrops).
+    if require("crops").isCrop(id) then special = require("crops").dropsOf(t.meta or 0) end
     if special then
         -- Листва и трава: свои шансы (саженцы, яблоки, семена; ножницами — блок).
         Plants.spill(special, t.x, t.y, t.z)
@@ -225,7 +229,9 @@ local function breakBlock(t)
     require("hud").addExhaustion(0.025)
     -- 64 осколка сеткой 4×4×4 (addBlockDestroyEffects) — из метаданных до поломки.
     require("particles").destroy(id, t.meta or 0, t.x, t.y, t.z)
-    Inv.wearTool()
+    -- Мотыга от поломки блоков не изнашивается (у ItemHoe нет onBlockDestroyed).
+    local hd = heldNow and B.byId[heldNow.id]
+    if not (hd and hd.tool == "hoe") then Inv.wearTool() end
     settle(t.x, t.y, t.z)
 end
 
@@ -434,7 +440,16 @@ function Act.update(dt, actions)
             if Plants.boneMeal(target.x, target.y, target.z) then
                 Inv.useOne()
                 Anim.swingItem()
+            elseif require("crops").boneMeal(target.x, target.y, target.z) then
+                -- Пшеница (IGrowable): мука тратится, искры по высоте блока.
+                Plants.happy(target.x, target.y, target.z, 0.25)
+                Inv.useOne()
+                Anim.swingItem()
             end
+            placeCooldown = 0.22
+        -- Мотыга и семена (ItemHoe/ItemSeeds.onItemUse) — по блоку под прицелом.
+        elseif placeCooldown == 0 and hd and (hd.tool == "hoe" or hd.plants) and target and not activates(target) then
+            if require("crops").use(target, held) then Anim.swingItem() end
             placeCooldown = 0.22
         -- Предмет, который ставит блок (дверь), — не «использование», а постановка:
         -- раньше ПКМ с дверью уходила сюда, и дверь не ставилась вовсе.

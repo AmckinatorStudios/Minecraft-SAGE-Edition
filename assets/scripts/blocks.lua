@@ -105,6 +105,15 @@ local defs = {
     -- Люк (BlockTrapDoor): плита 3/16 на боковой грани блока, метаданные —
     -- trapdoor.lua; в инвентаре и в руке — тонкая плита (setBlockBoundsForItemRender).
     {id = 72, name = "trapdoor",     title = "Trapdoor", tex = "trapdoor", draw = "trapdoor", hard = 3.0, tool = "axe", solid = false, opacityLight = 0, itemBox = {0, 0.40625, 0, 1, 0.59375, 1}},
+    -- Грядка (BlockFarmland): верх на 15/16 блока, сухая или влажная по
+    -- метаданным 0..7 (влажность), бока и низ — земля; столкновение — полный
+    -- куб (как у 1.7.10), роняет землю. Свет пропускает (верх читает клетку
+    -- над собой), грани соседей рядом с ней не прячутся.
+    {id = 73, name = "farmland",     title = "Farmland", top = "farmland_dry", wet = "farmland_wet", side = "dirt", bottom = "dirt", draw = "farmland", hard = 0.6, tool = "shovel", drop = "dirt", opacityLight = 0, itemBox = {0, 0, 0, 1, 0.9375, 1}, hidden = true},
+    -- Пшеница (BlockCrops): стадии 0..7 в метаданных, картинка стадии —
+    -- четыре плоскости «решёткой» (renderBlockCrops); столкновения нет.
+    {id = 74, name = "wheat_crop",   title = "Crops", tex = "wheat_stage_7", draw = "crops", hard = 0, solid = false, opacityLight = 0, drop = "none", hidden = true,
+     stages = {"wheat_stage_0", "wheat_stage_1", "wheat_stage_2", "wheat_stage_3", "wheat_stage_4", "wheat_stage_5", "wheat_stage_6", "wheat_stage_7"}},
     {id = 69, name = "dark_oak_planks", title = "Dark Oak Wood Planks", tex = "planks_big_oak", hard = 2.0, tool = "axe"},
     {id = 47, name = "lit_furnace",   facing = "furnace",  title = "Furnace",              top = "furnace_top", side = "furnace_side", front = "furnace_front_on", bottom = "furnace_top", hard = 3.5, tool = "pickaxe", need = 1, light = 13, drop = "furnace"},
 }
@@ -143,7 +152,16 @@ local items = {
     {id = 288, name = "compass",         title = "Compass",          tex = "compass", frames = 32},
     {id = 298, name = "clock",           title = "Clock",            tex = "clock", frames = 64},
     {id = 289, name = "empty_map",       title = "Empty Map",        tex = "map_empty"},
-    {id = 294, name = "wheat_seeds",     title = "Seeds",            tex = "seeds_wheat"},
+    -- Семена (ItemSeeds): ПКМ по верху грядки — пшеница (crops.lua).
+    {id = 294, name = "wheat_seeds",     title = "Seeds",            tex = "seeds_wheat", plants = "wheat_crop"},
+    {id = 303, name = "wheat",           title = "Wheat",            tex = "wheat"},
+    -- Мотыги (ItemHoe): ПКМ по земле или траве — грядка, износ 1 за вспашку.
+    -- Прочность — ToolMaterial 1.7.10 (uses = maxUses + 1, как у остальных).
+    {id = 304, name = "wood_hoe",        title = "Wooden Hoe",       tex = "wood_hoe",        tool = "hoe", tier = 1, uses = 60},
+    {id = 305, name = "stone_hoe",       title = "Stone Hoe",        tex = "stone_hoe",       tool = "hoe", tier = 2, uses = 132},
+    {id = 306, name = "iron_hoe",        title = "Iron Hoe",         tex = "iron_hoe",        tool = "hoe", tier = 3, uses = 251},
+    {id = 307, name = "gold_hoe",        title = "Golden Hoe",       tex = "gold_hoe",        tool = "hoe", tier = 1, uses = 33},
+    {id = 308, name = "diamond_hoe",     title = "Diamond Hoe",      tex = "diamond_hoe",     tool = "hoe", tier = 4, uses = 1562},
     -- Костная мука (dye 15): ускоряет рост саженца (ItemDye.applyBonemeal).
     {id = 295, name = "bone_meal",       title = "Bone Meal",        tex = "dye_powder_white"},
     -- Ножницы: листва и трава — целым блоком (BlockLeaves/BlockTallGrass.harvestBlock).
@@ -190,7 +208,7 @@ B.absorb = {}      -- сколько свет теряет, проходя ск�
 B.facing = {}     -- [id] = true — лицевая сторона по метаданным (печь, тыква)
 B.faceTile = {}    -- [id] = {верх, низ, север, юг, запад, восток} — номера плиток атласа
 
-local KIND = {solid = 1, cutout = 2, cross = 3, liquid = 4, torch = 5, door = 6, ladder = 7, trapdoor = 8}
+local KIND = {solid = 1, cutout = 2, cross = 3, liquid = 4, torch = 5, door = 6, ladder = 7, trapdoor = 8, farmland = 9, crops = 10}
 
 for i = 0, 1023 do
     B.opaque[i] = false
@@ -209,7 +227,7 @@ for _, d in ipairs(defs) do
     B.list[#B.list + 1] = d
     B.drawKind[d.id] = KIND[d.draw]
     B.opaque[d.id] = d.draw == "solid"
-    B.solid[d.id] = d.solid ~= false and d.draw ~= "cross"
+    B.solid[d.id] = d.solid ~= false and d.draw ~= "cross" and d.draw ~= "crops"
     B.emit[d.id] = d.light or 0
     B.facing[d.id] = d.facing ~= nil
     if d.draw == "solid" then B.absorb[d.id] = 15

@@ -158,6 +158,10 @@ local function move(p, dx, dy, dz)
     end
     -- Падение (updateFallState): копится, на земле — урон за всё выше 3.
     if p.onGround then
+        -- Грядка под ногами (onFallenUpon): шанс вытоптать — высота − 0.5.
+        if p.fall > 0 then
+            require("crops").fallenUpon(math.floor(p.x), math.floor(p.y - 0.2), math.floor(p.z), p.fall)
+        end
         if p.fall > 3 then Pig.damage(p, math.ceil(p.fall - 3), nil, "fall") end
         p.fall = 0
     elseif my < 0 then
@@ -592,7 +596,7 @@ function Pig.attack(p, P, held)
     local Hud = require "hud"
     Hud.addExhaustion(0.3)
     local d = held and B.byId[held.id]
-    if hit and d and d.tool then
+    if hit and d and d.tool and d.tool ~= "hoe" then
         local Inv = require "inventory"
         Inv.wearTool()
         if d.tool ~= "sword" then Inv.wearTool() end
