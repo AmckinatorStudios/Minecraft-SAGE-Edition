@@ -144,6 +144,12 @@ local EVENTS = {
     ["step.gravel"]        = {"step/gravel", 4, "neutral"},
     ["dig.grass"]          = {"dig/grass", 4, "block"},
     ["dig.gravel"]         = {"dig/gravel", 4, "block"},
+    -- Игрок (категория «игроки»): удар — game.player.hurt (damage/hit1–3),
+    -- падение — game.player.hurt.fall.small / .big (damage/fallsmall, fallbig;
+    -- у набора 1.7.10 большой вариант один — fallbig.ogg).
+    ["game.player.hurt"]   = {"damage/hit", 3, "player"},
+    ["damage.fallsmall"]   = {"damage/fallsmall", 0, "player"},
+    ["damage.fallbig"]     = {"damage/fallbig", 0, "player"},
 }
 S.EVENTS = EVENTS
 S.count.events = {}

@@ -80,6 +80,33 @@
         364,
         10
       ]
+    },
+    {
+      "name": "heart_empty_flash",
+      "rect": [
+        50,
+        0,
+        18,
+        18
+      ]
+    },
+    {
+      "name": "heart_full_flash",
+      "rect": [
+        140,
+        0,
+        18,
+        18
+      ]
+    },
+    {
+      "name": "heart_half_flash",
+      "rect": [
+        158,
+        0,
+        18,
+        18
+      ]
     }
   ]
 }

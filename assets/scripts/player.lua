@@ -24,7 +24,7 @@ P.sprinting = false
 P.inWater = false
 P.headInWater = false
 P.walkDist = 0          -- пройденный путь: им качается камера и шагают ноги
-P.fallStart = nil
+P.fallDistance = 0        -- накопленная высота падения (Entity.fallDistance)
 
 local GRAVITY = 32
 local JUMP = 9.0
@@ -66,7 +66,27 @@ local function moveAxis(axis, d)
         local p = P.pos
         local nx, ny, nz = p.x, p.y, p.z
         if axis == "x" then nx = nx + step elseif axis == "y" then ny = ny + step else nz = nz + step end
-        if collides(nx, ny, nz) then return false end
+        if collides(nx, ny, nz) then
+            -- Упёрлись: доходим вплотную (Entity.moveEntity обрезает сдвиг по
+            -- коробкам столкновения), а не стоим в зазоре до длины шага. Иначе
+            -- игрок «приземлялся» в воздухе на десятые доли блока выше пола,
+            -- падал снова — и падение засчитывалось дважды, а его высота
+            -- выходила меньше настоящей.
+            local lo, hi = 0, 1
+            for _ = 1, 20 do
+                local mid = (lo + hi) / 2
+                local tx, ty, tz = p.x, p.y, p.z
+                if axis == "x" then tx = tx + step * mid elseif axis == "y" then ty = ty + step * mid else tz = tz + step * mid end
+                if collides(tx, ty, tz) then hi = mid else lo = mid end
+            end
+            local tx, ty, tz = p.x, p.y, p.z
+            if axis == "x" then tx = tx + step * lo elseif axis == "y" then ty = ty + step * lo else tz = tz + step * lo end
+            -- Пол и потолок коробок — на сетке 1/16: дотягиваем высоту до неё.
+            local function snap(v) return math.floor(v * 16 + 0.5) / 16 end
+            if axis == "y" and math.abs(snap(ty) - ty) < 1e-4 and not collides(tx, snap(ty), tz) then ty = snap(ty) end
+            p.x, p.y, p.z = tx, ty, tz
+            return false
+        end
         -- Присед не даёт сойти с края: шаг, после которого под ногами пусто, отменяется.
         if P.sneaking and P.onGround and axis ~= "y" and not P.flying then
             if not collides(nx, ny - 0.6, nz) then return false end
@@ -79,6 +99,7 @@ end
 function P.spawnAt(x, y, z)
     P.pos.x, P.pos.y, P.pos.z = x, y, z
     P.vel.x, P.vel.y, P.vel.z = 0, 0, 0
+    P.fallDistance = 0
     -- Если точка внутри породы — вверх до воздуха.
     while collides(P.pos.x, P.pos.y, P.pos.z) and P.pos.y < W.HEIGHT do P.pos.y = P.pos.y + 1 end
 end
@@ -170,10 +191,11 @@ function P.update(input, dt)
         v.z = math.max(-lim, math.min(lim, v.z))
         v.y = math.max(v.y, -lim)
         if P.sneaking and v.y < 0 then v.y = 0 end
-        P.fallStart = nil
+        P.fallDistance = 0
     end
 
     local wasGround = P.onGround
+    local beforeY = p.y
     local beforeX, beforeZ = p.x, p.z
     local yOk = moveAxis("y", v.y * dt)
     if not yOk then
@@ -212,13 +234,23 @@ function P.update(input, dt)
         elseif P.onGround then Hud.addExhaustion((P.sprinting and 0.1 or 0.01) * moved) end
     end
 
-    -- Высота падения: от верхней точки полёта до приземления.
+    -- Высота падения (Entity.updateFallState): fallDistance копит каждое
+    -- фактическое снижение (подъём её не уменьшает); в воде, на лестнице и в
+    -- полёте — ноль. Приземлились — отдаём её один раз и обнуляем. Округление
+    -- до миллионных: сумма шагов кадров даёт 4.0000000001 вместо 4, и
+    -- ceil(высота − 3) прибавлял бы лишнее сердце.
     local landed = nil
-    if not P.onGround and not P.flying and not P.inWater and not ladder then
-        if not P.fallStart or p.y > P.fallStart then P.fallStart = p.y end
+    local dy = p.y - beforeY
+    if P.flying or P.inWater or ladder then
+        P.fallDistance = 0
+    elseif not P.onGround then
+        if dy < 0 then P.fallDistance = P.fallDistance - dy end
     else
-        if P.onGround and not wasGround and P.fallStart then landed = P.fallStart - p.y end
-        P.fallStart = nil
+        if dy < 0 then P.fallDistance = P.fallDistance - dy end
+        if P.fallDistance > 0 then
+            landed = math.floor(P.fallDistance * 1e6 + 0.5) / 1e6
+        end
+        P.fallDistance = 0
     end
     return landed
 end

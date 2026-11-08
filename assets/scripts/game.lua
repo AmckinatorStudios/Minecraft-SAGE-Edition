@@ -133,11 +133,15 @@ local function placeCamera()
         Sky.follow(cameraObj)
         return
     end
+    -- Наклон от удара (hurtCameraEffect): в пространстве глаза — первым,
+    -- до покачивания и взгляда; камере — обратный ему, последним.
+    local hurtInv = Mat.identity()
+    Mat.rotate(hurtInv, -require("hurt").roll(), 0, 0, 1)
     if thirdPerson == 0 then
         local m = Mat.identity()
         Mat.translate(m, 0, ey - P.pos.y, 0)
         Mat.rotate(m, P.pitch, 1, 0, 0)
-        Mat.applyTo(cameraObj, Mat.mul(m, bobInv))
+        Mat.applyTo(cameraObj, Mat.mul(Mat.mul(m, bobInv), hurtInv))
     else
         -- Камера отходит назад (или вперёд) по лучу взгляда, но не сквозь стену.
         local dx, dy, dz = P.lookDir()
@@ -156,7 +160,7 @@ local function placeCamera()
         Mat.translate(m, cx, ey - P.pos.y + ly, cz)
         if thirdPerson == 1 then Mat.rotate(m, P.pitch, 1, 0, 0)
         else Mat.rotate(m, 180, 0, 1, 0); Mat.rotate(m, -P.pitch, 1, 0, 0) end
-        Mat.applyTo(cameraObj, Mat.mul(m, bobInv))
+        Mat.applyTo(cameraObj, Mat.mul(Mat.mul(m, bobInv), hurtInv))
     end
     Sky.follow(cameraObj)
 end
@@ -330,6 +334,7 @@ local function startGame()
                 function() return require("pigcheck").selfCheck(P) end,
                 function() return require("cropcheck").selfCheck(P) end,
                 function() return require("chestcheck").selfCheck(P) end,
+                function() return require("hurtcheck").selfCheck(P) end,
             }
             local fx, fy, fz = 4, W.surface(4, 4) + 1, 4
             Act.setBlock(fx, fy, fz, B.byName.furnace.id)
@@ -860,21 +865,14 @@ function OnUpdate(entity, dt)
         end
     end
     if fall then
-        -- EntityLivingBase.fall: урон — ceil(высота − 3); звук поверхности
-        -- приземления — блок ПОД НОГАМИ в момент касания (posY − 0.2), громкость
-        -- stepVolume·0.5, тон stepPitch·0.75. Обычный прыжок (подъём до 1.25
-        -- блока и обратно) приземлением с высоты не считается.
-        local dmg = math.ceil(fall - 3)
-        if fall > 1.3 then
-            Snd.land(W.get(math.floor(P.pos.x), math.floor(P.pos.y - 0.2), math.floor(P.pos.z)),
-                     P.pos.x, P.pos.y, P.pos.z)
-        end
-        if dmg > 0 then Hud.damage(dmg) end
-        -- Грядка под ногами (BlockFarmland.onFallenUpon): вытоптана с шансом
-        -- высота падения − 0.5 (прыжок на месте — около 3/4).
+        -- Entity.updateFallState: сначала блок под ногами (onFallenUpon —
+        -- грядку вытаптывает с шансом высота − 0.5), затем fall(): урон
+        -- ceil(высота − 3), звуки damage.fall* и поверхности (hurt.lua).
         require("crops").fallenUpon(math.floor(P.pos.x), math.floor(P.pos.y - 0.2), math.floor(P.pos.z), fall)
+        require("hurt").fall(fall)
     end
 
+    require("hurt").update(dt)
     C.update(P.pos.x, P.pos.z, C.budgetMs)
 
     if not Inv.screenOpen and not chatting then Act.update(dt, Auto.active and Auto.actions() or nil) end

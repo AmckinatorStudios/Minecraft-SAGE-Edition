@@ -192,6 +192,13 @@ function A.swingProgress()
     return prevSwingP + f * A.partial
 end
 
+-- Удар (EntityLivingBase.handleHealthUpdate(2)): limbSwingAmount = 1.5 —
+-- ноги модели вздрагивают и затухают обычным сглаживанием (на экране не
+-- больше 1, как у doRender).
+function A.hurtLimbs()
+    limbAmt = 1.5
+end
+
 -- limbSwing и limbSwingAmount для модели (RendererLivingEntity.doRender).
 function A.limbs()
     local amt = math.min(1, lerp(prevLimbAmt, limbAmt, A.partial))
