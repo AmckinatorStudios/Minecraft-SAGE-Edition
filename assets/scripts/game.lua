@@ -36,6 +36,7 @@ local Worlds = require "worlds"
 
 local playerObj, cameraObj
 local started = false
+local deferredChecks = nil     -- --gencheck: проверки, что идут по кадру
 local loading = false
 local worldOpen = false        -- мир выбран и строится/идёт (до этого — только меню)
 local quitting = nil           -- «Save and Quit to Title» по шагам
@@ -267,13 +268,19 @@ local function startGame()
             -- горящая печь, уголь (80 с) прогорел — снова обычная.
             log(require("plants").selfCheck())
             log(require("torch").selfCheck())
-            log(require("bounds").selfCheck())
-            log(require("door").selfCheck())
-            log(require("light").metaSelfCheck())
-            log(require("ladder").selfCheck())
-            log(require("ui").durabilitySelfCheck())
-            log(B.facingSelfCheck())
-            log(require("particles").selfCheck())
+            -- Проверки механик блоков — по одной за кадр (OnUpdate): вместе с
+            -- запуском мира в одном вызове они не укладывались в лимит
+            -- времени вызова скрипта.
+            deferredChecks = {
+                function() return require("bounds").selfCheck() end,
+                function() return require("door").selfCheck() end,
+                function() return require("light").metaSelfCheck() end,
+                function() return require("ladder").selfCheck() end,
+                function() return require("trapdoor").selfCheck() end,
+                function() return require("ui").durabilitySelfCheck() end,
+                function() return B.facingSelfCheck() end,
+                function() return require("particles").selfCheck() end,
+            }
             local fx, fy, fz = 4, W.surface(4, 4) + 1, 4
             Act.setBlock(fx, fy, fz, B.byName.furnace.id)
             local f = Furn.at(fx, fy, fz)
@@ -375,6 +382,11 @@ function OnUpdate(entity, dt)
             logError("SAGE Craft failed to start: " .. tostring(err) .. "." .. hint)
             return
         end
+    end
+    -- Отложенные самопроверки (--gencheck): по одной за кадр.
+    if deferredChecks and #deferredChecks > 0 and worldOpen and not loading then
+        local ok, line = pcall(table.remove(deferredChecks, 1))
+        log(ok and line or ("CHECKERROR: " .. tostring(line)))
     end
     dt = math.min(dt, 0.1)
     -- F11 — полный экран, как в Minecraft: в меню и в мире, запоминается.
@@ -530,6 +542,21 @@ function OnUpdate(entity, dt)
                 Act.setBlock(x - 3, y, z, f, B.placeMeta(f, 0))     -- смотрел на север — лицо на юг
                 Act.setBlock(x + 2, y, z, f, B.placeMeta(f, 90))    -- смотрел на запад — лицо на восток
                 Act.setBlock(x + 3, y + 1, z, f, B.placeMeta(f, -90))
+            end
+            -- Для снимков: люки на стене к северу — внизу, вверху, открытый.
+            if LaunchFlag("trapdemo") then
+                local Tr = require "trapdoor"
+                local x, z = math.floor(P.pos.x), math.floor(P.pos.z) - 3
+                local y = W.surface(x, z) + 1
+                for dx = -4, 4 do
+                    for dy = 0, 3 do Act.setBlock(x + dx, y + dy, z, 0); Act.setBlock(x + dx, y + dy, z - 1, B.byName.stone.id) end
+                end
+                -- Клик по южной грани стены (сторона 3): люк в клетке перед ней.
+                Act.setBlock(x - 2, y, z, Tr.id(), Tr.metaFor(x - 2, y, z, 3, 0.2))
+                Act.setBlock(x, y + 1, z, Tr.id(), Tr.metaFor(x, y + 1, z, 3, 0.8))
+                Act.setBlock(x + 2, y, z, Tr.id(), Tr.metaFor(x + 2, y, z, 3, 0.2) | 4)
+                Inv.add(Tr.id(), 2)
+                Inv.add(B.byName.wooden_door.id, 3)
             end
             -- Для снимков: осколки разрушаемого блока перед игроком (каждые 0.4 с).
             if LaunchFlag("digdemo") then

@@ -312,11 +312,11 @@ local function doorLT(v)
     local s, l = cellLight(v)
     return {s, l, s, l, s, l, s, l}
 end
-local function emitDoor(b, x, y, z, full, tiles, override, lightOf)
-    local D = require "door"
-    local bx = D.box(full)
+-- Коробка блока шестью гранями, как RenderBlocks.renderStandardBlock /
+-- renderFace*: развёртка по границам коробки. pick(side) → плитка и
+-- зеркалить ли её (IconFlipped); lightOf(side, на_границе) → свет грани.
+local function emitBox(b, x, y, z, bx, pick, lightOf)
     local x0, y0, z0, x1, y1, z1 = bx[1], bx[2], bx[3], bx[4], bx[5], bx[6]
-    local top = (full & 8) ~= 0
     local P = 16
     -- Грань: углы (в долях клетки) и (U, V) оригинала в пикселях 0..16.
     local faces = {
@@ -335,14 +335,7 @@ local function emitDoor(b, x, y, z, full, tiles, override, lightOf)
     }
     for side = 0, 5 do
         local f = faces[side]
-        local tile, flip
-        if override then
-            tile, flip = override, false
-        elseif side <= 1 then
-            tile, flip = tiles.side, false
-        else
-            tile, flip = top and tiles.upper or tiles.side, D.flipped(full, side)
-        end
+        local tile, flip = pick(side)
         local uvs = {}
         for k = 1, 4 do
             local u, vv = f[3][k][1], f[3][k][2]
@@ -352,7 +345,23 @@ local function emitDoor(b, x, y, z, full, tiles, override, lightOf)
         addQuad(b, x, y, z, f[2], f[1], uvs, lightOf(side, f[4]), tile, false)
     end
 end
+
+local function emitDoor(b, x, y, z, full, tiles, override, lightOf)
+    local D = require "door"
+    local top = (full & 8) ~= 0
+    emitBox(b, x, y, z, D.box(full), function(side)
+        if override then return override, false end
+        if side <= 1 then return tiles.side, false end
+        return top and tiles.upper or tiles.side, D.flipped(full, side)
+    end, lightOf)
+end
 M.emitDoor = emitDoor
+
+-- Люк (BlockTrapDoor): та же стандартная коробка по метаданным (trapdoor.lua),
+-- одна картинка на все грани.
+local function emitTrapdoor(b, x, y, z, meta, tile, lightOf)
+    emitBox(b, x, y, z, require("trapdoor").box(meta), function() return tile, false end, lightOf)
+end
 
 -- Лестница — RenderBlocks.renderBlockLadder 1.7.10: одна плоскость
 -- картинки в 0.05 от опоры (f4), во всю клетку, лицом от стены; свет — своей
@@ -401,6 +410,11 @@ function M.build(cx, sy, cz)
                         emitTorch(solid, x, y, z, v, tiles.side)
                     elseif kind == 7 then
                         emitLadder(solid, x, y, z, v, tiles.side)
+                    elseif kind == 8 then
+                        local wi = rowBase + x + 1
+                        emitTrapdoor(solid, x, y, z, (v >> W.META_SHIFT) & 15, tiles.side, function(side, border)
+                            return doorLT(border and win[wi + FACES[DOOR_FACE[side]].dn] or v)
+                        end)
                     elseif kind == 6 then
                         -- Дверь рисуется, только если на месте вторая половина.
                         local wi = rowBase + x + 1
@@ -476,6 +490,8 @@ function M.single(id, meta, tile, wx, wy, wz)
         emitTorch(b, 0, 0, 0, v, tile)
     elseif kind == 7 then
         emitLadder(b, 0, 0, 0, v, tile, ZERO_LT)
+    elseif kind == 8 then
+        emitTrapdoor(b, 0, 0, 0, meta or 0, tile, function() return ZERO_LT end)
     elseif kind == 6 then
         local full = wx and require("door").fullMeta(wx, wy, wz) or (meta or 0)
         emitDoor(b, 0, 0, 0, full, nil, tile, function() return ZERO_LT end)
@@ -504,5 +520,6 @@ end
 -- Грани с развёрткой — для всех, кто строит кубик блока вне мира (выпавший
 -- блок, крошки): та же раскладка UV, что у граней участка.
 M.FACES = FACES
+M.faceUV = faceUV
 
 return M

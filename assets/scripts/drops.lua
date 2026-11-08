@@ -31,15 +31,20 @@ local M = require "mesher"
 -- ложились поперёк коры).
 local function cubeMesh(id, size, sub, su, sv)
     local tiles = A.blockTiles[id]
+    -- Коробка предмета (люк — плита посередине по высоте); без неё — куб.
+    local box = B.byId[id] and B.byId[id].itemBox or {0, 0, 0, 1, 1, 1}
     local pos, nrm, uv, uv2, idx = {}, {}, {}, {}, {}
     local nv = 0
-    for _, f in ipairs(M.FACES) do
+    for fi, f in ipairs(M.FACES) do
         local tu, tv, ts = A.tileOrigin(tiles[f.tile])
         for k = 1, 4 do
-            local p = f.c[k]
+            local c = f.c[k]
+            local p = {}
+            for a = 1, 3 do p[a] = box[a] + c[a] * (box[a + 3] - box[a]) end
             for a = 1, 3 do pos[#pos + 1] = (p[a] - 0.5) * size end
             for a = 1, 3 do nrm[#nrm + 1] = f.n[a] end
-            local q = f.uv[k]
+            local qu, qv = M.faceUV(fi, p)
+            local q = {qu, qv}
             uv[#uv + 1] = tu + (su + q[1] * sub) * ts
             uv[#uv + 1] = tv + (sv + q[2] * sub) * ts
             uv2[#uv2 + 1] = 15; uv2[#uv2 + 1] = 0

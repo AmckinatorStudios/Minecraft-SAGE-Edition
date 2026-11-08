@@ -590,6 +590,27 @@ local function spread(set, right)
     if h.n <= 0 then Inv.held = nil end
 end
 
+-- Что окажется в ячейках и в руке, если отпустить кнопку сейчас: тот же
+-- расчёт, что у spread, но без изменений (GuiContainer.func_146980_g —
+-- предпросмотр перетаскивания: ячейки показывают будущие стопки, рука —
+-- остаток, пока кнопка ещё зажата). Возвращает {[ячейка] = стопка}, остаток.
+local function spreadPreview(set, right)
+    local h = Inv.held
+    local out = {}
+    if not h then return out, 0 end
+    local left = h.n
+    local each = right and 1 or math.floor(h.n / #set)
+    for _, r in ipairs(set) do
+        local s = store(r.kind)[gridIndex(r)]
+        local have = s and s.n or 0
+        local k = math.max(0, math.min(each, stackMax(h.id) - have, left))
+        out[r] = {id = h.id, n = have + k, wear = h.wear}
+        left = left - k
+    end
+    return out, left
+end
+Inv.spreadPreview = spreadPreview
+
 -- Собрать в руку такие же предметы (рюкзак, сетка крафта), пока есть место.
 local function gather()
     local h = Inv.held
@@ -729,7 +750,15 @@ function Inv.update(dt)
         local ctrl = Input.is_key_down("LeftControl") or Input.is_key_down("Control")
         dropFromSlot(region, ctrl)
     end
-    U.setSlot(heldSlot, Inv.held)
+    -- Перетаскивание идёт: ячейки показывают будущие стопки сразу, как курсор
+    -- зашёл в них, рука — остаток; сами стопки меняются только при отпускании.
+    if drag and Inv.held then
+        local preview, left = spreadPreview(drag.set, drag.right)
+        for r, st in pairs(preview) do U.setSlot(r, st) end
+        U.setSlot(heldSlot, left > 0 and {id = Inv.held.id, n = left, wear = Inv.held.wear} or nil)
+    else
+        U.setSlot(heldSlot, Inv.held)
+    end
     heldSlot.bg.place(cursor.x - 8 * U.WIN, cursor.y - 8 * U.WIN)
 end
 
@@ -746,10 +775,16 @@ function Inv.selfCheck()
     Inv.held = {id = stone, n = 64}
     spread({reg(10), reg(11), reg(12)}, false)
     local even = Inv.slots[10].n == 21 and Inv.slots[12].n == 21 and Inv.held and Inv.held.n == 1
-    -- ПКМ: по одному в каждую.
+    -- ПКМ: по одному в каждую. Предпросмотр во время перетаскивания —
+    -- ровно то, что получится после отпускания, и ничего не меняет.
     Inv.held = {id = stone, n = 5}
-    spread({reg(13), reg(14)}, true)
-    local ones = Inv.slots[13].n == 1 and Inv.held.n == 3
+    Inv.slots[14] = {id = stone, n = 2}
+    local set = {reg(13), reg(14)}
+    local pv, left = spreadPreview(set, true)
+    local untouched = Inv.slots[13] == nil and Inv.slots[14].n == 2 and Inv.held.n == 5
+    spread(set, true)
+    local ones = Inv.slots[13].n == 1 and Inv.slots[14].n == 3 and Inv.held.n == 3
+    local preview = untouched and pv[set[1]].n == 1 and pv[set[2]].n == 3 and left == 3
     -- В ячейку с другим предметом перетаскивать нельзя.
     Inv.slots[15] = {id = B.byName.dirt.id, n = 1}
     local blocked = not canDragInto(reg(15)) and canDragInto(reg(16))
@@ -764,10 +799,10 @@ function Inv.selfCheck()
     dropFromSlot(reg(20), true)
     local q2 = Inv.slots[20] == nil and thrown == 10
     Inv.slots, Inv.held, D.throwFromPlayer = savedSlots, savedHeld, savedThrow
-    local ok = even and ones and blocked and gathered and q1 and q2
-    return string.format("INVCHECK: %s поровну=%s по_одному=%s чужая=%s сбор=%s Q=%s CtrlQ=%s",
-        ok and "PASS" or "FAIL", tostring(even), tostring(ones), tostring(blocked), tostring(gathered),
-        tostring(q1), tostring(q2))
+    local ok = even and ones and preview and blocked and gathered and q1 and q2
+    return string.format("INVCHECK: %s поровну=%s по_одному=%s предпросмотр=%s чужая=%s сбор=%s Q=%s CtrlQ=%s",
+        ok and "PASS" or "FAIL", tostring(even), tostring(ones), tostring(preview), tostring(blocked),
+        tostring(gathered), tostring(q1), tostring(q2))
 end
 
 return Inv

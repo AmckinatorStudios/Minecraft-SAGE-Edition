@@ -71,7 +71,8 @@ end
 function L.selfCheck()
     local Act = require "interact"
     local set = Act.setBlock
-    local x, z = 80, 80
+    local Pn = require("player").pos
+    local x, z = math.floor(Pn.x) - 6, math.floor(Pn.z) + 6
     local y = W.surface(x, z) + 1
     for yy = y, y + 2 do for dx = -1, 1 do for dz = -1, 1 do W.setId(x + dx, yy, z + dz, 0) end end end
     set(x, y, z - 1, B.byName.stone.id)                  -- стена с севера (−Z)

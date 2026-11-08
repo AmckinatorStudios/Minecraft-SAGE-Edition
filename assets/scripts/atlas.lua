@@ -82,17 +82,23 @@ end
 -- Выборка картинки грани для иконки: u, v — доли 0..1 (v снизу вверх).
 local function sample(name, tint, u, v)
     local src = sources[name]
-    local px = math.min(TILE - 1, math.floor(u * TILE))
-    local py = math.min(TILE - 1, math.floor(v * TILE))
-    local scale = src.width // TILE
-    local c = src.get(px * scale, src.height - TILE + py * scale)
+    -- Кадр — верхний квадрат w×w картинки любого размера (16 у набора 1.7.10,
+    -- 32 у прежнего): раньше шаг считался от 32, и картинка 16×16 давала
+    -- пустую иконку.
+    local w = src.width
+    local px = math.min(w - 1, math.floor(u * w))
+    local py = math.min(w - 1, math.floor(v * w))
+    local c = src.get(px, src.height - w + py)
     if tint then return c.x * tint[1], c.y * tint[2], c.z * tint[3], c.w end
     return c.x, c.y, c.z, c.w
 end
 
 -- Изометрическая иконка куба: верх, правый бок (+X) и левый (+Z), с тем же
 -- затемнением сторон, что и в мире (шейдер участка).
-local function cubeIcon(icons, slot, faces)
+-- box — коробка предмета (setBlockBoundsForItemRender: люк — плита по
+-- высоте 0.406..0.594); без неё — полный куб.
+local function cubeIcon(icons, slot, faces, box)
+    local by0, by1 = box and box[2] or 0, box and box[5] or 1
     local S = A.ICON
     local ox, oy = (slot % A.ICON_COLS) * S, (slot // A.ICON_COLS) * S
     local s = S * 0.47
@@ -104,7 +110,8 @@ local function cubeIcon(icons, slot, faces)
             local a = (fx - cxp) / k
             local r, g, b, al, shade = 0, 0, 0, 0, 1
             -- Верх: Y = 1.
-            local bsum = 2 - (fy - base - s) / (0.5 * s)
+            -- Верх коробки ниже верха куба на (1 − by1)·s пикселей.
+            local bsum = 2 - (fy + (1 - by1) * s - base - s) / (0.5 * s)
             local X, Z = (a + bsum) / 2, (bsum - a) / 2
             if X >= 0 and X <= 1 and Z >= 0 and Z <= 1 then
                 r, g, b, al = sample(faces.top[1], faces.top[2], X, 1 - Z)
@@ -119,7 +126,7 @@ local function cubeIcon(icons, slot, faces)
                     Y = (fy - base - (1 - x) * 0.5 * s) / s
                     u, face, shade = x, faces.left, 0.8
                 end
-                if Y >= 0 and Y <= 1 and u >= 0 and u <= 1 then
+                if Y >= by0 and Y <= by1 and u >= 0 and u <= 1 then
                     r, g, b, al = sample(face[1], face[2], u, Y)
                 end
             end
@@ -175,7 +182,7 @@ function A.build()
         if d.draw == "cross" or d.draw == "torch" or d.draw == "ladder" then
             flatIcon(icons, slot, sources[faceSrc.side[1]], faceSrc.side[2])
         else
-            cubeIcon(icons, slot, {top = faceSrc.top, right = faceSrc.side, left = faceSrc.front})
+            cubeIcon(icons, slot, {top = faceSrc.top, right = faceSrc.side, left = faceSrc.front}, d.itemBox)
         end
         slot = slot + 1
     end

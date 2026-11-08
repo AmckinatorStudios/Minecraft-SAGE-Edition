@@ -195,7 +195,8 @@ end
 function D.selfCheck()
     local Act = require "interact"
     local set = Act.setBlock
-    local x, z = 70, 70
+    local Pn = require("player").pos
+    local x, z = math.floor(Pn.x) + 6, math.floor(Pn.z) + 6
     local y = W.surface(x, z) + 1
     for yy = y, y + 3 do for dx = -2, 2 do for dz = -2, 2 do W.setId(x + dx, yy, z + dz, 0) end end end
     for dx = -2, 2 do for dz = -2, 2 do set(x + dx, y - 1, z + dz, B.byName.stone.id) end end
@@ -221,10 +222,30 @@ function D.selfCheck()
     local bx, by, bz = D.onBreak(set, x, y + 1, z, W.meta(x, y + 1, z))
     set(x, y + 1, z, 0)
     local brokeOk = W.get(x, y, z) == 0 and by == y and bx == x and bz == z
-    local ok = facingOk and placed and closedOk and openOk and hingeOk and brokeOk
-    return string.format("DOORCHECK: %s направление=%s поставлена=%s закрыта=%s открыта=%s петли=%s поломка=%s",
+    -- Сквозь настоящий путь ПКМ (Act.update): игрок с дверью в руке смотрит
+    -- вниз на камень — дверь встаёт двумя половинами, предмет тратится.
+    local P = require "player"
+    local Inv = require "inventory"
+    local save = {x = P.pos.x, y = P.pos.y, z = P.pos.z, yaw = P.yaw, pitch = P.pitch,
+                  slot = Inv.slots[Inv.selected]}
+    local tx, tz = x - 1, z + 1
+    set(tx, y, tz, 0); set(tx, y + 1, tz, 0)
+    -- Глаз на 1.62 выше ног, взгляд на 60° вниз: луч падает на верх камня
+    -- в 1.62·tg30° ≈ 0.94 блока впереди — ровно в клетку (tx, tz).
+    P.pos.x, P.pos.y, P.pos.z = tx + 0.5, y + 0.0, tz + 0.5 + 0.94
+    P.yaw, P.pitch = 0, -60
+    Inv.slots[Inv.selected] = {id = B.byName.wooden_door.id, n = 2}
+    Act.update(0.05, {place = true})
+    local viaClick = W.get(tx, y, tz) == doorId() and W.get(tx, y + 1, tz) == doorId()
+        and Inv.slots[Inv.selected] and Inv.slots[Inv.selected].n == 1
+    set(tx, y + 1, tz, 0); set(tx, y, tz, 0)
+    P.pos.x, P.pos.y, P.pos.z, P.yaw, P.pitch = save.x, save.y, save.z, save.yaw, save.pitch
+    Inv.slots[Inv.selected] = save.slot
+    Act.update(0.05, {place = false})
+    local ok = facingOk and placed and closedOk and openOk and hingeOk and brokeOk and viaClick
+    return string.format("DOORCHECK: %s направление=%s поставлена=%s закрыта=%s открыта=%s петли=%s поломка=%s пкм=%s",
         ok and "PASS" or "FAIL", tostring(facingOk), tostring(placed), tostring(closedOk), tostring(openOk),
-        tostring(hingeOk), tostring(brokeOk))
+        tostring(hingeOk), tostring(brokeOk), tostring(viaClick))
 end
 
 return D
