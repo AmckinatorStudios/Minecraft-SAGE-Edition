@@ -216,13 +216,13 @@ local function breakBlock(t)
         -- Листва и трава: свои шансы (саженцы, яблоки, семена; ножницами — блок).
         Plants.spill(special, t.x, t.y, t.z)
     elseif ok then
-        local drop = B.dropOf(id)
+        local drop = Act.harvestDrop(id, math.random())
         if drop then Drops.spawn(drop, B.dropCount(id), dropX + 0.5, dropY + 0.5, dropZ + 0.5) end
         local xp = B.xpOf(id)
         if xp > 0 then require("hud").addXp(xp) end
-        local d = B.byId[id]
-        if d.flint and math.random() < d.flint then Drops.spawn(B.byName.flint.id, 1, t.x + 0.5, t.y + 0.5, t.z + 0.5) end
     end
+    -- Усталость за поломку блока (Block.harvestBlock: 0.025).
+    require("hud").addExhaustion(0.025)
     -- 64 осколка сеткой 4×4×4 (addBlockDestroyEffects) — из метаданных до поломки.
     require("particles").destroy(id, t.meta or 0, t.x, t.y, t.z)
     Inv.wearTool()
@@ -321,6 +321,15 @@ local function place(t)
         settle(x, y - 1, z)
         Torch.checkAround(x, y, z)
     end
+end
+
+-- Что роняет блок id при броске roll (0..1). Гравий (BlockGravel.
+-- getItemDropped): с шансом 1/10 кремень ВМЕСТО себя, а не вдобавок —
+-- иначе каждый блок возвращал и гравий, и кремень (бесконечный кремень).
+function Act.harvestDrop(id, roll)
+    local d = B.byId[id]
+    if d and d.flint and roll < d.flint then return B.byName.flint.id end
+    return B.dropOf(id)
 end
 
 -- ПКМ с предметом — «использовать» (еда, лук, карта), а не ставить блок.
@@ -471,7 +480,7 @@ function Act.startUse(stack, d)
         Anim.startUse(stack.id, "eat", 32, function()
             -- onItemUseFinish: ещё один звук еды, затем onEaten — отрыжка.
             useSound("eat")
-            Hud.eat(d.food)
+            Hud.eat(d.food, d.sat)
             Inv.useOne()
             local x, y, z = require("player").eye()
             Snd.burp(x, y, z)

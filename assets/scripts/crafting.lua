@@ -62,6 +62,7 @@ end
 -- Рецепты 1.7.10 для предметов с анимацией использования.
 shaped("paper", 3, {"###"}, {["#"] = "reeds"})
 shaped("compass", 1, {" I ", "IRI", " I "}, {I = "iron_ingot", R = "redstone"})
+shaped("clock", 1, {" G ", "GRG", " G "}, {G = "gold_ingot", R = "redstone"})
 shaped("empty_map", 1, {"PPP", "PCP", "PPP"}, {P = "paper", C = "compass"})
 shaped("glass_bottle", 3, {"G G", " G "}, {G = "glass"})
 shaped("bow", 1, {" SX", "S X", " SX"}, {S = "stick", X = "string"})

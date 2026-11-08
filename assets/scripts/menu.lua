@@ -512,6 +512,15 @@ local function buildOptions()
         Avatar.prepareSkins()
         skin.set(skinText())
     end
+    -- Invert Mouse: OFF/ON (Controls → invertMouse): ось Y мыши наоборот.
+    local function invertText() return "Invert Mouse: " .. (o.invertY and "ON" or "OFF") end
+    local invert
+    invert = s.button(invertText(), function()
+        o.invertY = not o.invertY
+        invert.set(invertText())
+        apply()
+        saveOptions()
+    end)
     -- Music & Sounds… (GuiOptions → GuiScreenOptionsSounds): все категории.
     local soundsBtn = s.button("Music & Sounds...", function() saveOptions(); Menu.go("sounds") end)
     local done = s.button("Done", function()
@@ -535,6 +544,8 @@ local function buildOptions()
         full.place(W / 2 - 155 + (k % 2) * 160, H / 6 - 12 + 24 * (k // 2), 150)
         k = k + 1
         soundsBtn.place(W / 2 - 155 + (k % 2) * 160, H / 6 - 12 + 24 * (k // 2), 150)
+        k = k + 1
+        invert.place(W / 2 - 155 + (k % 2) * 160, H / 6 - 12 + 24 * (k // 2), 150)
         done.place(W / 2 - 100, H / 6 + 168, 200)
     end
     function s.tick() for _, sl in ipairs(sliders) do sl.update() end end

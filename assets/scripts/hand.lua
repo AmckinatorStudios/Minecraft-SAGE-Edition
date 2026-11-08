@@ -92,18 +92,26 @@ Hand.armMesh = armMesh
 -- пикселю — бока там, где сосед прозрачный. x = 0 — ПРАВЫЙ край иконки,
 -- y = 0 — нижний (так рисует оригинал, и его повороты рассчитаны на это).
 local flatCache = {}
-function Hand.flatItemMesh(id)
-    if flatCache[id] then return flatCache[id] end
-    local ix, iy, w, h = Atl.iconRect(id)
+function Hand.flatItemMesh(id, frame)
+    local cacheKey = id * 1000 + (frame or 0)
+    if flatCache[cacheKey] then return flatCache[cacheKey] end
+    local ix, iy, w, h = Atl.iconRect(id, frame)
     local canvas = Atl.iconCanvas
     local W_, H_ = Atl.ICON * Atl.ICON_COLS, Atl.iconSheetHeight
     local T = 1 / 16
+    -- Сетка — пиксели картинки предмета (16×16), а не ячейки листа (128):
+    -- бока на каждый пиксель ячейки давали меш в десятки раз тяжелее, а кадр
+    -- компаса или часов строит его заново.
+    local cell = w // 16
     local solid = {}
-    for r = 0, h - 1 do
-        for c = 0, w - 1 do
-            if canvas.get(ix + c, H_ - 1 - (iy + r)).w >= 0.5 then solid[r * w + c] = true end
+    for r = 0, 15 do
+        for c = 0, 15 do
+            local px, py = ix + c * cell + cell // 2, iy + r * cell + cell // 2
+            if canvas.get(px, H_ - 1 - py).w >= 0.5 then solid[r * 16 + c] = true end
         end
     end
+    local iw, ih = w, h
+    w, h = 16, 16
     local function at(c, r) return c >= 0 and r >= 0 and c < w and r < h and solid[r * w + c] end
     local pos, nrm, uv, uv2, idx = {}, {}, {}, {}, {}
     local function quad(p, n, t)
@@ -117,8 +125,8 @@ function Hand.flatItemMesh(id)
         for _, i in ipairs({1, 2, 3, 1, 3, 4}) do idx[#idx + 1] = base + i end
     end
     -- Лицевая и тыльная стороны — целым квадратом (прозрачное отсекает шейдер).
-    local u0, u1 = ix / W_, (ix + w) / W_
-    local vTop, vBot = 1 - iy / H_, 1 - (iy + h) / H_
+    local u0, u1 = ix / W_, (ix + iw) / W_
+    local vTop, vBot = 1 - iy / H_, 1 - (iy + ih) / H_
     quad({{0, 0, 0}, {1, 0, 0}, {1, 1, 0}, {0, 1, 0}}, {0, 0, 1}, {{u1, vBot}, {u0, vBot}, {u0, vTop}, {u1, vTop}})
     quad({{0, 1, -T}, {1, 1, -T}, {1, 0, -T}, {0, 0, -T}}, {0, 0, -1}, {{u1, vTop}, {u0, vTop}, {u0, vBot}, {u1, vBot}})
     -- Бока по пикселям.
@@ -127,8 +135,8 @@ function Hand.flatItemMesh(id)
             if solid[r * w + c] then
                 local x0, x1 = (w - c - 1) / w, (w - c) / w
                 local y0, y1 = (h - r - 1) / h, (h - r) / h
-                local pu0, pu1 = (ix + c) / W_, (ix + c + 1) / W_
-                local pv1, pv0 = 1 - (iy + r) / H_, 1 - (iy + r + 1) / H_
+                local pu0, pu1 = (ix + c * cell) / W_, (ix + (c + 1) * cell) / W_
+                local pv1, pv0 = 1 - (iy + r * cell) / H_, 1 - (iy + (r + 1) * cell) / H_
                 local t = {{pu0, pv0}, {pu1, pv0}, {pu1, pv1}, {pu0, pv1}}
                 if not at(c - 1, r) then quad({{x1, y0, 0}, {x1, y0, -T}, {x1, y1, -T}, {x1, y1, 0}}, {1, 0, 0}, t) end
                 if not at(c + 1, r) then quad({{x0, y0, -T}, {x0, y0, 0}, {x0, y1, 0}, {x0, y1, -T}}, {-1, 0, 0}, t) end
@@ -139,7 +147,9 @@ function Hand.flatItemMesh(id)
     end
     local m = mesh()
     m.arrays{position = pos, normal = nrm, uv = uv, uv2 = uv2, index = idx}
-    flatCache[id] = m
+    -- Пока лист иконок дорисовывается порциями, меш не запоминается: иначе
+    -- осталась бы пустая модель предмета.
+    if Atl.iconsReady then flatCache[cacheKey] = m end
     return m
 end
 
@@ -158,9 +168,15 @@ function Hand.setItemMesh(obj, id)
         cubeCache[id].apply(obj)
         SetMaterial(obj, HAND_BLOCK)
     else
-        Hand.flatItemMesh(id).apply(obj)
+        Hand.flatItemMesh(id, require("needle").frame(id)).apply(obj)
         SetMaterial(obj, HAND_ITEM)
     end
+end
+
+-- Ключ меша предмета: номер и кадр стрелки (компас, часы) — меш меняется,
+-- когда стрелка перешла на другой кадр.
+function Hand.meshKey(id)
+    return id * 1000 + (require("needle").frame(id) or 0)
 end
 
 -- Как ItemRenderer.renderItem ставит предмет (общая часть первого и третьего
@@ -313,8 +329,8 @@ function Hand.update(dt, visible, P, heldId)
 
     -- Предмет в руке (руки не видно).
     hide(arms[1]); hide(arms[2])
-    if itemKey ~= shown then
-        itemKey = shown
+    if itemKey ~= Hand.meshKey(shown) then
+        itemKey = Hand.meshKey(shown)
         Hand.setItemMesh(item, Hand.meshIdOf(shown))
         item:GetRenderer().Layer = Hand.LAYER
     end
@@ -328,7 +344,7 @@ function Hand.update(dt, visible, P, heldId)
             want = j >= 18 and B.byName.bow_pulling_2.id or (j > 13 and B.byName.bow_pulling_1.id
                 or (j > 0 and B.byName.bow_pulling_0.id or shown))
         end
-        if itemKey ~= want then itemKey = want; Hand.setItemMesh(item, want); item:GetRenderer().Layer = Hand.LAYER end
+        if itemKey ~= Hand.meshKey(want) then itemKey = Hand.meshKey(want); Hand.setItemMesh(item, want); item:GetRenderer().Layer = Hand.LAYER end
     end
 
     local m = M.copy(base)

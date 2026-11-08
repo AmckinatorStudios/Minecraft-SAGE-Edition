@@ -42,7 +42,8 @@ local worldOpen = false        -- мир выбран и строится/идё
 local quitting = nil           -- «Save and Quit to Title» по шагам
 local hidePlayerHand = false
 local thirdPerson = 0          -- 0 — глазами, 1 — сзади, 2 — спереди
-local MOUSE_SENS = 0.12
+local MOUSE_SENS = 0.15
+local MOUSE_INVERT = false
 
 local function bindControls()
     BindAction("Forward",   {"W", "UP"})
@@ -79,10 +80,35 @@ local function readInput()
     inp.sneak = IsActionDown("Sneak")
     inp.descend = inp.sneak
     inp.sprintPressed = WasActionPressed("Sprint")
+    inp.sprintDown = IsActionDown("Sprint")
+    inp.forwardPressed = WasActionPressed("Forward")
     -- Проверка снимками: присед и ходьба без рук.
     if LaunchFlag("sneak") then inp.sneak = true; inp.descend = true end
     if LaunchFlag("walk") then inp.forward = 1 end
     return inp
+end
+
+-- Поле зрения (EntityRenderer.updateFovModifierHand / getFOVModifier):
+-- множитель тянется к цели за тик наполовину; цель — ×1.1 в полёте и
+-- (скорость/шаг + 1)/2 — при беге (×1.3 скорости) это ×1.15; в воде ×60/70.
+local fovMod, fovAcc = 1, 0
+local function updateFov(dt)
+    local target = 1
+    if P.flying then target = target * 1.1 end
+    if P.sprinting then target = target * (1.3 + 1) / 2 end
+    fovAcc = fovAcc + dt
+    local n = 0
+    while fovAcc >= 0.05 and n < 5 do
+        fovAcc, n = fovAcc - 0.05, n + 1
+        fovMod = fovMod + (target - fovMod) * 0.5
+        fovMod = math.max(0.1, math.min(1.5, fovMod))
+    end
+    local c = cameraObj and cameraObj:GetCamera()
+    if c and not Pano.active then
+        local f = Menu.options.fov * fovMod
+        if P.headInWater then f = f * 60 / 70 end
+        c.Fov = f
+    end
 end
 
 local function placeCamera()
@@ -153,9 +179,12 @@ local function openWorld(w)
     C.radius = tonumber(LaunchArg("view") or "") or C.radius
 
     local sx, sy, sz = G.spawnPoint()
+    -- Компас смотрит на точку появления мира (World.getSpawnPoint).
+    require("needle").spawnX, require("needle").spawnZ = sx + 0.5, sz + 0.5
     if loaded and loaded.player then
         sx, sy, sz = loaded.player.x, loaded.player.y, loaded.player.z
         P.yaw, P.pitch = loaded.player.yaw or 0, loaded.player.pitch or 0
+        Hud.loadFood(loaded.player.food)
     end
     Sky.load(loaded)
     P.pos.x, P.pos.y, P.pos.z = sx, sy, sz
@@ -169,7 +198,8 @@ local function openWorld(w)
     -- Для проверки анимаций: меч, лук со стрелами, еда, вода, карта, блок.
     if LaunchFlag("animkit") then
         for _, k in ipairs({{"diamond_sword", 1}, {"bow", 1}, {"apple", 16}, {"potion", 1}, {"empty_map", 1},
-                            {"cobblestone", 64}, {"iron_pickaxe", 1}, {"stick", 16}, {"arrow", 64}}) do
+                            {"cobblestone", 64}, {"iron_pickaxe", 1}, {"stick", 16}, {"arrow", 64}, {"compass", 1},
+                            {"clock", 1}}) do
             Inv.add(B.byName[k[1]].id, k[2])
         end
     end
@@ -215,7 +245,11 @@ end
 function Menu.applyOptions()
     local o = Menu.options
     if not tonumber(LaunchArg("view") or "") then C.radius = o.render end
-    MOUSE_SENS = 0.24 * o.sensitivity + 0.01
+    -- Мышь (EntityRenderer.updateCameraAndRender): f = s·0.6 + 0.2,
+    -- градусов на пиксель — f³·8·0.15; ось Y — с переворотом по настройке.
+    local f = o.sensitivity * 0.6 + 0.2
+    MOUSE_SENS = f * f * f * 8 * 0.15
+    MOUSE_INVERT = o.invertY == true
     require("lightmap").gamma = o.gamma or 0
     require("shadows").fancy = o.fancy ~= false
     -- Громкость (SoundManager 1.7.10): звук × категория × общая, всё 0..1.
@@ -278,6 +312,8 @@ local function startGame()
                 function() return require("bounds").selfCheck() end,
                 function() if not A.iconsReady then return nil end return A.selfCheck() end,
                 function() return Menu.soundSelfCheck() end,
+                function() return require("needle").selfCheck() end,
+                function() return P.sprintSelfCheck() end,
                 function() return require("door").selfCheck() end,
                 function() return require("light").metaSelfCheck() end,
                 function() return require("ladder").selfCheck() end,
@@ -686,7 +722,7 @@ function OnUpdate(entity, dt)
     else
         inp = Auto.active and Auto.input(dt) or readInput()
         local look = GetMouseDelta()
-        if IsMouseCaptured() then P.look(look.x, look.y, MOUSE_SENS) end
+        if IsMouseCaptured() then P.look(look.x, MOUSE_INVERT and -look.y or look.y, MOUSE_SENS) end
         for i = 1, 9 do
             if WasActionPressed("Slot " .. i) then Inv.select(i) end
         end
@@ -732,6 +768,7 @@ function OnUpdate(entity, dt)
 
     if not Inv.screenOpen and not chatting then Act.update(dt, Auto.active and Auto.actions() or nil) end
     Drops.update(dt)
+    require("needle").update(dt, P)
     require("particles").update(dt)
     Fall.update(dt)
     Furn.update(dt)
@@ -746,6 +783,7 @@ function OnUpdate(entity, dt)
     Avatar.update(dt, P, thirdPerson ~= 0, heldId)
     Avatar.updatePreview(P, heldId)
     Hand.update(dt, thirdPerson == 0 and not hidePlayerHand, P, heldId)
+    updateFov(dt)
     placeCamera()
     Hud.update(dt)
     Inv.update(dt)

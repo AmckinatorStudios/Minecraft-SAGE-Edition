@@ -13,7 +13,11 @@ Hud.health = 20
 Hud.food = 20
 -- Голод выключен, пока в игре почти нечего есть: без полоски еды, сытость
 -- не тратится, здоровье восстанавливается само. Включить — true.
-Hud.HUNGER = false
+Hud.HUNGER = true
+-- FoodStats 1.7.10: сытость 0..20, насыщение (сначала тратится оно), усталость.
+Hud.saturation = 5
+Hud.exhaustion = 0
+local foodTimer = 0
 Hud.xp, Hud.level = 0, 0
 
 -- Сердца и еда — значки набора текстур (icons.png): пустая ячейка снизу и
@@ -68,11 +72,59 @@ function Hud.addXp(n)
     end
 end
 
--- Еда: восстанавливает сытость.
-function Hud.eat(n)
+-- Еда (FoodStats.addStats): сытость + n, насыщение + n·модификатор·2, но
+-- не больше сытости. Есть можно, только пока не сыт (canEat).
+function Hud.eat(n, satMod)
     if not Hud.HUNGER or Hud.food >= 20 then return false end
     Hud.food = math.min(20, Hud.food + n)
+    Hud.saturation = math.min(Hud.saturation + n * (satMod or 0.3) * 2, Hud.food)
     return true
+end
+
+-- Усталость (addExhaustion): бег 0.1 на блок, ходьба 0.01, прыжок 0.2,
+-- прыжок с разбега 0.8, удар 0.3, поломка блока 0.025; предел 40.
+function Hud.addExhaustion(x)
+    Hud.exhaustion = math.min(Hud.exhaustion + x, 40)
+end
+
+-- FoodStats.onUpdate — раз в игровой тик: усталость больше 4 съедает
+-- насыщение, а когда его нет — сытость; сытость от 18 лечит сердце раз в
+-- 80 тиков (ценой 3 усталости), на нуле — ранит раз в 80 тиков (Normal: до
+-- последнего сердца).
+function Hud.foodTick()
+    if Hud.exhaustion > 4 then
+        Hud.exhaustion = Hud.exhaustion - 4
+        if Hud.saturation > 0 then Hud.saturation = math.max(Hud.saturation - 1, 0)
+        else Hud.food = math.max(Hud.food - 1, 0) end
+    end
+    if Hud.food >= 18 and Hud.health > 0 and Hud.health < 20 then
+        foodTimer = foodTimer + 1
+        if foodTimer >= 80 then
+            Hud.health = Hud.health + 1
+            Hud.addExhaustion(3)
+            foodTimer = 0
+        end
+    elseif Hud.food <= 0 then
+        foodTimer = foodTimer + 1
+        if foodTimer >= 80 then
+            if Hud.health > 1 then Hud.damage(1) end
+            foodTimer = 0
+        end
+    else
+        foodTimer = 0
+    end
+end
+
+-- Сохранение и загрузка сытости.
+function Hud.saveFood()
+    return {health = Hud.health, food = Hud.food, saturation = Hud.saturation, exhaustion = Hud.exhaustion}
+end
+function Hud.loadFood(t)
+    if type(t) ~= "table" then return end
+    Hud.health = t.health or Hud.health
+    Hud.food = t.food or Hud.food
+    Hud.saturation = t.saturation or Hud.saturation
+    Hud.exhaustion = t.exhaustion or Hud.exhaustion
 end
 Hud.debug = false
 local fps, fpsTimer, frames = 0, 0, 0
@@ -143,18 +195,12 @@ function Hud.update(dt)
     end
     -- Сытость тратится на движение (бег и прыжки — больше), здоровье
     -- восстанавливается, только пока игрок сыт; голод отнимает здоровье.
-    local P = require "player"
-    if Hud.HUNGER then
-        local speed = math.sqrt(P.vel.x * P.vel.x + P.vel.z * P.vel.z)
-        Hud.exhaust = (Hud.exhaust or 0) + dt * (0.01 + speed * (P.sprinting and 0.03 or 0.012))
-        if Hud.exhaust >= 1 then Hud.exhaust = 0; Hud.food = math.max(0, Hud.food - 1) end
-    end
-    Hud.regen = (Hud.regen or 0) + dt
-    if Hud.regen > 4 then
-        Hud.regen = 0
-        local fed = not Hud.HUNGER or Hud.food >= 18
-        if fed and Hud.health < 20 then Hud.health = Hud.health + 1
-        elseif Hud.HUNGER and Hud.food == 0 and Hud.health > 1 then Hud.damage(1) end
+    -- Сытость и лечение — по игровым тикам (FoodStats.onUpdate).
+    Hud.foodAcc = (Hud.foodAcc or 0) + dt
+    local n = 0
+    while Hud.foodAcc >= 0.05 and n < 5 do
+        Hud.foodAcc, n = Hud.foodAcc - 0.05, n + 1
+        Hud.foodTick()
     end
     setRow(hearts, Hud.health, "heart")
     if Hud.HUNGER then setRow(foods, Hud.food, "food") end

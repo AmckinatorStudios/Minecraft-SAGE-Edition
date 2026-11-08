@@ -116,7 +116,9 @@ function U.setSlot(s, stack)
     local id = stack and stack.id or 0
     local n = stack and stack.n or 0
     local wear = stack and stack.wear or 0
-    local key = id * 1000 + n + wear * 1000000
+    -- Компас и часы — кадр по стрелке (needle.lua), меняется сам.
+    local frame = id ~= 0 and require("needle").frame(id) or nil
+    local key = id * 1000 + n + wear * 1000000 + (frame or 0) * 1e12
     if s.shown == key then return end
     s.shown = key
     -- Износ: у предмета uses — сколько раз он служит; maxDamage оригинала на
@@ -134,7 +136,7 @@ function U.setSlot(s, stack)
         s.count.text = ""
         return
     end
-    local x, y, w, h = A.iconRect(id)
+    local x, y, w, h = A.iconRect(id, frame)
     if x then s.icon.sprite = {x, y, w, h} end
     s.icon.color = Vec4(1, 1, 1, 1)
     s.count.text = n > 1 and tostring(n) or ""
