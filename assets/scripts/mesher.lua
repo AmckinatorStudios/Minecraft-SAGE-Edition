@@ -248,8 +248,17 @@ local function torchQuad(b, x, y, z, corners, uvs, out, lt, tile)
         corners = {corners[4], corners[3], corners[2], corners[1]}
         uvs = {uvs[4], uvs[3], uvs[2], uvs[1]}
     end
-    -- Нормаль — вверх: факел без оттенка стороны (renderBlockTorch — цвет 1).
-    addQuad(b, x, y, z, corners, {0, 1, 0}, uvs, lt, tile, false)
+    -- Нормаль — «вверх» (факел без оттенка стороны: renderBlockTorch — цвет 1),
+    -- но с долей настоящей нормали грани: движок разворачивает треугольник,
+    -- чья нормаль вершин смотрит против геометрической (Mesh FixWinding), и
+    -- наклонные плоскости настенного факела с чистым «вверх» вставали к
+    -- камере спиной — палочка пропадала. Длина ≥ 1: затенения угла нет.
+    -- Низ (грань вниз) так не согласовать — ему нормаль грани.
+    local len = math.sqrt(n[1] * n[1] + n[2] * n[2] + n[3] * n[3])
+    local f = {n[1] / len, n[2] / len, n[3] / len}
+    if f[1] * out[1] + f[2] * out[2] + f[3] * out[3] < 0 then f = {-f[1], -f[2], -f[3]} end
+    local nrm = f[2] < -0.5 and f or {f[1] * 0.6, 1.2 + f[2] * 0.6, f[3] * 0.6}
+    addQuad(b, x, y, z, corners, nrm, uvs, lt, tile, false)
 end
 
 local function emitTorch(b, x, y, z, v, tile)
