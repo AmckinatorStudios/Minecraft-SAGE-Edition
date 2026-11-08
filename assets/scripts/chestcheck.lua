@@ -193,8 +193,100 @@ function CC.selfCheck(P)
         and select(1, Snd.kindOf(B.byName.wheat_crop.id)) == "grass"
         and select(1, Snd.kindOf(B.byName.farmland.id)) == "gravel"
 
+    -- 12. Модель из GLTF: перед смотрит на сторону блока; половины пары —
+    -- левая и правая, вместе — коробка 30/16 без щели и наложения, шов — на
+    -- границе клеток, защёлка 2/16 посередине шва; крышка открывается вверх;
+    -- у половин нет граней шва; UV — внутри текстуры.
+    local Mat = require "mat"
+    local function bbox(kind, part, x, z, meta, a)
+        local d = CM.DATA[kind][part]
+        local m = CM.rootMatrix(x, 0, z, meta)
+        if part ~= "base" then m = Mat.mul(m, CM.lidMatrix(kind, a or 0)) end
+        local lo, hi = {1e9, 1e9, 1e9}, {-1e9, -1e9, -1e9}
+        for i = 1, #d.position, 3 do
+            local wx, wy, wz = Mat.apply(m, d.position[i], d.position[i + 1], d.position[i + 2])
+            local w = {wx, wy, wz}
+            for k = 1, 3 do lo[k] = math.min(lo[k], w[k]); hi[k] = math.max(hi[k], w[k]) end
+        end
+        return lo, hi
+    end
+    local function near(p, q) return math.abs(p - q) < 1e-4 end
+    local modelOk = true
+    local why = ""
+    -- Перед (защёлка) — на стороне meta: 2 → z = 0, 3 → z = 1, 4 → x = 0, 5 → x = 1.
+    for meta, want in pairs({[2] = {3, 0}, [3] = {3, 1}, [4] = {1, 0}, [5] = {1, 1}}) do
+        local lo, hi = bbox("single", "knob", 0, 0, meta)
+        local v = want[2] < 0.5 and lo[want[1]] or hi[want[1]]
+        if not near(v, want[2]) then modelOk = false; why = why .. " перед" .. meta end
+    end
+    for _, case in ipairs({{2, 1, 0}, {2, -1, 0}, {3, 1, 0}, {3, -1, 0}, {4, 0, 1}, {4, 0, -1}, {5, 0, 1}, {5, 0, -1}}) do
+        local meta, dx, dz = case[1], case[2], case[3]
+        local ka, kb = CM.halfFor(meta, dx, dz), CM.halfFor(meta, -dx, -dz)
+        if ka == kb then modelOk = false; why = why .. " половины" .. meta end
+        local axis = dx ~= 0 and 1 or 3
+        local la, ha = bbox(ka, "base", 0, 0, meta)
+        local lb, hb = bbox(kb, "base", dx, dz, meta)
+        local lo, hi = math.min(la[axis], lb[axis]), math.max(ha[axis], hb[axis])
+        local seam = (dx + dz) > 0 and 1 or 0
+        local inner = (dx + dz) > 0 and ha[axis] or la[axis]
+        local innerB = (dx + dz) > 0 and lb[axis] or hb[axis]
+        if not (near(hi - lo, 30 / 16) and near(inner, seam) and near(innerB, seam)) then
+            modelOk = false; why = why .. string.format(" шов%d(%d,%d)", meta, dx, dz)
+        end
+        local kla, kha = bbox(ka, "knob", 0, 0, meta)
+        local klb, khb = bbox(kb, "knob", dx, dz, meta)
+        local klo, khi = math.min(kla[axis], klb[axis]), math.max(kha[axis], khb[axis])
+        if not (near(khi - klo, 2 / 16) and near((klo + khi) / 2, seam)) then
+            modelOk = false; why = why .. " защёлка" .. meta
+        end
+    end
+    -- Крышка при a = 1 стоит вертикально: перед поднят над точкой вращения на 14/16.
+    local pv = CM.DATA.single.pivot
+    local lo1, hi1 = bbox("single", "lid", 0, 0, 2, 1)
+    local lo0, hi0 = bbox("single", "lid", 0, 0, 2, 0)
+    if not (near(hi1[2], pv[2] + 14 / 16) and near(hi0[2], 14 / 16) and near(lo1[3], 0.5 + pv[3]) and near(hi1[3], 0.5 + pv[3] + 5 / 16)) then
+        modelOk = false; why = why .. " крышка"
+    end
+    for _, kind in ipairs({"single", "left", "right"}) do
+        for _, part in ipairs({"base", "lid", "knob"}) do
+            local d = CM.DATA[kind][part]
+            for _, u in ipairs(d.uv) do if u < 0 or u > 1 then modelOk = false; why = why .. " uv" end end
+        end
+    end
+    if #CM.DATA.left.base.index ~= 30 or #CM.DATA.right.base.index ~= 30 or #CM.DATA.single.base.index ~= 36 then
+        modelOk = false; why = why .. " грани"
+    end
+    res.model = modelOk
+    res.why = why
+
+    -- 13. Ошибки состояния: сундук заменили другим блоком — содержимое высыпалось
+    -- один раз, новый сундук на том же месте — пустой; у половин пары угол
+    -- крышки общий; сторона пары — в правке участка (сохраняется).
+    local drops2 = {}
+    local saveSpawn2 = Drops.spawn
+    Drops.spawn = function(id, n) drops2[#drops2 + 1] = n end
+    place(10, 5, 0)
+    Ch.at(bx + 10, y, bz + 5).slots[3] = {id = cobble, n = 20}
+    Act.setBlock(bx + 10, y, bz + 5, B.byName.stone.id)
+    Act.setBlock(bx + 10, y, bz + 5, 0)
+    place(10, 5, 0)
+    Drops.spawn = saveSpawn2
+    local total = 0
+    for _, n in ipairs(drops2) do total = total + n end
+    local fresh = Ch.at(bx + 10, y, bz + 5).slots[3] == nil and total == 20
+    local h1, h2 = Ch.at(bx + 1, y, bz + 1), Ch.at(bx + 2, y, bz + 1)
+    h1.lid, h1.plid, h2.lid, h2.plid = 0.7, 0.6, 0, 0
+    local same = Ch.lidOf(h1, 0.5) == Ch.lidOf(h2, 0.5) and near(Ch.lidOf(h2, 0.5), 0.65)
+    local kinds = Ch.modelKind(h1) ~= Ch.modelKind(h2) and Ch.modelKind(Ch.at(bx + 10, y, bz + 5)) == "single"
+    h1.lid, h1.plid = 0, 0
+    local C0 = require "chunks"
+    local ed = C0.edits[W.ckey((bx + 2) // 16, (bz + 1) // 16)]
+    local ev = ed and ed[((bx + 2) & 15) + ((bz + 1) & 15) * 16 + y * 256]
+    local metaSaved = ev ~= nil and (ev >> 10) == W.meta(bx + 2, y, bz + 1) and (ev & 0x3FF) == Ch.ID
+    res.state = fresh and same and kinds and metaSaved
+
     -- Убрать за собой.
-    for _, k in ipairs({{1, 1}, {2, 1}, {3, 2}, {6, 1}, {6, 2}}) do
+    for _, k in ipairs({{1, 1}, {2, 1}, {3, 2}, {6, 1}, {6, 2}, {10, 5}}) do
         local cc = Ch.list[bx + k[1] .. "," .. y .. "," .. bz + k[2]]
         if cc then CM.destroy(cc.model) end
         Ch.list[bx + k[1] .. "," .. y .. "," .. bz + k[2]] = nil
@@ -207,13 +299,14 @@ function CC.selfCheck(P)
         local ed = C.edits[W.ckey(t[1] // 16, t[3] // 16)]
         if ed then ed[(t[1] & 15) + (t[3] & 15) * 16 + t[2] * 256] = nil end
     end
-    local keys = {"facing", "pairs", "view", "blocked", "lid", "shift", "hotbar", "spill", "save", "gui", "sounds"}
+    local keys = {"facing", "pairs", "view", "blocked", "lid", "shift", "hotbar", "spill", "save", "gui", "sounds", "model",
+                  "state"}
     local all, parts = true, {}
     for _, k in ipairs(keys) do
         if not res[k] then all = false end
         parts[#parts + 1] = k .. "=" .. tostring(res[k] and true or false)
     end
-    return "CHESTCHECK: " .. (all and "PASS " or "FAIL ") .. table.concat(parts, " ")
+    return "CHESTCHECK: " .. (all and "PASS " or "FAIL ") .. table.concat(parts, " ") .. res.why
 end
 
 return CC

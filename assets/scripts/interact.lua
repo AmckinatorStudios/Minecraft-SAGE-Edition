@@ -168,7 +168,10 @@ Act.settle = settle
 
 -- Поставить блок в мир: клетка, свет, пересборка, запись правки.
 function Act.setBlock(x, y, z, id, meta)
+    local prev = W.get(x, y, z)
     if not W.setId(x, y, z, id) then return false end
+    -- Сундук заменён чем угодно — содержимое высыпается (один раз: хранилище удаляется).
+    require("chest").replaced(x, y, z, prev, id)
     if meta then W.setMeta(x, y, z, meta) end
     C.recordEdit(x, y, z, id, meta)
     L.update(x, y, z)
@@ -186,8 +189,6 @@ local function breakBlock(t)
     Snd.dig(id, t.x, t.y, t.z)
     -- Содержимое печи — на землю, как в Minecraft.
     if require("furnace").isFurnace(id) then require("furnace").broken(t.x, t.y, t.z) end
-    -- Сундук (BlockChest.breakBlock): содержимое высыпается, хранилище удаляется.
-    if require("chest").isChest(id) then require("chest").broken(t.x, t.y, t.z) end
     Act.setBlock(t.x, t.y, t.z, 0)
     -- Дверь: вторая половина уходит следом, предмет — один, из нижней клетки.
     local dropX, dropY, dropZ = t.x, t.y, t.z
