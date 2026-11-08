@@ -157,6 +157,49 @@ local function flatIcon(icons, slot, src, tint, frame)
     end
 end
 
+-- Грани сундука для иконки, руки и выпавшего предмета: у 1.7.10 предмет
+-- рисуется моделью (ChestItemRenderHelper), а не кубом из плиток блока,
+-- поэтому плитки собираются из той же развёртки normal.png (64×64): верх —
+-- верх крышки, перед — перед крышки над передом корпуса и защёлка, бок —
+-- бок крышки над боком корпуса. Высота модели — 14/16 (коробка предмета),
+-- поэтому верхние два ряда плитки пусты. Ширина 14 растянута до 16.
+local CHEST_SRC = "assets/textures/entity/chest/normal.png"
+local function chestFaces()
+    local src = sources[CHEST_SRC] or texture.load(CHEST_SRC, "src_chest_normal")
+    sources[CHEST_SRC] = src
+    local function px(u, v) return src.get(u, src.height - 1 - v) end
+    local function face(name, fill)
+        local c = texture("chest_face_" .. name, 16, 16)
+        c.nearest = true
+        c.fill(function() return Vec4(0, 0, 0, 0) end)
+        for r = 0, 15 do
+            for x = 0, 15 do
+                local col = fill(x, r)
+                if col then c.set(x, 15 - r, col) end
+            end
+        end
+        sources["chest_" .. name] = c
+        return "chest_" .. name
+    end
+    local function sx(x) return math.floor(x * 14 / 16) end
+    -- Ряды 2..6 — бок крышки (v 14..18), 7..15 — корпус без верхнего ряда,
+    -- который крышка перекрывает (v 34..42).
+    local function side(u0, knob)
+        return function(x, r)
+            if knob and x >= 7 and x <= 8 and r >= 5 and r <= 8 then return px(1 + (x - 7), 1 + (r - 5)) end
+            if r >= 2 and r <= 6 then return px(u0 + sx(x), 14 + (r - 2)) end
+            if r >= 7 then return px(u0 + sx(x), 34 + (r - 7)) end
+            return nil
+        end
+    end
+    return {
+        top = face("top", function(x, r) return px(14 + sx(x), sx(r)) end),
+        bottom = face("bottom", function(x, r) return px(28 + sx(x), 19 + sx(r)) end),
+        front = face("front", side(14, true)),
+        side = face("side", side(28, false)),
+    }
+end
+
 function A.build()
     local atlas = texture(A.TEXTURE, SIZE, SIZE)
     atlas.nearest = true
@@ -175,7 +218,7 @@ function A.build()
     local slot = 0
     local jobs = {}
     for _, d in ipairs(B.list) do
-        local names = B.faceNames(d)
+        local names = d.chestFaces and chestFaces() or B.faceNames(d)
         local t = {}
         local faceSrc = {}
         for face, nm in pairs(names) do
@@ -185,6 +228,8 @@ function A.build()
         end
         -- Вторая картинка блока (верхняя половина двери).
         if d.upper then t.upper = tileFor(atlas, d.upper) end
+        -- Осколки сундука — доски (BlockChest.registerBlockIcons: planks_oak).
+        if d.chestFaces then t.particle = tileFor(atlas, d.tex) end
         -- Влажная грядка — вторая картинка верха; пшеница — картинка стадии.
         if d.wet then t.wet = tileFor(atlas, d.wet) end
         if d.stages then

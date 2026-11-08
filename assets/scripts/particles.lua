@@ -35,6 +35,7 @@ local curMeta = 0
 local function tileOfSide(id, side)
     local t = A.blockTiles[id]
     if not t then return nil end
+    if t.particle then return t.particle end
     if t.stages then return t.stages[math.min(7, curMeta) + 1] end
     if side == 1 and t.wet and curMeta > 0 then return t.wet end
     if side == 0 then return t.bottom or t.side end

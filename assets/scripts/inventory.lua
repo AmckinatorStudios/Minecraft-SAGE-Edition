@@ -224,7 +224,8 @@ end
 
 -- Надпись окна: x, y — левый верх в пикселях окна (x = nil — по центру
 -- окна, как у печи). Цвет 0x404040 без тени — так оригинал пишет заголовки.
-local function title(parent, text, x, y)
+local function title(parent, text, x, y, H)
+    H = H or LAYOUT.H
     local S = U.WIN
     local centered = x == nil
     local el = U.label(parent, "Window Title " .. text, "center", 0, 0, 10, 10, text, S / 2, centered)
@@ -235,7 +236,7 @@ local function title(parent, text, x, y)
     -- высотой строки 9.
     local w = centered and 176 or 120
     local left = centered and 0 or x
-    el.place((left + w / 2 - 88) * S, (y + 4.5 - 83) * S, w * S, 9 * S)
+    el.place((left + w / 2 - 88) * S, (y + 4.5 - H / 2) * S, w * S, 9 * S)
     return el
 end
 
@@ -322,6 +323,48 @@ local function buildWindow(which)
     windows[which] = list
 end
 
+-- Окно сундука (GuiChest 1.7.10): одна картинка generic_54.png (256×256) —
+-- верх окна с rows рядами (0, 0, 176, rows·18 + 17) и низ с рюкзаком
+-- (0, 126, 176, 96) под ним; высота окна 114 + rows·18 (168 и 222).
+-- Ячейки (ContainerChest): сундук — (8 + c·18, 18 + r·18), рюкзак —
+-- (8 + c·18, 103 + r·18 + i), панель — (8 + c·18, 161 + i), i = (rows − 4)·18.
+local CHEST_IMG = "assets/ui/generic_54.png"
+function Inv.chestHeight(rows) return 114 + rows * 18 end
+local function buildChestWindow(rows)
+    local S = U.WIN
+    local which = "chest" .. rows
+    local H = Inv.chestHeight(rows)
+    local topH = rows * 18 + 17
+    local win = ui.image{parent = screenRoot, name = "Window Image " .. which, anchor = "center", x = 0,
+                         y = (-H / 2 + topH / 2) * S, w = 176 * S, h = topH * S, image = CHEST_IMG}
+    win.sprite = {0, 0, 176, topH}
+    local win2 = ui.image{parent = screenRoot, name = "Window Image " .. which .. " Inventory", anchor = "center",
+                          x = 0, y = (-H / 2 + topH + 48) * S, w = 176 * S, h = 96 * S, image = CHEST_IMG}
+    win2.sprite = {0, 126, 176, 96}
+    local list = {win = win, win2 = win2, slots = {}, H = H, rows = rows}
+    local function slot(kind, index, x, y)
+        local cx, cy = (x + 8 - 88) * S, (y + 8 - H / 2) * S
+        local sl = U.slot(screenRoot, which .. " " .. kind .. " " .. index, "center", cx, cy, 16 * S)
+        sl.window = which
+        addRegion(kind, index, cx, cy, sl)
+        list.slots[#list.slots + 1] = sl
+        return sl
+    end
+    for r = 0, rows - 1 do
+        for c = 0, 8 do slot("chest", r * 9 + c + 1, 8 + c * 18, 18 + r * 18) end
+    end
+    local i = (rows - 4) * 18
+    for r = 0, 2 do
+        for c = 0, 8 do slot("inv", 10 + r * 9 + c, 8 + c * 18, 103 + r * 18 + i) end
+    end
+    for c = 0, 8 do slot("inv", c + 1, 8 + c * 18, 161 + i) end
+    -- Заголовки (drawGuiContainerForegroundLayer): имя хранилища в (8, 6),
+    -- «Inventory» в (8, ySize − 96 + 2), цвет 0x404040.
+    list.title = title(screenRoot, rows == 6 and "Large Chest" or "Chest", 8, 6, H)
+    list.title2 = title(screenRoot, "Inventory", 8, H - 96 + 2, H)
+    windows[which] = list
+end
+
 function Inv.buildScreen()
     screenRoot = U.screen("Backpack", 20)
     local dim = U.fill(screenRoot, "Backpack Dim", "top_left", 0, 0, 10, 10, Vec4(0, 0, 0, 0.55))
@@ -329,6 +372,8 @@ function Inv.buildScreen()
     buildWindow("inventory")
     buildWindow("table")
     buildWindow("furnace")
+    buildChestWindow(3)
+    buildChestWindow(6)
     -- Подсветка ячейки под курсором (GuiContainer): белый 0x80FFFFFF поверх
     -- внутренних 16×16 — и поверх предмета, рамка ячейки не меняется.
     highlight = U.fill(screenRoot, "Slot Highlight", "center", 0, 0, 16 * U.WIN, 16 * U.WIN,
@@ -342,12 +387,14 @@ local function showWindow(which)
     for name, w in pairs(windows) do
         local on = name == which
         U.show(w.win, on)
+        if w.win2 then U.show(w.win2, on) end
         for _, s in ipairs(w.slots) do U.show(s.bg, on) end
         if w.preview then U.show(w.preview, on) end
         if w.title then U.show(w.title, on) end
         if w.title2 then U.show(w.title2, on) end
     end
     Inv.window = which
+    Inv.winH = windows[which].H or LAYOUT.H
 end
 
 -- size: 2 — рюкзак, 3 — верстак. nil — закрыть/открыть рюкзак.
@@ -357,7 +404,10 @@ function Inv.toggleScreen(size)
     U.show(screenRoot, Inv.screenOpen)
     SetMouseCaptured(not Inv.screenOpen)
     input.ReleaseAll()
-    if Inv.screenOpen and Inv.furnace then
+    if Inv.screenOpen and Inv.chest then
+        Inv.gridSize = 2
+        showWindow("chest" .. Inv.chest.rows)
+    elseif Inv.screenOpen and Inv.furnace then
         Inv.gridSize = 2
         showWindow("furnace")
     elseif Inv.screenOpen then
@@ -374,6 +424,9 @@ function Inv.toggleScreen(size)
         giveBack(Inv.held)
         Inv.held = nil
         Inv.furnace = nil
+        -- Сундук: игрок перестал им пользоваться (closeInventory) — крышка закрывается.
+        if Inv.chest then require("chest").closed(Inv.chest) end
+        Inv.chest = nil
         require("avatar").setPreview(false)
     end
 end
@@ -382,6 +435,13 @@ end
 function Inv.openFurnace(f)
     if Inv.screenOpen then return end
     Inv.furnace = f
+    Inv.toggleScreen()
+end
+
+-- Окно сундука view (chest.lua: группа, ряды, ячейки, заголовок).
+function Inv.openChest(view)
+    if Inv.screenOpen then require("chest").closed(view); return end
+    Inv.chest = view
     Inv.toggleScreen()
 end
 
@@ -399,6 +459,7 @@ end
 local function store(kind)
     if kind == "craft" then return Inv.grid end
     if kind == "furnace" then return Inv.furnace.slots end
+    if kind == "chest" then return Inv.chest.slots end
     return Inv.slots
 end
 
@@ -451,9 +512,71 @@ local function gridIndex(region)
     return r * Inv.gridSize + c + 1
 end
 
+-- Container.mergeItemStack: сначала в такие же стопки (по порядку ячеек),
+-- остаток — в первую пустую. cells — список {таблица, номер}. Возвращает
+-- остаток (0 — ушло всё).
+local function merge(stack, cells)
+    local n = stack.n
+    local max = stackMax(stack.id)
+    if not stack.wear and max > 1 then
+        for _, c in ipairs(cells) do
+            local q = c[1][c[2]]
+            if q and q.id == stack.id and not q.wear and q.n < max then
+                local k = math.min(n, max - q.n)
+                q.n = q.n + k
+                n = n - k
+                if n == 0 then return 0 end
+            end
+        end
+    end
+    for _, c in ipairs(cells) do
+        if not c[1][c[2]] then
+            c[1][c[2]] = {id = stack.id, n = n, wear = stack.wear}
+            return 0
+        end
+    end
+    return n
+end
+Inv.merge = merge
+
+-- Ячейки рюкзака в порядке окна сундука (ряды 10..36, затем панель 1..9);
+-- reverse — с конца (transferStackInSlot из сундука: mergeItemStack(…, true)).
+local function playerCells(reverse)
+    local out = {}
+    for i = 10, 36 do out[#out + 1] = {Inv.slots, i} end
+    for i = 1, 9 do out[#out + 1] = {Inv.slots, i} end
+    if reverse then
+        local r = {}
+        for i = #out, 1, -1 do r[#r + 1] = out[i] end
+        return r
+    end
+    return out
+end
+
+-- Shift+ЛКМ в окне сундука (ContainerChest.transferStackInSlot): из сундука —
+-- в рюкзак с конца, из рюкзака — в сундук с начала.
+local function shiftChest(t, idx, kind)
+    local s = t[idx]
+    if not s then return end
+    local cells
+    if kind == "chest" then
+        cells = playerCells(true)
+    else
+        cells = {}
+        for i = 1, Inv.chest.rows * 9 do cells[#cells + 1] = {Inv.chest.slots, i} end
+    end
+    local left = merge(s, cells)
+    if left == 0 then t[idx] = nil else s.n = left end
+end
+Inv.shiftChest = shiftChest
+
 local function clickStore(t, idx, right, shift, kind)
     local s = t[idx]
     local h = Inv.held
+    if shift and not right and Inv.chest and (kind == "chest" or kind == "inv") then
+        shiftChest(t, idx, kind)
+        return
+    end
     if shift and not right and kind == "furnace" then
         if s then
             local left = Inv.add(s.id, s.n)
@@ -627,8 +750,43 @@ local function gather()
             end
         end
     end
+    if Inv.chest then take(Inv.chest.slots, Inv.chest.rows * 9) end
     take(Inv.grid, 9)
     take(Inv.slots, Inv.SIZE)
+end
+
+-- Цифра k над ячейкой region (Container.slotClick, режим 2): ячейка рюкзака —
+-- обмен с ячейкой панели; ячейка чужого хранилища (сундук, печь, сетка) —
+-- её стопка уходит в панель, а стопка панели — в первое свободное место
+-- рюкзака (нет места — ничего); пустая ячейка — забирает стопку панели.
+-- Результат крафта и выход печи стопку панели не принимают.
+function Inv.hotbarSwap(region, k)
+    if region.kind == "result" then return end
+    local t, idx = store(region.kind), gridIndex(region)
+    local s, hot = t[idx], Inv.slots[k]
+    if region.kind == "inv" and idx == k then return end
+    local accepts = not (region.kind == "furnace" and idx == 3)
+    if region.kind == "inv" then
+        t[idx], Inv.slots[k] = hot, s
+        return
+    end
+    if s then
+        if not hot then
+            Inv.slots[k], t[idx] = s, nil
+        else
+            -- getFirstEmptyStack: без свободной ячейки обмена нет; стопка
+            -- панели — addItemStackToInventory (к таким же, затем в пустую).
+            local free = false
+            for i = 1, Inv.SIZE do if not Inv.slots[i] then free = true; break end end
+            if not free then return end
+            Inv.slots[k], t[idx] = s, nil
+            local cells = {}
+            for i = 1, Inv.SIZE do cells[#cells + 1] = {Inv.slots, i} end
+            merge(hot, cells)
+        end
+    elseif hot and accepts then
+        t[idx], Inv.slots[k] = hot, nil
+    end
 end
 
 -- Выбросить из ячейки один предмет или всю стопку (Q / Ctrl+Q).
@@ -668,11 +826,19 @@ function Inv.update(dt)
                     if io then U.show(io, Inv.slots[s.index] == nil) end
                 end
             elseif s.kind == "craft" then U.setSlot(s, Inv.grid[gridIndex(s)])
-            elseif s.kind == "furnace" then U.setSlot(s, Inv.furnace.slots[s.index]) end
+            elseif s.kind == "furnace" then U.setSlot(s, Inv.furnace.slots[s.index])
+            elseif s.kind == "chest" then U.setSlot(s, Inv.chest.slots[s.index]) end
         end
     end
     if Inv.window == "furnace" then
         Inv.updateFurnaceBars()
+    elseif Inv.chest then
+        -- Сундук сломан, ушёл далеко или стал парой — окно закрывается
+        -- (isUseableByPlayer), предметы остаются в его ячейках.
+        if not require("chest").usable(Inv.chest, require("player")) then
+            Inv.toggleScreen()
+            return
+        end
     else
         local r = Inv.result()
         U.setSlot(windows[Inv.window].result, r and {id = r.out, n = r.n} or nil)
@@ -686,7 +852,7 @@ function Inv.update(dt)
     local shift = Input.is_key_down("LeftShift") or Input.is_key_down("Shift")
     local region = hit(mx, my)
     -- Курсор за пределами окна 176×166 (GuiContainer: слот −999).
-    local outside = math.abs(mx) >= LAYOUT.W / 2 * U.WIN or math.abs(my) >= LAYOUT.H / 2 * U.WIN
+    local outside = math.abs(mx) >= LAYOUT.W / 2 * U.WIN or math.abs(my) >= (Inv.winH or LAYOUT.H) / 2 * U.WIN
 
     -- Подсветка ячейки под курсором.
     if highlight then
@@ -744,6 +910,12 @@ function Inv.update(dt)
         end
     end
 
+    -- Цифра 1..9 над ячейкой — обмен с ячейкой панели (slotClick, режим 2).
+    if region and not drag and not Inv.held then
+        for k = 1, 9 do
+            if WasActionPressed("Slot " .. k) then Inv.hotbarSwap(region, k) end
+        end
+    end
     -- Q над ячейкой — выбросить предмет из неё, Ctrl+Q — всю стопку
     -- (GuiContainer.keyTyped -> handleMouseClick(…, 4)).
     if WasActionPressed("Drop") and region and not Inv.held then

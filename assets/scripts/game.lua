@@ -178,6 +178,7 @@ local function openWorld(w)
     require("plants").load(loaded and loaded.plants)
     -- Свиньи и участки, где животные уже появлялись (до генерации участков).
     require("crops").load(loaded and loaded.crops)
+    require("chest").load(loaded and loaded.chests)
     require("pig").load(loaded and loaded.pigs)
     require("pig").loadChunks(loaded and loaded.pigChunks)
     C.radius = tonumber(LaunchArg("view") or "") or C.radius
@@ -328,6 +329,7 @@ local function startGame()
                 function() return require("pigmodel").selfCheck() end,
                 function() return require("pigcheck").selfCheck(P) end,
                 function() return require("cropcheck").selfCheck(P) end,
+                function() return require("chestcheck").selfCheck(P) end,
             }
             local fx, fy, fz = 4, W.surface(4, 4) + 1, 4
             Act.setBlock(fx, fy, fz, B.byName.furnace.id)
@@ -569,6 +571,35 @@ function OnUpdate(entity, dt)
                                     {"wheat_seeds", 64}, {"bone_meal", 64}, {"wheat", 16}}) do
                     Inv.add(B.byName[k[1]].id, k[2])
                 end
+            end
+            -- Для снимков сундука: одиночный и двойной перед игроком (оба —
+            -- лицом к нему), в одиночном — предметы; сундуки в рюкзаке.
+            -- chestopen=1 — сразу открыть окно одиночного, =2 — двойного.
+            if LaunchFlag("chestdemo") then
+                local Ch = require "chest"
+                local dx, _, dz = P.lookDir()
+                local function put(fw, side)
+                    local x = math.floor(P.pos.x + dx * fw - dz * side)
+                    local z = math.floor(P.pos.z + dz * fw + dx * side)
+                    local y = W.surface(x, z) + 1
+                    for yy = y, y + 2 do Act.setBlock(x, yy, z, 0) end
+                    local meta, pair = Ch.placeMeta(x, y, z, P.yaw)
+                    Act.setBlock(x, y, z, Ch.ID, meta)
+                    Ch.placed(x, y, z, meta, pair, Act.setBlock)
+                    return x, y, z
+                end
+                local sx, sy, sz = put(3, -2)
+                local d1x, d1y, d1z = put(3, 1)
+                put(3, 2)
+                local c = Ch.at(sx, sy, sz)
+                c.slots[1] = {id = B.byName.diamond.id, n = 12}
+                c.slots[5] = {id = B.byName.iron_pickaxe.id, n = 1, wear = 80}
+                c.slots[14] = {id = B.byName.wheat.id, n = 64}
+                c.slots[27] = {id = B.byName.torch.id, n = 33}
+                Ch.at(d1x, d1y, d1z).slots[10] = {id = B.byName.cobblestone.id, n = 64}
+                Inv.add(B.byName.chest.id, 8)
+                local open = LaunchArg("chestopen")
+                if open == "1" then Ch.open(sx, sy, sz) elseif open == "2" then Ch.open(d1x, d1y, d1z) end
             end
             -- Для проверки F2: снимок через 3 с, ещё через 2 с — кадр с надписью в чате.
             if LaunchFlag("shotdemo") then shotDemo = 0 end
@@ -822,6 +853,7 @@ function OnUpdate(entity, dt)
     Drops.update(dt)
     require("pig").update(dt, P)
     require("crops").update(dt)
+    require("chest").update(dt)
     require("needle").update(dt, P)
     require("particles").update(dt)
     Fall.update(dt)

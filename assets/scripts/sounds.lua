@@ -31,7 +31,7 @@ local KIND = {
     sand = "sand",
     snow = "snow",
     planks = "wood", log = "wood", birch_log = "wood", birch_planks = "wood",
-    crafting_table = "wood", bookshelf = "wood", pumpkin = "wood", torch = "wood",
+    crafting_table = "wood", bookshelf = "wood", pumpkin = "wood", torch = "wood", chest = "wood",
     wool = "cloth", red_wool = "cloth", blue_wool = "cloth", yellow_wool = "cloth",
     green_wool = "cloth", cactus = "cloth",
 }
@@ -130,11 +130,53 @@ function S.land(id, x, y, z)
     end
 end
 
--- Вспашка мотыгой (ItemHoe.onItemUse): шаг материала грядки (гравий),
--- громкость (1 + 1)/2, тон ×0.8, из центра клетки.
+-- --- События звуков (sounds.json 1.7.10) -------------------------------------
+-- Имя события → варианты файлов (assets/sounds/<путь>N.ogg, вариант — случайный)
+-- и категория громкости (шина движка: master × категория). Игра зовёт событие
+-- по имени, как World.playSoundEffect, а не файл напрямую.
+local EVENTS = {
+    ["random.chestopen"]   = {"random/chestopen", 0, "block"},
+    ["random.chestclosed"] = {"random/chestclosed", 0, "block"},
+    ["mob.pig.say"]        = {"mob/pig/say", 3, "neutral"},
+    ["mob.pig.death"]      = {"mob/pig/death", 0, "neutral"},
+    ["mob.pig.step"]       = {"mob/pig/step", 5, "neutral"},
+    ["step.grass"]         = {"step/grass", 6, "neutral"},
+    ["step.gravel"]        = {"step/gravel", 4, "neutral"},
+    ["dig.grass"]          = {"dig/grass", 4, "block"},
+    ["dig.gravel"]         = {"dig/gravel", 4, "block"},
+}
+S.EVENTS = EVENTS
+S.count.events = {}
+
+-- Путь файла события (вариант — случайный, как SoundEventAccessorComposite).
+function S.eventFile(name)
+    local e = EVENTS[name]
+    if not e then return nil end
+    if e[2] == 0 then return "assets/sounds/" .. e[1] .. ".ogg", e[3] end
+    return string.format("assets/sounds/%s%d.ogg", e[1], math.random(e[2])), e[3]
+end
+
+-- Звук события name в точке (x, y, z): громкость и тон — как у вызова
+-- оригинала; затухание по расстоянию и громкость категории — движок.
+function S.event(name, x, y, z, vol, pitch)
+    local path, cat = S.eventFile(name)
+    if not path then return false end
+    PlaySound3D(path, Vec3(x, y, z), vol or 1, pitch or 1, cat)
+    S.count.events[name] = (S.count.events[name] or 0) + 1
+    return true
+end
+
+-- Вспашка мотыгой (ItemHoe.onItemUse): step.gravel (звук шага грядки),
+-- громкость (1 + 1)/2, тон 1·0.8, из центра клетки.
 function S.till(x, y, z)
-    PlaySound3D(file("step", "gravel"), at(x, y, z), (1 + 1) / 2, 0.8, "block")
+    S.event("step.gravel", x + 0.5, y + 0.5, z + 0.5, (1 + 1) / 2, 0.8)
     S.count.till = (S.count.till or 0) + 1
+end
+
+-- Посадка семян: step.grass (материал пшеницы — трава), громкость и тон —
+-- как у постановки блока: (1 + 1)/2 и 1·0.8.
+function S.plant(x, y, z)
+    S.event("step.grass", x + 0.5, y + 0.5, z + 0.5, (1 + 1) / 2, 0.8)
 end
 
 -- Сколько вариантов у материала — для проверки, что файлы на месте.
