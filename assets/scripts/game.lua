@@ -254,6 +254,8 @@ local function startGame()
             -- горящая печь, уголь (80 с) прогорел — снова обычная.
             log(require("plants").selfCheck())
             log(require("torch").selfCheck())
+            log(require("bounds").selfCheck())
+            log(require("particles").selfCheck())
             local fx, fy, fz = 4, W.surface(4, 4) + 1, 4
             Act.setBlock(fx, fy, fz, B.byName.furnace.id)
             local f = Furn.at(fx, fy, fz)
@@ -478,6 +480,11 @@ function OnUpdate(entity, dt)
                 Act.setBlock(x, y + 3, z - 1, B.byName.torch.id, 5)
                 Act.setBlock(x + 2, y + 1, z - 2, B.byName.torch.id, Tor.metaFor(x + 2, y + 1, z - 2, 1, 0, 0) or 5)
             end
+            -- Для снимков: осколки разрушаемого блока перед игроком (каждые 0.4 с).
+            if LaunchFlag("digdemo") then
+                require("particles").demo = {x = math.floor(P.pos.x), y = W.surface(math.floor(P.pos.x),
+                    math.floor(P.pos.z) - 3) + 1, z = math.floor(P.pos.z) - 3, t = 0}
+            end
             -- Для снимков: все породы деревьев из саженцев в ряд к северу (−Z).
             if LaunchFlag("treedemo") then
                 local Pl = require "plants"
@@ -635,6 +642,7 @@ function OnUpdate(entity, dt)
 
     if not Inv.screenOpen and not chatting then Act.update(dt, Auto.active and Auto.actions() or nil) end
     Drops.update(dt)
+    require("particles").update(dt)
     Fall.update(dt)
     Furn.update(dt)
     require("plants").update(dt)

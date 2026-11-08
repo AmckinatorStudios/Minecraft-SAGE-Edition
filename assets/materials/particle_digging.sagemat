@@ -1,0 +1,12 @@
+{
+  "cull": "none",
+  "opacity": 0.99,
+  "filtering": "nearest",
+  "vertexShader": "assets/shaders/sprite.vert",
+  "fragmentShader": "assets/shaders/digging.frag",
+  "textures": {
+    "uAtlas": "sagecraft_atlas",
+    "uLightCells": "sagecraft_lightmap"
+  },
+  "params": {}
+}
