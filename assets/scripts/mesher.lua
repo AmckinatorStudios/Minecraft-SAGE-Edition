@@ -356,6 +356,41 @@ function M.build(cx, sy, cz)
     return solid, liquid
 end
 
+-- Один блок в начале координат с чужой плиткой (трещины —
+-- RenderBlocks.renderBlockUsingTexture): та же форма, что в участке (Render
+-- Bounds: крест у растений, плоскости у факела, сужение у кактуса), все шесть
+-- граней куба (renderAllFaces). Возвращает пачку для mesh.arrays.
+local ZERO_LT = {0, 0, 0, 0, 0, 0, 0, 0}
+function M.single(id, meta, tile)
+    local b = batch()
+    local kind = drawKind[id]
+    local v = id | ((meta or 0) << W.META_SHIFT)
+    if kind == 3 then
+        emitCross(b, 0, 0, 0, v, tile)
+    elseif kind == 5 then
+        emitTorch(b, 0, 0, 0, v, tile)
+    elseif kind ~= 0 and kind ~= 4 then
+        local inset = B.byId[id].inset
+        for fi = 1, 6 do
+            local f = FACES[fi]
+            local corners = f.c
+            if inset and fi > 2 then
+                corners = {}
+                for k = 1, 4 do
+                    local p = f.c[k]
+                    local q = {p[1], p[2], p[3]}
+                    for a = 1, 3 do
+                        if f.n[a] ~= 0 then q[a] = q[a] - f.n[a] * inset end
+                    end
+                    corners[k] = q
+                end
+            end
+            addQuad(b, 0, 0, 0, corners, f.n, f.uv, ZERO_LT, tile, false)
+        end
+    end
+    return b
+end
+
 -- Грани с развёрткой — для всех, кто строит кубик блока вне мира (выпавший
 -- блок, крошки): та же раскладка UV, что у граней участка.
 M.FACES = FACES

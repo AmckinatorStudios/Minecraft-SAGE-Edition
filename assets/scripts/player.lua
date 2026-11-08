@@ -31,22 +31,24 @@ local JUMP = 9.0
 -- Скорости Minecraft, блоков в секунду: шаг 4.317, бег 5.612, присед
 -- 1.31, полёт 10.92.
 local WALK, SPRINT, SNEAK, FLY = 4.317, 5.612, 1.31, 10.92
-local solid = B.solid
-
-local function blocked(x, y, z)
-    return solid[W.get(x, y, z)]
-end
-
--- Пересекает ли коробка игрока (ноги в x, y, z) хоть одну твёрдую клетку.
+-- Пересекает ли коробка игрока (ноги в x, y, z) коробки столкновения блоков
+-- (bounds.lua: у кактуса — уже клетки, у факела и растений — никакой).
+-- Клетки берутся и на одну ниже: коробка столкновения может торчать вверх
+-- из своей клетки (забор у оригинала — 1.5 блока).
+local Bounds = require "bounds"
 local function collides(x, y, z)
     local h = P.WIDTH / 2
-    local x0, x1 = math.floor(x - h), math.floor(x + h - 1e-4)
-    local y0, y1 = math.floor(y), math.floor(y + P.HEIGHT - 1e-4)
-    local z0, z1 = math.floor(z - h), math.floor(z + h - 1e-4)
+    local ax0, ax1, ay0, ay1, az0, az1 = x - h, x + h, y, y + P.HEIGHT, z - h, z + h
+    local x0, x1 = math.floor(ax0), math.floor(ax1 - 1e-4)
+    local y0, y1 = math.floor(ay0) - 1, math.floor(ay1 - 1e-4)
+    local z0, z1 = math.floor(az0), math.floor(az1 - 1e-4)
     for by = y0, y1 do
         for bz = z0, z1 do
             for bx = x0, x1 do
-                if blocked(bx, by, bz) then return true end
+                local id = W.get(bx, by, bz)
+                if id ~= 0 and Bounds.overlaps(id, W.meta(bx, by, bz), bx, by, bz, ax0, ay0, az0, ax1, ay1, az1) then
+                    return true
+                end
             end
         end
     end
@@ -212,35 +214,19 @@ function P.raycast(maxDist)
     local t = 0
     while t <= maxDist do
         local id = W.get(x, y, z)
-        if id ~= 0 and B.drawKind[id] ~= 4 then
-            if B.drawKind[id] ~= 5 then
-                return {x = x, y = y, z = z, id = id, nx = nx, ny = ny, nz = nz, dist = t}
-            end
-            -- Факел: попадание — только в его рамку выбора (луч и рамка,
-            -- slab-метод), грань — та, через которую луч вошёл в рамку.
-            local box = require("torch").bounds(W.meta(x, y, z))
-            local tmin, tmax, fn = -math.huge, math.huge, {0, 0, 0}
-            local hit = true
-            local O, D, Cc = {ox, oy, oz}, {dx, dy, dz}, {x, y, z}
-            for axis = 1, 3 do
-                local o, d = O[axis], D[axis]
-                local lo, hi = Cc[axis] + box[axis], Cc[axis] + box[axis + 3]
-                if math.abs(d) < 1e-9 then
-                    if o < lo or o > hi then hit = false end
-                else
-                    local t1, t2 = (lo - o) / d, (hi - o) / d
-                    local n = -1
-                    if t1 > t2 then t1, t2, n = t2, t1, 1 end
-                    if t1 > tmin then
-                        tmin = t1
-                        fn = {0, 0, 0}
-                        fn[axis] = n
-                    end
-                    if t2 < tmax then tmax = t2 end
+        if id ~= 0 then
+            local meta = W.meta(x, y, z)
+            local box = Bounds.selected(id, meta)
+            if box == Bounds.FULL then
+                return {x = x, y = y, z = z, id = id, meta = meta, nx = nx, ny = ny, nz = nz, dist = t, box = box}
+            elseif box then
+                -- Неполный блок (факел, растение, кактус): попадание — только
+                -- в его коробку выбора, грань — та, через которую луч вошёл.
+                local tHit, fn = Bounds.rayBox(box, x, y, z, ox, oy, oz, dx, dy, dz, maxDist)
+                if tHit then
+                    return {x = x, y = y, z = z, id = id, meta = meta, nx = fn[1], ny = fn[2], nz = fn[3],
+                            dist = tHit, box = box}
                 end
-            end
-            if hit and tmin <= tmax and tmax >= 0 and tmin <= maxDist then
-                return {x = x, y = y, z = z, id = id, nx = fn[1], ny = fn[2], nz = fn[3], dist = math.max(0, tmin), box = box}
             end
         end
         if tx < ty and tx < tz then
@@ -255,12 +241,11 @@ function P.raycast(maxDist)
 end
 
 -- Можно ли поставить блок в клетку: не внутрь игрока (растение и факел — можно).
-function P.canPlace(x, y, z, id)
-    if not B.solid[id] then return true end
+function P.canPlace(x, y, z, id, meta)
     local h = P.WIDTH / 2
     local p = P.pos
-    return not (x + 1 > p.x - h and x < p.x + h and y + 1 > p.y and y < p.y + P.HEIGHT
-                and z + 1 > p.z - h and z < p.z + h)
+    -- Мешает только коробка СТОЛКНОВЕНИЯ нового блока (World.canPlaceEntityOnSide).
+    return not Bounds.overlaps(id, meta or 0, x, y, z, p.x - h, p.y, p.z - h, p.x + h, p.y + P.HEIGHT, p.z + h)
 end
 
 return P

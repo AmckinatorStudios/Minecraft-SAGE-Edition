@@ -1,6 +1,8 @@
 {
   "cull": "back",
   "opacity": 0.99,
+  "blend": "modulate2x",
+  "depthBias": -3,
   "vertexShader": "assets/shaders/chunk.vert",
   "fragmentShader": "assets/shaders/crack.frag",
   "textures": {"uAtlas": "sagecraft_atlas"},

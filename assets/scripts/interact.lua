@@ -22,6 +22,7 @@ local P = require "player"
 local Inv = require "inventory"
 local C = require "chunks"
 local Anim = require "anim"
+local Bo = require "bounds"
 
 local Act = {}
 
@@ -29,89 +30,97 @@ Act.REACH = 5
 Act.stats = {broken = 0, placed = 0, picked = 0}
 local target
 local mining = nil          -- {x, y, z, t}
-local outline, crack
+local outline = {}          -- {obj, th}
+local crack
 local placeCooldown = 0
 local breakCooldown = 0
 
-local function outlineMesh()
+-- Рамка выбора (RenderGlobal.drawSelectionBox): рёбра коробки выбора,
+-- расширенной на 0.002 (иначе рамка спорит с гранью за глубину), чёрные с
+-- прозрачностью 0.4, толщиной около 2 экранных пикселей (glLineWidth(2)).
+-- Линий в движке нет — рёбра брусками, толщина которых пересчитывается по
+-- расстоянию до рамки, полю зрения и высоте экрана: на экране она остаётся
+-- те же 2 пикселя и вблизи, и вдали.
+local OUTLINE_GROW = 0.002
+local OUTLINE_PX = 2
+local function outlineMesh(b, t)
     local m = mesh()
-    local e = 0.002
-    local t = 0.012
-    local lo, hi = -e, 1 + e
-    local function bar(x0, y0, z0, x1, y1, z1)
-        local b = box(x1 - x0, y1 - y0, z1 - z0)
-        b.move((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2)
-        m.add(b)
+    local g = OUTLINE_GROW
+    local x0, y0, z0, x1, y1, z1 = b[1] - g, b[2] - g, b[3] - g, b[4] + g, b[5] + g, b[6] + g
+    local function bar(ax, ay, az, bx, by, bz)
+        local w = box(math.abs(bx - ax) + t, math.abs(by - ay) + t, math.abs(bz - az) + t)
+        w.move((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2)
+        m.add(w)
     end
-    for _, a in ipairs({lo, hi}) do
-        for _, b in ipairs({lo, hi}) do
-            bar(lo, a - t, b - t, hi, a + t, b + t)
-            bar(a - t, lo, b - t, a + t, hi, b + t)
-            bar(a - t, b - t, lo, a + t, b + t, hi)
-        end
+    for _, a in ipairs({y0, y1}) do
+        for _, c in ipairs({z0, z1}) do bar(x0, a, c, x1, a, c) end
+        for _, c in ipairs({x0, x1}) do bar(c, a, z0, c, a, z1) end
+    end
+    for _, a in ipairs({x0, x1}) do
+        for _, c in ipairs({z0, z1}) do bar(a, y0, c, a, y1, c) end
     end
     return m
 end
 
--- Трещина освещена как сам блок: свет каждой грани — из клетки перед ней
--- (тот же, что у грани участка). С постоянным 15/15 она светилась в тёмной
--- пещере белым узором поверх чёрного камня.
-local function crackMesh(stage, bx, by, bz)
-    local tu, tv, ts = A.tileOrigin(A.destroyTile[stage])
-    local pos, nrm, uv, uv2, idx = {}, {}, {}, {}, {}
-    local e = 0.004
-    local faces = {
-        {{0,1,0},{0,1,1},{1,1,1},{1,1,0}, n = {0,1,0}},
-        {{0,0,0},{1,0,0},{1,0,1},{0,0,1}, n = {0,-1,0}},
-        {{1,0,0},{1,1,0},{1,1,1},{1,0,1}, n = {1,0,0}},
-        {{0,0,0},{0,0,1},{0,1,1},{0,1,0}, n = {-1,0,0}},
-        {{0,0,1},{1,0,1},{1,1,1},{0,1,1}, n = {0,0,1}},
-        {{0,0,0},{0,1,0},{1,1,0},{1,0,0}, n = {0,0,-1}},
-    }
-    local quv = {{0, 0}, {1, 0}, {1, 1}, {0, 1}}
-    local nv = 0
-    for _, f in ipairs(faces) do
-        local sky, blk = 15, 15
-        if bx then
-            local v = W.raw(bx + f.n[1], by + f.n[2], bz + f.n[3])
-            if v then sky, blk = (v >> W.SKY_SHIFT) & 15, (v >> W.BLK_SHIFT) & 15 end
-        end
-        for k = 1, 4 do
-            local p = f[k]
-            for a = 1, 3 do pos[#pos + 1] = p[a] * (1 + 2 * e) - e end
-            for a = 1, 3 do nrm[#nrm + 1] = f.n[a] end
-            uv[#uv + 1] = tu + quv[k][1] * ts; uv[#uv + 1] = tv + quv[k][2] * ts
-            uv2[#uv2 + 1] = sky; uv2[#uv2 + 1] = blk
-        end
-        for _, i in ipairs({1, 2, 3, 1, 3, 4}) do idx[#idx + 1] = nv + i end
-        nv = nv + 4
-    end
-    local m = mesh()
-    m.arrays{position = pos, normal = nrm, uv = uv, uv2 = uv2, index = idx}
-    return m
+-- Толщина бруска рамки в блоках для OUTLINE_PX пикселей на расстоянии d.
+local function outlineThickness(d)
+    local cam = FindObject("Player Camera")
+    local c = cam and cam:GetCamera()
+    local fov = c and c.Fov or 70
+    local size = UIScreenSize()
+    local hpx = (size and size.y and size.y > 0) and size.y or 720
+    return OUTLINE_PX * 2 * math.max(d, 0.05) * math.tan(math.rad(fov) / 2) / hpx
 end
 
--- Меш трещины пересобирается, только когда сменились стадия или блок.
+local outlineKey
+local function showOutline(t)
+    local b = t.box or {0, 0, 0, 1, 1, 1}
+    local ex, ey, ez = P.eye()
+    local cx, cy, cz = t.x + (b[1] + b[4]) / 2, t.y + (b[2] + b[5]) / 2, t.z + (b[3] + b[6]) / 2
+    local d = math.sqrt((cx - ex) ^ 2 + (cy - ey) ^ 2 + (cz - ez) ^ 2)
+    local th = outlineThickness(d)
+    -- Пересборка — когда сменилась коробка или толщина ушла больше чем на 8 %.
+    local key = table.concat(b, ",")
+    if key ~= outlineKey or not outline.th or math.abs(th - outline.th) > outline.th * 0.08 then
+        outlineKey, outline.th = key, th
+        outlineMesh(b, th).apply(outline.obj)
+        SetMaterial(outline.obj, "sagecraft_outline")
+    end
+    outline.obj.Transform.Position = Vec3(t.x, t.y, t.z)
+end
+
+-- Трещины (RenderGlobal.drawBlockDamageTexture): та же геометрия блока
+-- (Render Bounds: у факела — его плоскости, у растения — крест) с плиткой
+-- стадии destroy_stage_N; смешение GL_DST_COLOR, GL_SRC_COLOR и смещение
+-- глубины −3 — в материале crack.sagemat. Меш пересобирается, только когда
+-- сменились стадия, блок или его метаданные; новая стадия заменяет прежнюю.
 local crackKey
 local function showCrack(stage, t)
-    local key = stage .. ":" .. t.x .. ":" .. t.y .. ":" .. t.z
+    local key = stage .. ":" .. t.x .. ":" .. t.y .. ":" .. t.z .. ":" .. t.id .. ":" .. (t.meta or 0)
     if key ~= crackKey then
         crackKey = key
-        crackMesh(stage, t.x, t.y, t.z).apply(crack)
+        local m = mesh()
+        m.arrays(require("mesher").single(t.id, t.meta or 0, A.destroyTile[stage]))
+        m.apply(crack)
         SetMaterial(crack, "assets/materials/crack.sagemat")
     end
     crack.Transform.Position = Vec3(t.x, t.y, t.z)
 end
 
+local function hideCrack()
+    crack.Transform.Position = Vec3(0, -100, 0)
+    crackKey = nil
+end
+
 function Act.init()
-    outline = SpawnObject("Block Outline")
-    outlineMesh().apply(outline)
-    material("sagecraft_outline", {color = rgb(0.02, 0.02, 0.02), unlit = true})
-    SetMaterial(outline, "sagecraft_outline")
-    outline.Transform.Position = Vec3(0, -100, 0)
+    outline.obj = SpawnObject("Block Outline")
+    -- Чёрный с альфой 0.4 оригинала: он смешивает в sRGB (фон × 0.6), кадр
+    -- движка линейный — там то же затемнение даёт альфа 1 − 0.6^2.2 ≈ 0.675.
+    material("sagecraft_outline", {color = rgb(0, 0, 0), unlit = true, opacity = 0.675})
+    outlineMesh(Bo.FULL, 0.01).apply(outline.obj)
+    SetMaterial(outline.obj, "sagecraft_outline")
+    outline.obj.Transform.Position = Vec3(0, -100, 0)
     crack = SpawnObject("Block Crack")
-    crackMesh(0).apply(crack)
-    SetMaterial(crack, "assets/materials/crack.sagemat")
     crack.Transform.Position = Vec3(0, -100, 0)
 end
 
@@ -201,7 +210,8 @@ local function breakBlock(t)
         local d = B.byId[id]
         if d.flint and math.random() < d.flint then Drops.spawn(B.byName.flint.id, 1, t.x + 0.5, t.y + 0.5, t.z + 0.5) end
     end
-    Drops.burst(id, t.x + 0.5, t.y + 0.5, t.z + 0.5)
+    -- 64 осколка сеткой 4×4×4 (addBlockDestroyEffects) — из метаданных до поломки.
+    require("particles").destroy(id, t.meta or 0, t.x, t.y, t.z)
     Inv.wearTool()
     settle(t.x, t.y, t.z)
 end
@@ -270,12 +280,10 @@ function Act.update(dt, actions)
         showCrack(Act.forceCrack, target)
     end
     if target then
-        -- Рамка — по границам блока (у факела — его рамка выбора).
-        local bx = target.box or {0, 0, 0, 1, 1, 1}
-        outline.Transform.Position = Vec3(target.x + bx[1], target.y + bx[2], target.z + bx[3])
-        outline.Transform.Scale = Vec3(bx[4] - bx[1], bx[5] - bx[2], bx[6] - bx[3])
+        -- Рамка — по коробке выбора блока (bounds.lua), а не по клетке.
+        showOutline(target)
     else
-        outline.Transform.Position = Vec3(0, -100, 0)
+        outline.obj.Transform.Position = Vec3(0, -100, 0)
     end
 
     -- Удар по воздуху — один взмах на нажатие; по блоку — непрерывно
@@ -293,6 +301,13 @@ function Act.update(dt, actions)
             Snd.hit(target.id, target.x, target.y, target.z)
             mining.nextHit = mining.nextHit + 4 / 20
         end
+        -- Осколок у грани удара — каждый тик добычи (addBlockHitEffects).
+        mining.nextFx = mining.nextFx or 0
+        while mining.t >= mining.nextFx do
+            local Pt = require "particles"
+            Pt.hit(target.id, target.meta or 0, target.x, target.y, target.z, Pt.sideOf(target.nx, target.ny, target.nz))
+            mining.nextFx = mining.nextFx + 1 / 20
+        end
         local need = Act.breakTime(target.id)
         local stage = math.min(9, math.floor(mining.t / need * 10))
         mining.stage = stage
@@ -302,12 +317,12 @@ function Act.update(dt, actions)
             mining = nil
             -- Пауза перед следующим блоком — 5 тиков, как у 1.7.10.
             breakCooldown = 5 / 20
-            crack.Transform.Position = Vec3(0, -100, 0)
+            hideCrack()
         end
     else
         mining = nil
         -- Принудительная стадия (снимки) держится на блоке и без удара.
-        if not (Act.forceCrack and target) then crack.Transform.Position = Vec3(0, -100, 0) end
+        if not (Act.forceCrack and target) then hideCrack() end
     end
 
     -- ПКМ (как в 1.7.10): блок, который открывается, — открыть; предмет с

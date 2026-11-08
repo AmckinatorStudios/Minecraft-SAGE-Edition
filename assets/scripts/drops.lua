@@ -14,7 +14,6 @@ local A = require "atlas"
 local D = {}
 
 local list = {}
-local bits = {}
 local meshCache = {}
 local ICON_MAT = "sagecraft_icon_mat"
 local Light = require "lightmap"
@@ -133,22 +132,6 @@ function D.throwFromPlayer(id, n, wear)
     e.age = -1.2
 end
 
--- Крошки: кусочки текстуры блока разлетаются и пропадают.
-function D.burst(id, x, y, z)
-    -- Крошки — у любого блока с картинкой (addBlockDestroyEffects): у
-    -- растений — из их собственной текстуры.
-    local d = B.byId[id]
-    if not d or not d.isBlock or B.drawKind[id] == 4 then return end
-    for i = 1, 8 do
-        local o = SpawnObject("Bit")
-        cubeMesh(id, 0.09, 0.2, math.random() * 0.8, math.random() * 0.8).apply(o)
-        SetMaterial(o, BLOCK_MAT)
-        bits[#bits + 1] = {obj = o, x = x + (math.random() - 0.5) * 0.6, y = y + (math.random() - 0.5) * 0.6,
-                           z = z + (math.random() - 0.5) * 0.6, vx = (math.random() - 0.5) * 3,
-                           vy = math.random() * 3 + 1, vz = (math.random() - 0.5) * 3, life = 0.5 + math.random() * 0.4}
-    end
-end
-
 local function solidAt(x, y, z) return B.solid[W.get(math.floor(x), math.floor(y), math.floor(z))] end
 
 local function physics(e, dt, radius)
@@ -234,20 +217,6 @@ function D.update(dt)
             e.shadow = e.shadow or Sh.new("Drop Shadow")
             Sh.place(e.shadow, e.x, e.y - 0.13, e.z, 0.15, 0.75, Sh.camera())
             e.obj.Transform.Rotation = Vec3(0, e.spin, 0)
-            i = i + 1
-        end
-    end
-    i = 1
-    while i <= #bits do
-        local b = bits[i]
-        b.life = b.life - dt
-        physics(b, dt, 0.045)
-        if b.life <= 0 then
-            DestroyObject(b.obj)
-            table.remove(bits, i)
-        else
-            b.obj.Transform.Position = Vec3(b.x, b.y, b.z)
-            Light.applyLevels(b.obj, Light.levels(b.x, b.y, b.z))
             i = i + 1
         end
     end
