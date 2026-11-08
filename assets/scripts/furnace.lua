@@ -51,7 +51,9 @@ local function setLit(f, lit)
     local id = W.get(f.x, f.y, f.z)
     if not F.isFurnace(id) then return end
     local want = lit and ON or OFF
-    if id ~= want then require("interact").setBlock(f.x, f.y, f.z, want) end
+    -- Горящая и холодная печь — разные блоки; лицо (метаданные) сохраняется
+    -- (BlockFurnace.updateFurnaceBlockState: setBlockMetadataWithNotify).
+    if id ~= want then require("interact").setBlock(f.x, f.y, f.z, want, W.meta(f.x, f.y, f.z)) end
 end
 
 function F.update(dt)

@@ -172,7 +172,7 @@ function A.build()
         if d.upper then t.upper = tileFor(atlas, d.upper) end
         A.blockTiles[d.id] = t
         A.icon[d.id] = slot
-        if d.draw == "cross" or d.draw == "torch" then
+        if d.draw == "cross" or d.draw == "torch" or d.draw == "ladder" then
             flatIcon(icons, slot, sources[faceSrc.side[1]], faceSrc.side[2])
         else
             cubeIcon(icons, slot, {top = faceSrc.top, right = faceSrc.side, left = faceSrc.front})

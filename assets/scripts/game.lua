@@ -179,6 +179,19 @@ local function openWorld(w)
             Inv.add(B.byName[n].id, B.byName[n].stack)
         end
     end
+    -- Для снимков: инструменты с разным износом (полоска прочности).
+    if LaunchFlag("weardemo") then
+        local parts = {0.1, 0.35, 0.6, 0.85, 0.97}
+        local k = 0
+        for i = 1, Inv.SIZE do
+            local s = Inv.slots[i]
+            local d = s and B.byId[s.id]
+            if d and d.uses then
+                k = k + 1
+                s.wear = math.floor((d.uses - 1) * parts[(k - 1) % #parts + 1])
+            end
+        end
+    end
     Sky.init()
     Clouds.init(seed)
     Hud.init()
@@ -256,6 +269,10 @@ local function startGame()
             log(require("torch").selfCheck())
             log(require("bounds").selfCheck())
             log(require("door").selfCheck())
+            log(require("light").metaSelfCheck())
+            log(require("ladder").selfCheck())
+            log(require("ui").durabilitySelfCheck())
+            log(B.facingSelfCheck())
             log(require("particles").selfCheck())
             local fx, fy, fz = 4, W.surface(4, 4) + 1, 4
             Act.setBlock(fx, fy, fz, B.byName.furnace.id)
@@ -498,6 +515,21 @@ function OnUpdate(entity, dt)
                 D.place(Act.setBlock, x + 1, y, z, 0)
                 D.place(Act.setBlock, x + 2, y, z, 0)
                 D.toggle(Act.setBlock, x + 2, y, z)
+            end
+            -- Для снимков: стена с лестницей и печи, поставленные игроком,
+            -- смотревшим с четырёх сторон (лицо — к нему).
+            if LaunchFlag("ladderdemo") then
+                local Lad = require "ladder"
+                local x, z = math.floor(P.pos.x), math.floor(P.pos.z) - 3
+                local y = W.surface(x, z) + 1
+                for dx = -4, 4 do
+                    for dy = 0, 4 do Act.setBlock(x + dx, y + dy, z, 0); Act.setBlock(x + dx, y + dy, z - 1, B.byName.stone.id) end
+                end
+                for dy = 0, 4 do Act.setBlock(x, y + dy, z, B.byName.ladder.id, Lad.metaFor(x, y + dy, z, 3)) end
+                local f = B.byName.furnace.id
+                Act.setBlock(x - 3, y, z, f, B.placeMeta(f, 0))     -- смотрел на север — лицо на юг
+                Act.setBlock(x + 2, y, z, f, B.placeMeta(f, 90))    -- смотрел на запад — лицо на восток
+                Act.setBlock(x + 3, y + 1, z, f, B.placeMeta(f, -90))
             end
             -- Для снимков: осколки разрушаемого блока перед игроком (каждые 0.4 с).
             if LaunchFlag("digdemo") then

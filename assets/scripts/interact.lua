@@ -196,6 +196,8 @@ local function breakBlock(t)
     end
     -- Факелы, державшиеся за этот блок, падают предметом.
     Torch.checkAround(t.x, t.y, t.z)
+    -- Лестницы, державшиеся за этот блок, падают предметом.
+    require("ladder").checkAround(Act.setBlock, t.x, t.y, t.z)
     -- Дверь, стоявшая на этом блоке, выпадает предметом.
     Door.checkSupport(Act.setBlock, t.x, t.y, t.z)
     -- Соседняя вода затекает в дыру (одна клетка — без настоящего течения).
@@ -276,7 +278,15 @@ local function place(t)
         -- обязана держать этой стороной.
         meta = Torch.metaFor(x, y, z, t.nx, t.ny, t.nz)
         if not meta then return end
-    elseif d.draw == "cross" and not B.opaque[below] then return end
+    elseif d.draw == "cross" and not B.opaque[below] then return
+    elseif d.draw == "ladder" then
+        -- Лестница (onBlockPlaced): сторона — по грани клика, опора сзади.
+        meta = require("ladder").metaFor(x, y, z, require("particles").sideOf(t.nx, t.ny, t.nz))
+        if not meta then return end
+    elseif d.facing then
+        -- Печь, тыква — лицом к игроку (onBlockPlacedBy).
+        meta = B.placeMeta(held.id, P.yaw)
+    end
     if Act.setBlock(x, y, z, held.id, meta) then
         Act.stats.placed = Act.stats.placed + 1
         Snd.place(held.id, x, y, z)

@@ -94,7 +94,7 @@ D.ITEM_MAT = "assets/materials/item.sagemat"
 
 local function isCube(id)
     local d = B.byId[id]
-    return d and d.isBlock and d.draw ~= "cross" and d.draw ~= "torch"
+    return d and d.isBlock and d.draw ~= "cross" and d.draw ~= "torch" and d.draw ~= "ladder"
 end
 
 local function spawnObject(id)
