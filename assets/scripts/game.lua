@@ -64,6 +64,7 @@ local function bindControls()
     BindAction("Skin",      "K")
     BindAction("Chat",      "T")
     BindAction("Pause",     "ESCAPE")
+    BindAction("Fullscreen", "F11")
     for i = 1, 9 do BindAction("Slot " .. i, tostring(i)) end
 end
 
@@ -204,6 +205,7 @@ function Menu.applyOptions()
     require("lightmap").gamma = o.gamma or 0
     require("shadows").fancy = o.fancy ~= false
     SetMasterVolume(o.master)
+    display.set_fullscreen(o.fullscreen == true)
     Music.setVolume(o.music)
     local c = cameraObj and cameraObj:GetCamera()
     if c and not Pano.active then c.Fov = o.fov end
@@ -355,6 +357,12 @@ function OnUpdate(entity, dt)
         end
     end
     dt = math.min(dt, 0.1)
+    -- F11 — полный экран, как в Minecraft: в меню и в мире, запоминается.
+    if WasActionPressed("Fullscreen") then
+        Menu.options.fullscreen = not Menu.options.fullscreen
+        Menu.applyOptions()
+        SaveGame("options", Menu.options, 1)
+    end
     local MT = package.loaded["menutest"]
     if MT then MT.update(dt, worldOpen, loading) end
 

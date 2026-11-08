@@ -142,9 +142,9 @@ function Avatar.applySkin()
     SetMaterial(obj, mat)
     require("hand").setMaterial(mat)
     -- Превью в рюкзаке — свой материал: ровный свет, а не свет клетки.
-    -- Освещено «студийным» светом съёмки: у оригинала существо в интерфейсе —
-    -- со светом standardItemLighting (лицо светлее боков), а не плоское.
-    material("sagecraft_skin_preview", {texture = s.name, nearest = true, cutoff = 0.05, double_sided = true, roughness = 1})
+    -- Без освещения движка: студийный свет с тонокоррекцией делал скин
+    -- пересвеченным и контрастным — цвета картинки теперь как есть.
+    material("sagecraft_skin_preview", {texture = s.name, nearest = true, cutoff = 0.05, double_sided = true, unlit = true})
     if Avatar.previewObj then SetMaterial(Avatar.previewObj, "sagecraft_skin_preview") end
     Avatar.skinPath = s.key
     Avatar._lr = nil            -- новый материал — свет заново

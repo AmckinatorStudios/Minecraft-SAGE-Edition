@@ -205,6 +205,7 @@ sage_build --project /путь/к/Minecraft-SAGE-Edition --player SagePlayer --o
 | F2 | снимок экрана |
 | F3 | отладка (и биом) |
 | F5 | вид |
+| F11 | полный экран (и «Fullscreen» в Options) |
 | K | следующий скин |
 
 ## Свои скины
