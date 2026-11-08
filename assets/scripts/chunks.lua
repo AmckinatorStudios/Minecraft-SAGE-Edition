@@ -162,6 +162,8 @@ function C.update(px, pz, budget)
             if c and not c.lit and neighborsReady(cx, cz, "generated") then
                 local t = now()
                 L.lightChunk(c)
+                -- Животные при первом создании участка (performWorldGenSpawning).
+                require("pig").chunkReady(cx, cz)
                 C.stats.light = C.stats.light + (now() - t)
                 busy = true
                 if overBudget() then return true end
