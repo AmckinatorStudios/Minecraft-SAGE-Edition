@@ -33,6 +33,7 @@ local Map    = require "map"
 local Mat    = require "mat"
 local Pano   = require "panorama"
 local Worlds = require "worlds"
+local Prof   = require "profile"
 
 local playerObj, cameraObj
 local started = false
@@ -272,6 +273,10 @@ function Menu.applyOptions()
 end
 
 local function startGame()
+    -- Сборщик мусора — поколенческий: игра порождает горы короткоживущих
+    -- таблиц (меши, частицы, векторы), и обычный инкрементальный не
+    -- успевал — память Lua росла до сотен мегабайт и кадр дёргался на сборке.
+    collectgarbage("generational")
     bindControls()
     playerObj = FindObject("Player")
     cameraObj = FindObject("Player Camera")
@@ -424,6 +429,7 @@ end
 
 function OnUpdate(entity, dt)
     if failed then return end
+    Prof.frameBegin()
     if not started then
         started = true
         local ok, err = pcall(startGame)
@@ -762,6 +768,13 @@ function OnUpdate(entity, dt)
         return
     end
 
+    -- Нагрузочный прогон (--stress=1): игрок летит по прямой (10 блоков/с),
+    -- мир догенерируется — с --profile=1 журнал показывает, что дорожает.
+    if LaunchFlag("stress") then
+        P.flying = true
+        P.pos.x = P.pos.x + 10 * dt
+        P.pos.y = math.max(P.pos.y, W.surface(math.floor(P.pos.x), math.floor(P.pos.z)) + 6)
+    end
     if useFor then
         useFor = useFor - dt
         if useFor <= 0 then Act.forcePlace = false; useFor = nil end
@@ -851,9 +864,9 @@ function OnUpdate(entity, dt)
         P.sprinting = false
     end
     local walkedBefore = P.walkDist
-    local fall = P.update(inp, dt)
+    local fall = Prof.run("player", P.update, inp, dt)
     local heldNow = Inv.current()
-    Anim.update(dt, P, heldNow and heldNow.id or 0, Inv.selected)
+    Prof.run("anim", Anim.update, dt, P, heldNow and heldNow.id or 0, Inv.selected)
     -- Шаги — как у 1.7.10: путь по земле копится с множителем 0.6, звук —
     -- при каждом переходе через целое (то есть раз в 1/0.6 блока); в воде
     -- и в полёте тихо. Материал — у блока под ногами.
@@ -873,32 +886,33 @@ function OnUpdate(entity, dt)
     end
 
     require("hurt").update(dt)
-    C.update(P.pos.x, P.pos.z, C.budgetMs)
+    Prof.run("chunks", C.update, P.pos.x, P.pos.z, C.budgetMs)
 
-    if not Inv.screenOpen and not chatting then Act.update(dt, Auto.active and Auto.actions() or nil) end
-    Drops.update(dt)
-    require("pig").update(dt, P)
-    require("crops").update(dt)
-    require("chest").update(dt)
+    if not Inv.screenOpen and not chatting then Prof.run("interact", Act.update, dt, Auto.active and Auto.actions() or nil) end
+    Prof.run("drops", Drops.update, dt)
+    Prof.run("pigs", require("pig").update, dt, P)
+    Prof.run("crops", require("crops").update, dt)
+    Prof.run("chests", require("chest").update, dt)
     require("needle").update(dt, P)
-    require("particles").update(dt)
-    Fall.update(dt)
-    Furn.update(dt)
-    require("plants").update(dt)
-    require("torch").update(dt, P)
-    Sky.update(dt, P)
-    Clouds.update(dt, P)
-    Arrows.update(dt, P)
+    Prof.run("particles", require("particles").update, dt)
+    Prof.run("falling", Fall.update, dt)
+    Prof.run("furnaces", Furn.update, dt)
+    Prof.run("plants", require("plants").update, dt)
+    Prof.run("torches", require("torch").update, dt, P)
+    Prof.run("sky", Sky.update, dt, P)
+    Prof.run("clouds", Clouds.update, dt, P)
+    Prof.run("arrows", Arrows.update, dt, P)
     local held = Inv.current()
     local heldId = held and held.id or 0
     Map.heldNumber = held and held.id == B.byName.filled_map.id and held.wear or nil
-    Avatar.update(dt, P, thirdPerson ~= 0, heldId)
+    Prof.run("avatar", Avatar.update, dt, P, thirdPerson ~= 0, heldId)
     Avatar.updatePreview(P, heldId)
-    Hand.update(dt, thirdPerson == 0 and not hidePlayerHand, P, heldId)
+    Prof.run("hand", Hand.update, dt, thirdPerson == 0 and not hidePlayerHand, P, heldId)
     updateFov(dt)
     placeCamera()
-    Hud.update(dt)
-    Inv.update(dt)
-    Save.tick(dt)
+    Prof.run("hud", Hud.update, dt)
+    Prof.run("inventory", Inv.update, dt)
+    Prof.run("save", Save.tick, dt)
     Auto.update(dt)
+    Prof.frameEnd(dt)
 end

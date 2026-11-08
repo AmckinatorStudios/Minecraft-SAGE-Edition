@@ -284,8 +284,7 @@ local function render(c, t)
         return
     end
     local kind = Ch.modelKind(c)
-    if c.model and c.model.kind ~= kind then CM.destroy(c.model); c.model = nil end
-    c.model = c.model or CM.create(kind)
+    if c.model then CM.retarget(c.model, kind) else c.model = CM.create(kind) end
     local Light = require "lightmap"
     local s, b = Light.levels(c.x + 0.5, c.y + 0.5, c.z + 0.5)
     CM.pose(c.model, c.x, c.y, c.z, W.meta(c.x, c.y, c.z), Ch.lidOf(c, t), {s, b})
