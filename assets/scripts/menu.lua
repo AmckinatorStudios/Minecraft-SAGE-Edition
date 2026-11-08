@@ -454,6 +454,15 @@ local function buildOptions()
         graphics.set(graphicsText())
         apply()
     end)
+    -- Fullscreen: ON/OFF (Video Settings, F11) — окно без рамки на весь экран.
+    local function fullText() return "Fullscreen: " .. (o.fullscreen and "ON" or "OFF") end
+    local full
+    full = s.button(fullText(), function()
+        o.fullscreen = not o.fullscreen
+        full.set(fullText())
+        apply()
+        saveOptions()
+    end)
     -- Свой скин: выбор (по кругу) и папка, куда класть PNG (пользовательская
     -- папка игры «skins» — рядом с игрой).
     local Avatar = require "avatar"
@@ -467,6 +476,7 @@ local function buildOptions()
     local skinsFolder = s.button("Open Skins Folder", function() Avatar.openSkinsFolder() end)
     s.skin = skin
     function s.onOpen()
+        full.set(fullText())   -- F11 мог переключить режим, пока окно было закрыто
         Avatar.prepareSkins()
         skin.set(skinText())
     end
@@ -487,6 +497,8 @@ local function buildOptions()
         skin.place(W / 2 - 155 + (k % 2) * 160, H / 6 - 12 + 24 * (k // 2), 150)
         k = k + 1
         skinsFolder.place(W / 2 - 155 + (k % 2) * 160, H / 6 - 12 + 24 * (k // 2), 150)
+        k = k + 1
+        full.place(W / 2 - 155 + (k % 2) * 160, H / 6 - 12 + 24 * (k // 2), 150)
         done.place(W / 2 - 100, H / 6 + 168, 200)
     end
     function s.tick() for _, sl in ipairs(sliders) do sl.update() end end

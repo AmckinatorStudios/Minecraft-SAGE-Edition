@@ -8,7 +8,7 @@
     "uLightCells": "sagecraft_lightmap"
   },
   "params": {
-    "uWave": 1.0,
+    "uWave": 0.0,
     "uTint": [
       0.62,
       0.76,
