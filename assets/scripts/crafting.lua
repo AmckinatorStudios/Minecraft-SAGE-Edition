@@ -89,7 +89,9 @@ for from, to in pairs({iron_ore = "iron_ingot", gold_ore = "gold_ingot", sand = 
                        -- Руды, добытые «Шёлковым касанием» в оригинале, плавятся в свой
                        -- предмет; здесь их не добыть целыми, но рецепт тот же.
                        coal_ore = "coal", diamond_ore = "diamond", redstone_ore = "redstone",
-                       lapis_ore = "lapis_lazuli", emerald_ore = "emerald"}) do
+                       lapis_ore = "lapis_lazuli", emerald_ore = "emerald",
+                       -- FurnaceRecipes: сырая свинина — жареная (опыт 0.35).
+                       porkchop_raw = "porkchop_cooked"}) do
     R.SMELT[id(from)] = id(to)
 end
 

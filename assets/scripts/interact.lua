@@ -341,6 +341,15 @@ end
 -- actions — для автопрогона: {breaking = bool, place = bool}.
 function Act.update(dt, actions)
     target = P.raycast(Act.REACH)
+    -- Существо под прицелом (getMouseOver): ближе блока и не дальше 3 блоков
+    -- в выживании — тогда блок не выбран, ЛКМ бьёт, ПКМ — взаимодействие.
+    local Pig = require "pig"
+    do
+        local ox, oy, oz = P.eye()
+        local dx, dy, dz = P.lookDir()
+        Act.pig = Pig.raycast(ox, oy, oz, dx, dy, dz, math.min(3, target and target.dist or 3))
+        if Act.pig then target = nil end
+    end
     local breaking = actions and actions.breaking or IsActionDown("Break")
     local placing = actions and actions.place or IsActionDown("Place") or Act.forcePlace
     if Act.forceSwing then Anim.swingItem() end
@@ -361,6 +370,10 @@ function Act.update(dt, actions)
     -- Удар по воздуху — один взмах на нажатие; по блоку — непрерывно
     -- (swingItem каждый тик, новый взмах — с середины прошлого).
     if (actions and actions.breaking) == nil and WasActionPressed("Break") then Anim.swingItem() end
+    -- Удар существа — один на нажатие (clickMouse → attackEntity).
+    if Act.pig and (actions and actions.breaking) == nil and WasActionPressed("Break") then
+        Pig.attack(Act.pig, P, Inv.current())
+    end
     if breaking and target and breakCooldown == 0 then
         Anim.swingItem()
         -- Другой блок под прицелом — прогресс и счёт ударов заново (1.7.10).
@@ -402,6 +415,14 @@ function Act.update(dt, actions)
     -- иначе — поставить блок. Отпустили — использование кончилось (лук стреляет).
     local held = Inv.current()
     local hd = held and B.byId[held.id]
+    -- ПКМ по существу (interactWithEntitySending): морковь свинье — любовь;
+    -- не взяла — предмет используется как обычно (морковь съедается).
+    if placing and Act.pig and not Anim.use and placeCooldown == 0 and Pig.interact(Act.pig, held) then
+        Inv.useOne()
+        placeCooldown = 0.22
+        placing = false
+        held = Inv.current()
+    end
     if placing then
         if Anim.use then
             -- уже используется

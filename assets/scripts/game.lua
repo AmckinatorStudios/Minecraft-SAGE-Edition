@@ -176,6 +176,9 @@ local function openWorld(w)
     Furn.load(loaded and loaded.furnaces)
     Map.load(loaded and loaded.maps)
     require("plants").load(loaded and loaded.plants)
+    -- Свиньи и участки, где животные уже появлялись (до генерации участков).
+    require("pig").load(loaded and loaded.pigs)
+    require("pig").loadChunks(loaded and loaded.pigChunks)
     C.radius = tonumber(LaunchArg("view") or "") or C.radius
 
     local sx, sy, sz = G.spawnPoint()
@@ -321,6 +324,8 @@ local function startGame()
                 function() return require("ui").durabilitySelfCheck() end,
                 function() return B.facingSelfCheck() end,
                 function() return require("particles").selfCheck() end,
+                function() return require("pigmodel").selfCheck() end,
+                function() return require("pigcheck").selfCheck(P) end,
             }
             local fx, fy, fz = 4, W.surface(4, 4) + 1, 4
             Act.setBlock(fx, fy, fz, B.byName.furnace.id)
@@ -520,6 +525,22 @@ function OnUpdate(entity, dt)
                 local x, z = P.pos.x + dx * 3.5, P.pos.z + dz * 3.5
                 Drops.spawn(B.byName.log.id, 1, x, P.pos.y + 0.6, z, 0, 0, 0)
                 Drops.spawn(B.byName.stone_pickaxe.id, 1, x + dz * 0.5, P.pos.y + 0.6, z - dx * 0.5, 0, 0, 0)
+            end
+            -- Для снимков и проверки свиньи: стадо перед игроком (двое взрослых,
+            -- поросёнок), в рюкзаке — морковь, морковь на удочке, мечи, свинина.
+            if LaunchFlag("pigdemo") then
+                local Pig = require "pig"
+                local dx, _, dz = P.lookDir()
+                for i, d in ipairs({{4, 0, 0}, {5, 1.5, 0}, {4.5, -1.5, -24000}}) do
+                    local x = math.floor(P.pos.x + dx * d[1] - dz * d[2]) + 0.5
+                    local z = math.floor(P.pos.z + dz * d[1] + dx * d[2]) + 0.5
+                    local y = W.surface(math.floor(x), math.floor(z)) + 1
+                    Pig.spawn(x, y, z, (-P.yaw + i * 25) % 360, d[3])
+                end
+                for _, k in ipairs({{"carrot", 64}, {"carrot_on_a_stick", 1}, {"wood_sword", 1}, {"diamond_sword", 1},
+                                    {"porkchop_raw", 16}, {"porkchop_cooked", 16}}) do
+                    Inv.add(B.byName[k[1]].id, k[2])
+                end
             end
             -- Для проверки F2: снимок через 3 с, ещё через 2 с — кадр с надписью в чате.
             if LaunchFlag("shotdemo") then shotDemo = 0 end
@@ -768,6 +789,7 @@ function OnUpdate(entity, dt)
 
     if not Inv.screenOpen and not chatting then Act.update(dt, Auto.active and Auto.actions() or nil) end
     Drops.update(dt)
+    require("pig").update(dt, P)
     require("needle").update(dt, P)
     require("particles").update(dt)
     Fall.update(dt)

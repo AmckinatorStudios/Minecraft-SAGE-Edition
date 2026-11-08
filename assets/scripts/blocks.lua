@@ -119,7 +119,14 @@ local items = {
     {id = 258, name = "diamond",         title = "Diamond",              tex = "diamond"},
     {id = 259, name = "iron_ingot",      title = "Iron Ingot",    tex = "iron_ingot"},
     {id = 260, name = "gold_ingot",      title = "Gold Ingot",     tex = "gold_ingot"},
-    {id = 261, name = "apple",           title = "Apple",             tex = "apple", food = 4},
+    {id = 261, name = "apple",           title = "Apple",             tex = "apple", food = 4, sat = 0.3},
+    -- Свинина (ItemFood 1.7.10): сырая — 3 и насыщение ×0.3, жареная — 8 и ×0.8;
+    -- морковь (ItemSeedFood) — 3 и ×0.6, ею кормят свиней (размножение,
+    -- приманка); морковь на удочке — приманка (руль седла — без седла).
+    {id = 299, name = "porkchop_raw",    title = "Raw Porkchop",     tex = "porkchop_raw", food = 3, sat = 0.3},
+    {id = 300, name = "porkchop_cooked", title = "Cooked Porkchop",  tex = "porkchop_cooked", food = 8, sat = 0.8},
+    {id = 301, name = "carrot",          title = "Carrot",           tex = "carrot", food = 3, sat = 0.6},
+    {id = 302, name = "carrot_on_a_stick", title = "Carrot on a Stick", tex = "carrot_on_a_stick", stack = 1},
     {id = 262, name = "flint",           title = "Flint",            tex = "flint"},
     {id = 263, name = "redstone",        title = "Redstone",         tex = "redstone_dust"},
     {id = 264, name = "lapis_lazuli",    title = "Lapis Lazuli",     tex = "dye_powder_blue"},
@@ -229,7 +236,7 @@ for _, it in ipairs(items) do
     it.isBlock = false
     it.stack = it.stack or (it.tool and 1 or 64)
     -- Как держится и что делает ПКМ (Item.isFull3D, getItemUseAction).
-    it.full3d = it.tool ~= nil or it.name == "stick"
+    it.full3d = it.tool ~= nil or it.name == "stick" or it.name == "carrot_on_a_stick"
     if it.food then it.use = "eat"
     elseif it.drink then it.use = "drink"
     elseif it.tool == "sword" then it.use = "block"

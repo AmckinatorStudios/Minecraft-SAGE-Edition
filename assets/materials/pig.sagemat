@@ -1,0 +1,13 @@
+{
+  "cull": "back",
+  "filtering": "nearest",
+  "vertexShader": "assets/shaders/chunk.vert",
+  "fragmentShader": "assets/shaders/chunk.frag",
+  "textures": {
+    "uAtlas": "assets/textures/entity/pig/pig.png",
+    "uLightCells": "sagecraft_lightmap"
+  },
+  "params": {
+    "uEntityLight": 1
+  }
+}
