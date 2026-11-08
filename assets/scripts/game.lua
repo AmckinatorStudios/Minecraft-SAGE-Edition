@@ -62,6 +62,7 @@ local function bindControls()
     BindAction("MenuConfirm", {"ENTER", "KP_ENTER"})
     BindAction("Fly",       "F")
     BindAction("Skin",      "K")
+    BindAction("Chat",      "T")
     BindAction("Pause",     "ESCAPE")
     for i = 1, 9 do BindAction("Slot " .. i, tostring(i)) end
 end
@@ -180,6 +181,7 @@ local function openWorld(w)
     Sky.init()
     Clouds.init(seed)
     Hud.init()
+    require("chat").init()
     Hud.loading(false)          -- загрузку показывает меню (Loading world)
     Hand.init(cameraObj)
     Avatar.init(playerObj)
@@ -232,6 +234,7 @@ local function startGame()
         log(Sky.selfCheck())
         log(require("lightmap").selfCheck())
         log(Inv.selfCheck())
+        log(require("chat").selfCheck())
         -- Свет факела в открытом воздухе: 14, 13, … — по одному за клетку.
         -- (Очередь волны с дырой обрывала свет через три клетки.)
         do
@@ -248,6 +251,7 @@ local function startGame()
             -- Печь: 2 руды и уголь — два слитка через 20 с; пока огонь —
             -- горящая печь, уголь (80 с) прогорел — снова обычная.
             log(require("plants").selfCheck())
+            log(require("torch").selfCheck())
             local fx, fy, fz = 4, W.surface(4, 4) + 1, 4
             Act.setBlock(fx, fy, fz, B.byName.furnace.id)
             local f = Furn.at(fx, fy, fz)
@@ -445,6 +449,27 @@ function OnUpdate(entity, dt)
             Act.forceSwing = LaunchFlag("forceswing")
             if LaunchArg("slot") and LaunchArg("slot") ~= "" then Inv.select(tonumber(LaunchArg("slot"))) end
             -- Для снимков: печь рядом — руда плавится, уголь горит, окно открыто.
+            -- Для снимков чата: --say=текст — сообщение игрока, --chatopen=1 —
+            -- открытое поле ввода.
+            if (LaunchArg("say") or "") ~= "" then
+                local Chat = require "chat"
+                Chat.add("<Danze> Hello")
+                Chat.add("<" .. Chat.name .. "> " .. LaunchArg("say"))
+                if LaunchFlag("chatopen") then Chat.openChat() end
+            end
+            -- Для снимков: стенка из камня к северу с факелами на трёх сторонах
+            -- и одним на полу.
+            if LaunchFlag("walltorch") then
+                local Tor = require "torch"
+                local x, z = math.floor(P.pos.x), math.floor(P.pos.z) - 3
+                local y = W.surface(x, z) + 1
+                for dy = 0, 2 do for dx = -2, 2 do Act.setBlock(x + dx, y + dy, z - 1, B.byName.planks.id) end end
+                for dy = 0, 2 do for dx = -2, 2 do if W.get(x + dx, y + dy, z) ~= 0 then Act.setBlock(x + dx, y + dy, z, 0) end end end
+                Act.setBlock(x - 1, y + 1, z, B.byName.torch.id, 3)
+                Act.setBlock(x + 1, y + 1, z, B.byName.torch.id, 3)
+                Act.setBlock(x, y + 3, z - 1, B.byName.torch.id, 5)
+                Act.setBlock(x + 2, y + 1, z - 2, B.byName.torch.id, Tor.metaFor(x + 2, y + 1, z - 2, 1, 0, 0) or 5)
+            end
             -- Для снимков: все породы деревьев из саженцев в ряд к северу (−Z).
             if LaunchFlag("treedemo") then
                 local Pl = require "plants"
@@ -518,29 +543,40 @@ function OnUpdate(entity, dt)
     -- растворение надо (иначе он остаётся на экране навсегда).
     if Menu.fading() then Menu.update(dt) end
 
-    if WasActionPressed("Inventory") then Inv.toggleScreen() end
-    if WasActionPressed("Pause") then
-        if Inv.screenOpen then Inv.toggleScreen() else Menu.open() end
+    -- Чат: открыт — клавиши его (буквы, Enter, Esc), игра стоит на месте.
+    local Chat = require "chat"
+    Chat.update(dt)
+    local chatting = Chat.isOpen() or Chat.justClosed
+    if not chatting and not Inv.screenOpen and WasActionPressed("Chat") then
+        Chat.openChat()
+        chatting = true
     end
-    if Act.openTable then
-        Act.openTable = false
-        if not Inv.screenOpen then Inv.toggleScreen(3) end
+
+    if not chatting then
+        if WasActionPressed("Inventory") then Inv.toggleScreen() end
+        if WasActionPressed("Pause") then
+            if Inv.screenOpen then Inv.toggleScreen() else Menu.open() end
+        end
+        if Act.openTable then
+            Act.openTable = false
+            if not Inv.screenOpen then Inv.toggleScreen(3) end
+        end
+        if Act.openFurnace then
+            local p = Act.openFurnace
+            Act.openFurnace = nil
+            Inv.openFurnace(Furn.at(p.x, p.y, p.z))
+        end
+        if WasActionPressed("View") then thirdPerson = (thirdPerson + 1) % 3 end
+        if WasActionPressed("Debug") then Hud.toggleDebug() end
+        -- F2 — снимок экрана, как в Minecraft: файл по времени в screenshots/
+        -- каталога игры, в чат — его имя.
+        if WasActionPressed("Screenshot") then takeScreenshot() end
+        if WasActionPressed("Fly") then P.flying = not P.flying; P.vel.y = 0 end
+        if WasActionPressed("Skin") then Avatar.nextSkin() end
     end
-    if Act.openFurnace then
-        local p = Act.openFurnace
-        Act.openFurnace = nil
-        Inv.openFurnace(Furn.at(p.x, p.y, p.z))
-    end
-    if WasActionPressed("View") then thirdPerson = (thirdPerson + 1) % 3 end
-    if WasActionPressed("Debug") then Hud.toggleDebug() end
-    -- F2 — снимок экрана, как в Minecraft: файл по времени в screenshots/
-    -- каталога игры, в чат — его имя.
-    if WasActionPressed("Screenshot") then takeScreenshot() end
-    if WasActionPressed("Fly") then P.flying = not P.flying; P.vel.y = 0 end
-    if WasActionPressed("Skin") then Avatar.nextSkin() end
 
     local inp
-    if Inv.screenOpen then
+    if Inv.screenOpen or chatting then
         inp = {forward = 0, strafe = 0}
     else
         inp = Auto.active and Auto.input(dt) or readInput()
@@ -589,11 +625,12 @@ function OnUpdate(entity, dt)
 
     C.update(P.pos.x, P.pos.z, C.budgetMs)
 
-    if not Inv.screenOpen then Act.update(dt, Auto.active and Auto.actions() or nil) end
+    if not Inv.screenOpen and not chatting then Act.update(dt, Auto.active and Auto.actions() or nil) end
     Drops.update(dt)
     Fall.update(dt)
     Furn.update(dt)
     require("plants").update(dt)
+    require("torch").update(dt, P)
     Sky.update(dt, P)
     Clouds.update(dt, P)
     Arrows.update(dt, P)

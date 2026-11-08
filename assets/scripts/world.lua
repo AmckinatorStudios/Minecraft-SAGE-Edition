@@ -21,6 +21,9 @@ W.SEA = 62
 
 local ID_MASK = 0x3FF
 local SKY_SHIFT, BLK_SHIFT = 10, 14
+-- Метаданные блока (4 бита, как у Minecraft): ориентация факела и т.п.
+local META_SHIFT = 18
+local META_MASK = 15 << META_SHIFT
 
 W.chunks = {}      -- [ключ участка] = участок
 W.dirty = {}       -- [ключ секции] = true — меш секции нужно пересобрать
@@ -98,7 +101,21 @@ end
 function W.setId(x, y, z, id)
     local v = W.raw(x, y, z)
     if v == nil then return false end
-    return W.setRaw(x, y, z, (v & ~ID_MASK) | id)
+    -- Новый блок — с чистыми метаданными (ориентация старого ему не нужна).
+    return W.setRaw(x, y, z, (v & ~(ID_MASK | META_MASK)) | id)
+end
+
+W.META_SHIFT = META_SHIFT
+function W.meta(x, y, z)
+    local v = W.raw(x, y, z)
+    if v == nil then return 0 end
+    return (v >> META_SHIFT) & 15
+end
+
+function W.setMeta(x, y, z, m)
+    local v = W.raw(x, y, z)
+    if v == nil then return false end
+    return W.setRaw(x, y, z, (v & ~META_MASK) | ((m & 15) << META_SHIFT))
 end
 
 function W.sky(x, y, z)

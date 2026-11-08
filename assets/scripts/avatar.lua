@@ -467,7 +467,7 @@ function Avatar.updatePreview(P, heldId)
     if not Avatar.previewOn or not Avatar.previewObj or not P then return end
     local o = Avatar.previewObj
     local S = require("ui").WIN
-    local c, size = UICursor(), UIScreenSize()
+    local c, size = ui.cursor(), ui.size()
     local guiLeft, guiTop = size.x / 2 - 88 * S, size.y / 2 - 83 * S
     local mouseX, mouseY = (c.x - guiLeft) / S, (c.y - guiTop) / S
     local mx = Avatar.PREVIEW_FEET[1] - mouseX

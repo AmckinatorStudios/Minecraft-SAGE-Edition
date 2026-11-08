@@ -213,7 +213,35 @@ function P.raycast(maxDist)
     while t <= maxDist do
         local id = W.get(x, y, z)
         if id ~= 0 and B.drawKind[id] ~= 4 then
-            return {x = x, y = y, z = z, id = id, nx = nx, ny = ny, nz = nz, dist = t}
+            if B.drawKind[id] ~= 5 then
+                return {x = x, y = y, z = z, id = id, nx = nx, ny = ny, nz = nz, dist = t}
+            end
+            -- Факел: попадание — только в его рамку выбора (луч и рамка,
+            -- slab-метод), грань — та, через которую луч вошёл в рамку.
+            local box = require("torch").bounds(W.meta(x, y, z))
+            local tmin, tmax, fn = -math.huge, math.huge, {0, 0, 0}
+            local hit = true
+            local O, D, Cc = {ox, oy, oz}, {dx, dy, dz}, {x, y, z}
+            for axis = 1, 3 do
+                local o, d = O[axis], D[axis]
+                local lo, hi = Cc[axis] + box[axis], Cc[axis] + box[axis + 3]
+                if math.abs(d) < 1e-9 then
+                    if o < lo or o > hi then hit = false end
+                else
+                    local t1, t2 = (lo - o) / d, (hi - o) / d
+                    local n = -1
+                    if t1 > t2 then t1, t2, n = t2, t1, 1 end
+                    if t1 > tmin then
+                        tmin = t1
+                        fn = {0, 0, 0}
+                        fn[axis] = n
+                    end
+                    if t2 < tmax then tmax = t2 end
+                end
+            end
+            if hit and tmin <= tmax and tmax >= 0 and tmin <= maxDist then
+                return {x = x, y = y, z = z, id = id, nx = fn[1], ny = fn[2], nz = fn[3], dist = math.max(0, tmin), box = box}
+            end
         end
         if tx < ty and tx < tz then
             x = x + sx; t = tx; tx = tx + ddx; nx, ny, nz = -sx, 0, 0

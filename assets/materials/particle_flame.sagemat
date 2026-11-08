@@ -1,0 +1,11 @@
+{
+  "cull": "none",
+  "opacity": 0.99,
+  "filtering": "nearest",
+  "vertexShader": "assets/shaders/sprite.vert",
+  "fragmentShader": "assets/shaders/particle.frag",
+  "textures": {
+    "uTex": "assets/textures/particle/particles.png"
+  },
+  "params": {}
+}
