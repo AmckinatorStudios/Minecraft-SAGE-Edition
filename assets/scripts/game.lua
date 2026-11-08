@@ -601,6 +601,34 @@ function OnUpdate(entity, dt)
                 local open = LaunchArg("chestopen")
                 if open == "1" then Ch.open(sx, sy, sz) elseif open == "2" then Ch.open(d1x, d1y, d1z) end
             end
+            -- Для снимков пары: двойные сундуки со всех четырёх сторон от игрока,
+            -- все лицом к нему (по X — на север и юг, по Z — на запад и восток);
+            -- chestlid=1 — крышки всех сундуков открыты (без окна).
+            if LaunchFlag("chestgrid") then
+                local Ch = require "chest"
+                local px, pz = math.floor(P.pos.x), math.floor(P.pos.z)
+                local fy = math.floor(P.pos.y) - 1
+                -- Ровная площадка 13×13 из камня, над ней воздух — чтобы рельеф не прятал пары.
+                for x = px - 6, px + 6 do
+                    for z = pz - 6, pz + 6 do
+                        Act.setBlock(x, fy, z, B.byName.stone.id)
+                        for yy = fy + 1, fy + 5 do
+                            if W.get(x, yy, z) ~= 0 then Act.setBlock(x, yy, z, 0) end
+                        end
+                    end
+                end
+                for _, c in ipairs({{0, -4, 1, 0, 0}, {0, 4, 1, 0, 180}, {-4, 0, 0, 1, 90}, {4, 0, 0, 1, -90}}) do
+                    for k = 0, 1 do
+                        local x, z = px + c[1] + c[3] * k, pz + c[2] + c[4] * k
+                        local meta, pair = Ch.placeMeta(x, fy + 1, z, c[5])
+                        Act.setBlock(x, fy + 1, z, Ch.ID, meta)
+                        Ch.placed(x, fy + 1, z, meta, pair, Act.setBlock)
+                    end
+                end
+            end
+            if LaunchFlag("chestlid") then
+                for _, c in pairs(require("chest").list) do c.users = 1 end
+            end
             -- Для проверки F2: снимок через 3 с, ещё через 2 с — кадр с надписью в чате.
             if LaunchFlag("shotdemo") then shotDemo = 0 end
             if (LaunchArg("shotat") or "") ~= "" then shotAt = {t = 0, at = tonumber(LaunchArg("shotat"))} end

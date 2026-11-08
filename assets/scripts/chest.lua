@@ -112,6 +112,11 @@ end
 
 -- Сундук поставлен (уже в мире, с метаданными meta): хранилище и сторона пары.
 function Ch.placed(x, y, z, meta, pair, setBlock)
+    -- Новый блок — новое пустое хранилище (новый TileEntityChest): старое с
+    -- этой клетки не всплывает.
+    local old = Ch.list[key(x, y, z)]
+    if old then CM.destroy(old.model) end
+    Ch.list[key(x, y, z)] = nil
     Ch.at(x, y, z)
     if pair and W.meta(pair[1], pair[2], pair[3]) ~= meta then
         setBlock(pair[1], pair[2], pair[3], Ch.ID, meta)
@@ -213,6 +218,13 @@ function Ch.broken(x, y, z)
     return spawned
 end
 
+-- Клетка сменила блок (Act.setBlock): был сундук, стал не сундук — как
+-- BlockContainer.breakBlock при любой замене: содержимое высыпается.
+function Ch.replaced(x, y, z, prev, id)
+    if prev == Ch.ID and id ~= Ch.ID then return Ch.broken(x, y, z) end
+    return 0
+end
+
 -- --- Крышка и звуки (TileEntityChest.updateEntity) ----------------------------
 
 local function sound(c, name)
@@ -248,24 +260,35 @@ end
 local acc = 0
 local TICK = 1 / 20
 
--- Модель: рисует только главная половина (у пары — большая модель с углом
--- крышки — больший из двух, как у renderTileEntityAt).
+-- Модель: каждая клетка рисует себя — одиночный сундук или свою половину
+-- пары (левую или правую по стороне соседа). Угол крышки у обеих половин —
+-- больший из двух (renderTileEntityAt), поэтому они двигаются как одна.
+function Ch.modelKind(c)
+    local px, _, pz = Ch.partner(c.x, c.y, c.z)
+    if not px then return "single" end
+    return CM.halfFor(W.meta(c.x, c.y, c.z), px - c.x, pz - c.z)
+end
+
+function Ch.lidOf(c, t)
+    local a = c.plid + (c.lid - c.plid) * t
+    local px, py, pz = Ch.partner(c.x, c.y, c.z)
+    local o = px and Ch.list[key(px, py, pz)]
+    if o then a = math.max(a, o.plid + (o.lid - o.plid) * t) end
+    return a
+end
+
 local function render(c, t)
     local loaded = W.chunk(c.x // 16, c.z // 16)
-    if not (loaded and loaded.built) or not isMaster(c) or not isChestAt(c.x, c.y, c.z) then
+    if not (loaded and loaded.built) or not isChestAt(c.x, c.y, c.z) then
         if c.model then CM.destroy(c.model); c.model = nil end
         return
     end
-    local xPos, zPos = isChestAt(c.x + 1, c.y, c.z), isChestAt(c.x, c.y, c.z + 1)
-    local kind = (xPos or zPos) and "double" or "single"
+    local kind = Ch.modelKind(c)
     if c.model and c.model.kind ~= kind then CM.destroy(c.model); c.model = nil end
     c.model = c.model or CM.create(kind)
-    local a = c.plid + (c.lid - c.plid) * t
-    local o = xPos and Ch.list[key(c.x + 1, c.y, c.z)] or zPos and Ch.list[key(c.x, c.y, c.z + 1)]
-    if o then a = math.max(a, o.plid + (o.lid - o.plid) * t) end
     local Light = require "lightmap"
     local s, b = Light.levels(c.x + 0.5, c.y + 0.5, c.z + 0.5)
-    CM.pose(c.model, c.x, c.y, c.z, W.meta(c.x, c.y, c.z), a, xPos, zPos, {s, b})
+    CM.pose(c.model, c.x, c.y, c.z, W.meta(c.x, c.y, c.z), Ch.lidOf(c, t), {s, b})
 end
 
 function Ch.update(dt)
