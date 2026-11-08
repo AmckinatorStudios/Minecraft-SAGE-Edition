@@ -102,6 +102,9 @@ local defs = {
     -- Лестница (BlockLadder): плоская картинка на стене, метаданные — сторона
     -- (ladder.lua), лезут по ней (player.lua).
     {id = 71, name = "ladder",       title = "Ladder", tex = "ladder", draw = "ladder", hard = 0.4, tool = "axe", solid = false, opacityLight = 0},
+    -- Люк (BlockTrapDoor): плита 3/16 на боковой грани блока, метаданные —
+    -- trapdoor.lua; в инвентаре и в руке — тонкая плита (setBlockBoundsForItemRender).
+    {id = 72, name = "trapdoor",     title = "Trapdoor", tex = "trapdoor", draw = "trapdoor", hard = 3.0, tool = "axe", solid = false, opacityLight = 0, itemBox = {0, 0.40625, 0, 1, 0.59375, 1}},
     {id = 69, name = "dark_oak_planks", title = "Dark Oak Wood Planks", tex = "planks_big_oak", hard = 2.0, tool = "axe"},
     {id = 47, name = "lit_furnace",   facing = "furnace",  title = "Furnace",              top = "furnace_top", side = "furnace_side", front = "furnace_front_on", bottom = "furnace_top", hard = 3.5, tool = "pickaxe", need = 1, light = 13, drop = "furnace"},
 }
@@ -136,7 +139,9 @@ local items = {
     {id = 295, name = "bone_meal",       title = "Bone Meal",        tex = "dye_powder_white"},
     -- Ножницы: листва и трава — целым блоком (BlockLeaves/BlockTallGrass.harvestBlock).
     -- Дверь (ItemDoor): ставит блок door_wood — две половины.
-    {id = 297, name = "wooden_door",     title = "Wooden Door",      tex = "door_wood", stack = 1, places = "door_wood"},
+    -- Стопка 64 — иначе рецепт на 3 двери не уместился бы в одну стопку
+    -- (у 1.7.10 дверь не складывалась, а рецепт давал одну).
+    {id = 297, name = "wooden_door",     title = "Wooden Door",      tex = "door_wood", stack = 64, places = "door_wood"},
     {id = 296, name = "shears",          title = "Shears",           tex = "shears", stack = 1, uses = 238, shears = true},
     {id = 290, name = "filled_map",      title = "Map",              tex = "map_filled", map = true, stack = 1},
     -- Кадры натяжения лука (ItemBow.getItemIconForUseDuration) — только картинки.
@@ -176,7 +181,7 @@ B.absorb = {}      -- сколько свет теряет, проходя ск�
 B.facing = {}     -- [id] = true — лицевая сторона по метаданным (печь, тыква)
 B.faceTile = {}    -- [id] = {верх, низ, север, юг, запад, восток} — номера плиток атласа
 
-local KIND = {solid = 1, cutout = 2, cross = 3, liquid = 4, torch = 5, door = 6, ladder = 7}
+local KIND = {solid = 1, cutout = 2, cross = 3, liquid = 4, torch = 5, door = 6, ladder = 7, trapdoor = 8}
 
 for i = 0, 1023 do
     B.opaque[i] = false

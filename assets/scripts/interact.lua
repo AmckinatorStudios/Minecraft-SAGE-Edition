@@ -75,6 +75,7 @@ end
 
 local outlineKey
 local function showOutline(t)
+    if not outline.obj then return end     -- до Act.init (самопроверки)
     local b = t.box or {0, 0, 0, 1, 1, 1}
     local ex, ey, ez = P.eye()
     local cx, cy, cz = t.x + (b[1] + b[4]) / 2, t.y + (b[2] + b[5]) / 2, t.z + (b[3] + b[6]) / 2
@@ -97,6 +98,7 @@ end
 -- сменились стадия, блок или его метаданные; новая стадия заменяет прежнюю.
 local crackKey
 local function showCrack(stage, t)
+    if not crack then return end
     local key = stage .. ":" .. t.x .. ":" .. t.y .. ":" .. t.z .. ":" .. t.id .. ":" .. (t.meta or 0)
     if key ~= crackKey then
         crackKey = key
@@ -109,6 +111,7 @@ local function showCrack(stage, t)
 end
 
 local function hideCrack()
+    if not crack then return end
     crack.Transform.Position = Vec3(0, -100, 0)
     crackKey = nil
 end
@@ -196,6 +199,8 @@ local function breakBlock(t)
     end
     -- Факелы, державшиеся за этот блок, падают предметом.
     Torch.checkAround(t.x, t.y, t.z)
+    -- Люки, державшиеся за этот блок, падают предметом.
+    require("trapdoor").checkAround(Act.setBlock, t.x, t.y, t.z)
     -- Лестницы, державшиеся за этот блок, падают предметом.
     require("ladder").checkAround(Act.setBlock, t.x, t.y, t.z)
     -- Дверь, стоявшая на этом блоке, выпадает предметом.
@@ -228,6 +233,7 @@ end
 local function activates(t)
     if not t or IsActionDown("Sneak") then return false end
     return require("furnace").isFurnace(t.id) or t.id == B.byName.crafting_table.id or Door.isDoor(t.id)
+        or require("trapdoor").isTrapdoor(t.id)
 end
 
 local function place(t)
@@ -242,6 +248,12 @@ local function place(t)
     -- Дверь (onBlockActivated): ПКМ по любой половине — открыть/закрыть всю.
     if Door.isDoor(t.id) and activates(t) then
         Door.toggle(Act.setBlock, t.x, t.y, t.z)
+        Anim.swingItem()
+        return
+    end
+    -- Люк (onBlockActivated): ПКМ — открыть/закрыть.
+    if require("trapdoor").isTrapdoor(t.id) and activates(t) then
+        require("trapdoor").toggle(Act.setBlock, t.x, t.y, t.z)
         Anim.swingItem()
         return
     end
@@ -279,6 +291,14 @@ local function place(t)
         meta = Torch.metaFor(x, y, z, t.nx, t.ny, t.nz)
         if not meta then return end
     elseif d.draw == "cross" and not B.opaque[below] then return
+    elseif d.draw == "trapdoor" then
+        -- Люк (onBlockPlaced): только боковая грань; вверху клетки — если
+        -- попали в верхнюю половину грани (hitY оригинала).
+        local _, ey = P.eye()
+        local _, ly = P.lookDir()
+        local hitY = ey + ly * t.dist - t.y
+        meta = require("trapdoor").metaFor(x, y, z, require("particles").sideOf(t.nx, t.ny, t.nz), hitY)
+        if not meta then return end
     elseif d.draw == "ladder" then
         -- Лестница (onBlockPlaced): сторона — по грани клика, опора сзади.
         meta = require("ladder").metaFor(x, y, z, require("particles").sideOf(t.nx, t.ny, t.nz))
@@ -298,6 +318,12 @@ local function place(t)
     end
 end
 
+-- ПКМ с предметом — «использовать» (еда, лук, карта), а не ставить блок.
+-- Предмет, который ставит блок (дверь: places), — постановка.
+function Act.isUseItem(d)
+    return d ~= nil and not d.isBlock and not d.places
+end
+
 -- actions — для автопрогона: {breaking = bool, place = bool}.
 function Act.update(dt, actions)
     target = P.raycast(Act.REACH)
@@ -314,7 +340,7 @@ function Act.update(dt, actions)
     if target then
         -- Рамка — по коробке выбора блока (bounds.lua), а не по клетке.
         showOutline(target)
-    else
+    elseif outline.obj then
         outline.obj.Transform.Position = Vec3(0, -100, 0)
     end
 
@@ -375,7 +401,9 @@ function Act.update(dt, actions)
                 Anim.swingItem()
             end
             placeCooldown = 0.22
-        elseif placeCooldown == 0 and hd and not hd.isBlock and not activates(target) then
+        -- Предмет, который ставит блок (дверь), — не «использование», а постановка:
+        -- раньше ПКМ с дверью уходила сюда, и дверь не ставилась вовсе.
+        elseif placeCooldown == 0 and hd and Act.isUseItem(hd) and not activates(target) then
             Act.useItem(held, hd)
             placeCooldown = 0.22
         elseif target and placeCooldown == 0 then

@@ -72,6 +72,12 @@ shape("ladder", {
     collision = function(meta) return {require("ladder").box(meta)} end,
 })
 
+-- Люк (BlockTrapDoor): плита 3/16 по метаданным — столкновение и выбор.
+shape("trapdoor", {
+    selected = function(meta) return require("trapdoor").box(meta) end,
+    collision = function(meta) return {require("trapdoor").box(meta)} end,
+})
+
 -- Факел (BlockTorch): столкновения нет, выбор — по ориентации (torch.lua).
 shape("torch", {
     selected = function(meta) return require("torch").bounds(meta) end,

@@ -42,7 +42,10 @@ for _, w in ipairs({"spruce", "jungle", "acacia", "dark_oak"}) do shapeless(w ..
 shaped("shears", 1, {" I", "I "}, {I = "iron_ingot"})
 shaped("stick", 4, {"P", "P"}, {P = PLANKS})
 shaped("crafting_table", 1, {"PP", "PP"}, {P = PLANKS})
-shaped("wooden_door", 1, {"PP", "PP", "PP"}, {P = PLANKS})
+-- Дверь — 6 досок в два столбца по три, 3 штуки; люк — в два ряда по три,
+-- 2 штуки (TRAPDOOR — CraftingManager 1.7.10).
+shaped("wooden_door", 3, {"PP", "PP", "PP"}, {P = PLANKS})
+shaped("trapdoor", 2, {"PPP", "PPP"}, {P = PLANKS})
 shaped("ladder", 3, {"S S", "SSS", "S S"}, {S = "stick"})
 shaped("torch", 4, {"C", "S"}, {C = "coal", S = "stick"})
 shaped("furnace", 1, {"CCC", "C C", "CCC"}, {C = "cobblestone"})
