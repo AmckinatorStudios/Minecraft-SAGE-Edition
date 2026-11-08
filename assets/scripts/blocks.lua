@@ -94,6 +94,10 @@ local defs = {
     {id = 66, name = "spruce_planks",   title = "Spruce Wood Planks",   tex = "planks_spruce", hard = 2.0, tool = "axe"},
     {id = 67, name = "jungle_planks",   title = "Jungle Wood Planks",   tex = "planks_jungle", hard = 2.0, tool = "axe"},
     {id = 68, name = "acacia_planks",   title = "Acacia Wood Planks",   tex = "planks_acacia", hard = 2.0, tool = "axe"},
+    -- Дверь (BlockDoor): две половины, метаданные — door.lua; рисуется
+    -- мешером по коробке полотна (renderBlockDoor). Не глухая, свет пропускает,
+    -- роняет предмет «дверь» (нижняя половина).
+    {id = 70, name = "door_wood",    title = "Wooden Door", tex = "door_wood_lower", upper = "door_wood_upper", draw = "door", hard = 3.0, tool = "axe", solid = false, opacityLight = 0, drop = "wooden_door", item = "wooden_door", hidden = true},
     {id = 69, name = "dark_oak_planks", title = "Dark Oak Wood Planks", tex = "planks_big_oak", hard = 2.0, tool = "axe"},
     {id = 47, name = "lit_furnace",  title = "Furnace",              top = "furnace_top", side = "furnace_side", front = "furnace_front_on", bottom = "furnace_top", hard = 3.5, tool = "pickaxe", need = 1, light = 13, drop = "furnace"},
 }
@@ -127,6 +131,8 @@ local items = {
     -- Костная мука (dye 15): ускоряет рост саженца (ItemDye.applyBonemeal).
     {id = 295, name = "bone_meal",       title = "Bone Meal",        tex = "dye_powder_white"},
     -- Ножницы: листва и трава — целым блоком (BlockLeaves/BlockTallGrass.harvestBlock).
+    -- Дверь (ItemDoor): ставит блок door_wood — две половины.
+    {id = 297, name = "wooden_door",     title = "Wooden Door",      tex = "door_wood", stack = 1, places = "door_wood"},
     {id = 296, name = "shears",          title = "Shears",           tex = "shears", stack = 1, uses = 238, shears = true},
     {id = 290, name = "filled_map",      title = "Map",              tex = "map_filled", map = true, stack = 1},
     -- Кадры натяжения лука (ItemBow.getItemIconForUseDuration) — только картинки.
@@ -165,7 +171,7 @@ B.emit = {}        -- свет блока 0..15
 B.absorb = {}      -- сколько свет теряет, проходя сквозь (1 — воздух)
 B.faceTile = {}    -- [id] = {верх, низ, север, юг, запад, восток} — номера плиток атласа
 
-local KIND = {solid = 1, cutout = 2, cross = 3, liquid = 4, torch = 5}
+local KIND = {solid = 1, cutout = 2, cross = 3, liquid = 4, torch = 5, door = 6}
 
 for i = 0, 1023 do
     B.opaque[i] = false

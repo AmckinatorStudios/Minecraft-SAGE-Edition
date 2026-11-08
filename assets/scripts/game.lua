@@ -255,6 +255,7 @@ local function startGame()
             log(require("plants").selfCheck())
             log(require("torch").selfCheck())
             log(require("bounds").selfCheck())
+            log(require("door").selfCheck())
             log(require("particles").selfCheck())
             local fx, fy, fz = 4, W.surface(4, 4) + 1, 4
             Act.setBlock(fx, fy, fz, B.byName.furnace.id)
@@ -479,6 +480,24 @@ function OnUpdate(entity, dt)
                 Act.setBlock(x + 1, y + 1, z, B.byName.torch.id, 3)
                 Act.setBlock(x, y + 3, z - 1, B.byName.torch.id, 5)
                 Act.setBlock(x + 2, y + 1, z - 2, B.byName.torch.id, Tor.metaFor(x + 2, y + 1, z - 2, 1, 0, 0) or 5)
+            end
+            -- Для снимков: двери к северу — закрытая, открытая, пара с петлями
+            -- по разные стороны (вторая открыта).
+            if LaunchFlag("doordemo") then
+                local D = require "door"
+                local x, z = math.floor(P.pos.x), math.floor(P.pos.z) - 3
+                local y = W.surface(x, z) + 1
+                for dx = -4, 4 do
+                    for dy = 0, 3 do Act.setBlock(x + dx, y + dy, z, 0) end
+                    Act.setBlock(x + dx, y - 1, z, B.byName.stone.id)
+                end
+                -- Игрок смотрит на север (−Z): наш yaw 0.
+                D.place(Act.setBlock, x - 3, y, z, 0)
+                D.place(Act.setBlock, x - 1, y, z, 0)
+                D.toggle(Act.setBlock, x - 1, y + 1, z)
+                D.place(Act.setBlock, x + 1, y, z, 0)
+                D.place(Act.setBlock, x + 2, y, z, 0)
+                D.toggle(Act.setBlock, x + 2, y, z)
             end
             -- Для снимков: осколки разрушаемого блока перед игроком (каждые 0.4 с).
             if LaunchFlag("digdemo") then

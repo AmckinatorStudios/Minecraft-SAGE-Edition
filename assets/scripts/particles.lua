@@ -115,7 +115,7 @@ end
 -- (multiplyVelocity: по вертикали (v − 0.1)·0.2 + 0.1), размер ×0.6.
 function Pt.hit(id, meta, x, y, z, side)
     if B.drawKind[id] == 4 then return nil end
-    local b = Bo.render(id, meta)
+    local b = Bo.render(id, meta, x, y, z)
     local f = 0.1
     local px = x + rnd() * (b[4] - b[1] - f * 2) + f + b[1]
     local py = y + rnd() * (b[5] - b[2] - f * 2) + f + b[2]

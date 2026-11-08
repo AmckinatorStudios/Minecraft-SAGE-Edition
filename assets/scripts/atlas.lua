@@ -57,12 +57,14 @@ local function tileFor(atlas, name, tint)
     nextTile = nextTile + 1
     local ox, oy = (t % GRID) * TILE, (t // GRID) * TILE
     -- Полоса кадров (вода — 32×1024): берём верхний кадр. Строки холста идут
-    -- снизу вверх, поэтому верхний кадр — последние TILE строк.
-    local sy0 = src.height - TILE
-    local scale = src.width // TILE
+    -- снизу вверх, поэтому верхний кадр — последние w строк. Картинка 16×16
+    -- (дверь из набора 1.7.10) ложится в плитку 32×32 ближайшим пикселем —
+    -- каждый пиксель ровно 2×2.
+    local w = src.width
+    local sy0 = src.height - w
     for y = 0, TILE - 1 do
         for x = 0, TILE - 1 do
-            local c = src.get(x * scale, sy0 + y * scale)
+            local c = src.get(x * w // TILE, sy0 + y * w // TILE)
             if tint then c = Vec4(c.x * tint[1], c.y * tint[2], c.z * tint[3], c.w) end
             atlas.set(ox + x, oy + y, c)
         end
@@ -166,6 +168,8 @@ function A.build()
             t[face] = tileFor(atlas, name, tint)
             faceSrc[face] = {name, tint}
         end
+        -- Вторая картинка блока (верхняя половина двери).
+        if d.upper then t.upper = tileFor(atlas, d.upper) end
         A.blockTiles[d.id] = t
         A.icon[d.id] = slot
         if d.draw == "cross" or d.draw == "torch" then
