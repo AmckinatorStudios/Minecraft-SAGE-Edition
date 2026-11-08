@@ -291,7 +291,11 @@ function Hand.update(dt, visible, P, heldId)
     local ls, lb = Light.levels(ex, ey, ez)
     Light.applyLevels(item, ls, lb)
     Hand.lightLevels = {ls, lb}
-    local base = Hand.bobMatrix()
+    -- Наклон от удара (renderHand → hurtCameraEffect) — перед покачиванием:
+    -- рука и предмет наклоняются вместе с видом.
+    local base = M.identity()
+    M.rotate(base, require("hurt").roll(), 0, 0, 1)
+    base = M.mul(base, Hand.bobMatrix())
     -- Отставание руки от взгляда: (взгляд − отставший)·0.1 (знаки Minecraft:
     -- наклон вниз — плюс, рыскание — в другую сторону, чем у игры).
     local lagPitch, lagYaw = Anim.armLag()

@@ -377,11 +377,15 @@ local heldObj, heldKey
 -- она стоит (Entity.getBrightnessForRender: ноги + рост 1.8 × 0.66). Каждый
 -- кадр и без ступенек округления: карта сама плавно меняется со временем
 -- суток, погодой и мерцанием факелов. Тот же материал у рук от первого лица.
-function Avatar.light(P)
+function Avatar.light(P, red)
     if not Avatar.material then return end
     local Light = require "lightmap"
     local s, b = Light.levels(P.pos.x, P.pos.y + 1.8 * 0.66, P.pos.z)
     local r, g, bl = Light.at(s, b)
+    -- Удар (RendererLivingEntity, hurtTime > 0): модель красная — поверх неё
+    -- красный с альфой 0.4: зелёный и синий ×0.6. Только от третьего лица:
+    -- у руки от первого лица (тот же материал) красного нет.
+    if red then g, bl = g * 0.6, bl * 0.6 end
     if r ~= Avatar._lr or g ~= Avatar._lg or bl ~= Avatar._lb then
         Avatar._lr, Avatar._lg, Avatar._lb = r, g, bl
         material.Set(Avatar.material, "albedo", Vec3(r, g, bl))
@@ -393,7 +397,7 @@ end
 function Avatar.update(dt, P, visible, heldId)
     if not obj then return end
     Avatar.watchSkins(dt)
-    Avatar.light(P)   -- и без вида от третьего лица: этот материал у рук от первого лица
+    Avatar.light(P, visible and require("hurt").red())   -- и без вида от третьего лица: этот материал у рук от первого лица
     obj.Transform.Scale = visible and Vec3(1, 1, 1) or Vec3(0.0001, 0.0001, 0.0001)
     if not heldObj then
         heldObj = SpawnObject("Held Item")

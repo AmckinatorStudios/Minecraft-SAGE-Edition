@@ -29,9 +29,12 @@ function Hud.buildIcons()
         local hx = -half + (i - 1) * 8 * S + 4.5 * S
         local fx = half - (i - 1) * 8 * S - 4.5 * S
         local y = 22 * S + 6 * S
-        U.sprite(root, "Heart Back " .. i, "bottom", hx, y, 9 * S, 9 * S, ICONS, "heart_empty")
+        local back = U.sprite(root, "Heart Back " .. i, "bottom", hx, y, 9 * S, 9 * S, ICONS, "heart_empty")
+        -- Белый слой — потерянное здоровье в моргании после удара (GuiIngame).
+        local lost = U.sprite(root, "Heart Lost " .. i, "bottom", hx, y, 9 * S, 9 * S, ICONS, "heart_full_flash")
+        lost.visible = false
         local h = U.sprite(root, "Heart " .. i, "bottom", hx, y, 9 * S, 9 * S, ICONS, "heart_full")
-        hearts[i] = {el = h, shown = ""}
+        hearts[i] = {el = h, shown = "", back = back, lost = lost, lostShown = "", backShown = "heart_empty"}
         if Hud.HUNGER then
             U.sprite(root, "Food Back " .. i, "bottom", fx, y, 9 * S, 9 * S, ICONS, "food_empty")
             local f = U.sprite(root, "Food " .. i, "bottom", fx, y, 9 * S, 9 * S, ICONS, "food_full")
@@ -172,9 +175,42 @@ function Hud.toggleDebug()
     debugLabel.visible = Hud.debug
 end
 
+-- Моргание сердец после удара (GuiIngame.renderIngameGui 1.7.10): пока
+-- неуязвимость ≥ 10 тиков, каждые 3 тика рамки белые, а потерянное здоровье —
+-- белыми сердцами; «прежнее» здоровье держится секунду после удара.
+Hud.lastHealth, Hud.lastHealthAt = 20, 0
+function Hud.blinkHearts()
+    local resist = require("hurt").resist
+    local now = Time.total()
+    if Hud.health < Hud.lastHealth and resist > 0 then
+        Hud.lastHealthAt = now
+    elseif now - Hud.lastHealthAt > 1 then
+        Hud.lastHealth = Hud.health
+        Hud.lastHealthAt = now
+    end
+    if Hud.health > Hud.lastHealth then Hud.lastHealth = Hud.health end
+    local flag = resist >= 10 and (resist // 3) % 2 == 1
+    for i = 1, 10 do
+        local it = hearts[i]
+        local back = flag and "heart_empty_flash" or "heart_empty"
+        if it.backShown ~= back then it.backShown = back; it.back.sprite = back end
+        local lost = ""
+        if flag then
+            local k = (i - 1) * 2
+            if k + 1 < Hud.lastHealth then lost = "heart_full_flash"
+            elseif k + 1 == Hud.lastHealth then lost = "heart_half_flash" end
+        end
+        if it.lostShown ~= lost then
+            it.lostShown = lost
+            it.lost.visible = lost ~= ""
+            if lost ~= "" then it.lost.sprite = lost end
+        end
+    end
+end
+
 function Hud.damage(n)
     Hud.health = math.max(0, Hud.health - n)
-    flashTimer = 0.35
+    -- Красной вспышки экрана у 1.7.10 нет — удар виден по камере и сердцам.
     if Hud.health == 0 then
         -- Падение насмерть — возвращение на точку появления, рюкзак цел:
         -- в песочнице наказание за ошибку не должно стоить часа работы.
@@ -203,6 +239,7 @@ function Hud.update(dt)
         Hud.foodTick()
     end
     setRow(hearts, Hud.health, "heart")
+    Hud.blinkHearts()
     if Hud.HUNGER then setRow(foods, Hud.food, "food") end
     local need = 10 + Hud.level * 2
     -- Заливка — кусок картинки той же ширины, что доля опыта.

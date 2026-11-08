@@ -96,19 +96,28 @@ end
 -- стадии destroy_stage_N; смешение GL_DST_COLOR, GL_SRC_COLOR и смещение
 -- глубины −3 — в материале crack.sagemat. Меш пересобирается, только когда
 -- сменились стадия, блок или его метаданные; новая стадия заменяет прежнюю.
-local crackKey
+local crackKey, crackEmpty
 local function showCrack(stage, t)
     if not crack then return end
     local key = stage .. ":" .. t.x .. ":" .. t.y .. ":" .. t.z .. ":" .. t.id .. ":" .. (t.meta or 0)
     if key ~= crackKey then
         crackKey = key
-        local m = mesh()
-        m.arrays(require("mesher").single(t.id, t.meta or 0, A.destroyTile[stage], t.x, t.y, t.z))
-        m.apply(crack)
-        SetMaterial(crack, "assets/materials/crack.sagemat")
+        local arrays = require("mesher").single(t.id, t.meta or 0, A.destroyTile[stage], t.x, t.y, t.z)
+        -- Блок без геометрии участка (сундук рисует модель; у 1.7.10 трещин на
+        -- нём нет) — трещин нет. Пустой меш движок не принимает: ошибка
+        -- обрывала кадр, и сундук нельзя было сломать — игра «зависала».
+        crackEmpty = arrays.n == 0
+        if not crackEmpty then
+            local m = mesh()
+            m.arrays(arrays)
+            m.apply(crack)
+            SetMaterial(crack, "assets/materials/crack.sagemat")
+        end
     end
-    crack.Transform.Position = Vec3(t.x, t.y, t.z)
+    crack.Transform.Position = crackEmpty and Vec3(0, -100, 0) or Vec3(t.x, t.y, t.z)
 end
+
+Act.showCrack = showCrack
 
 local function hideCrack()
     if not crack then return end
