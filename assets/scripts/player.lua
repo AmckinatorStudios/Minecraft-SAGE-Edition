@@ -97,9 +97,22 @@ function P.update(input, dt)
     P.inWater = liquidAt(p.x, p.y + 0.4, p.z)
     P.headInWater = liquidAt(p.x, p.y + (P.sneaking and P.EYE_SNEAK or P.EYE), p.z)
     P.sneaking = input.sneak and not P.flying
-    if input.sprintPressed and input.forward > 0 then P.sprinting = true end
+    -- Бег (EntityPlayerSP.onLivingUpdate): двойное нажатие «вперёд» на земле
+    -- (второе — за 7 тиков после первого) или «вперёд» при зажатом Ctrl.
+    -- Нельзя, если сытость 6 и меньше (кроме полёта), при использовании
+    -- предмета и в приседе (moveForward < 0.8); упёрся в стену — бег сбит.
+    local Hud = require "hud"
+    local using = require("anim").use ~= nil
+    local fwd = input.forward > 0 and not P.sneaking and not using
+    local canSprint = (not Hud.HUNGER or Hud.food > 6 or P.flying)
+    P.sprintTimer = math.max(0, (P.sprintTimer or 0) - dt)
+    if P.onGround and input.forwardPressed and fwd and not P.sprinting and canSprint then
+        if P.sprintTimer <= 0 and not input.sprintDown then P.sprintTimer = 7 / 20
+        else P.sprinting = true end
+    end
+    if not P.sprinting and fwd and canSprint and (input.sprintDown or input.sprintPressed) then P.sprinting = true end
     -- В воде не бегают (как в Minecraft 1.7): плывут шагом.
-    if input.forward <= 0 or P.sneaking or (P.inWater and not P.flying) then P.sprinting = false end
+    if not fwd or not canSprint or (P.inWater and not P.flying) then P.sprinting = false end
 
     local speed = P.flying and FLY or (P.sneaking and SNEAK or (P.sprinting and SPRINT or WALK))
     if P.inWater and not P.flying then speed = speed * 0.55 end
@@ -131,7 +144,19 @@ function P.update(input, dt)
     else
         v.y = v.y - GRAVITY * dt
         v.y = math.max(v.y, -60)
-        if input.jump and P.onGround then v.y = JUMP end
+        if input.jump and P.onGround then
+            v.y = JUMP
+            -- Прыжок с разбега (EntityLivingBase.jump): +0.2 блока за тик по
+            -- взгляду; усталость — 0.8 за такой прыжок, 0.2 за обычный.
+            local Hud = require "hud"
+            if P.sprinting then
+                local yr = math.rad(P.yaw)
+                v.x, v.z = v.x - math.sin(yr) * 0.2 * 20, v.z - math.cos(yr) * 0.2 * 20
+                Hud.addExhaustion(0.8)
+            else
+                Hud.addExhaustion(0.2)
+            end
+        end
     end
 
     -- Лестница (EntityLivingBase.isOnLadder: клетка ног — лестница;
@@ -178,6 +203,14 @@ function P.update(input, dt)
     -- Путь в приседе на земле не копится (Entity.moveEntity): нет шагов и
     -- покачивания — присед в оригинале бесшумный.
     if P.onGround and not P.sneaking then P.walkDist = P.walkDist + math.sqrt(dx * dx + dz * dz) end
+    -- Усталость от пути (EntityPlayer.addMovementStat): в воде 0.015 на блок,
+    -- на земле бегом 0.1, шагом 0.01.
+    local moved = math.sqrt(dx * dx + dz * dz)
+    if not P.flying and moved > 0 then
+        local Hud = require "hud"
+        if P.inWater then Hud.addExhaustion(0.015 * moved)
+        elseif P.onGround then Hud.addExhaustion((P.sprinting and 0.1 or 0.01) * moved) end
+    end
 
     -- Высота падения: от верхней точки полёта до приземления.
     local landed = nil
@@ -265,6 +298,47 @@ function P.canPlace(x, y, z, id, meta)
     local p = P.pos
     -- Мешает только коробка СТОЛКНОВЕНИЯ нового блока (World.canPlaceEntityOnSide).
     return not Bounds.overlaps(id, meta or 0, x, y, z, p.x - h, p.y, p.z - h, p.x + h, p.y + P.HEIGHT, p.z + h)
+end
+
+-- Самопроверка (--gencheck, строка SPRINTCHECK): двойное «вперёд» за 7 тиков
+-- включает бег, одиночное — нет; Ctrl при «вперёд» — тоже; на голодной
+-- сытости (6) бега нет; прыжок с разбега — толчок вперёд и усталость 0.8;
+-- кремень из гравия — вместо гравия.
+function P.sprintSelfCheck()
+    local Hud = require "hud"
+    local save = {x = P.pos.x, y = P.pos.y, z = P.pos.z, yaw = P.yaw, food = Hud.food, ex = Hud.exhaustion,
+                  fly = P.flying, ground = P.onGround, vx = P.vel.x, vy = P.vel.y, vz = P.vel.z}
+    local function reset()
+        P.sprinting, P.sprintTimer, P.onGround, P.flying = false, 0, true, false
+        P.vel.x, P.vel.y, P.vel.z = 0, 0, 0
+        P.pos.y = 300                       -- в воздухе над миром: ничего не мешает
+    end
+    local function step(inp) inp.forward = inp.forward or 0; inp.strafe = 0; P.onGround = true; P.update(inp, 0.05) end
+    reset(); Hud.food = 20
+    step({forward = 1, forwardPressed = true})
+    local single = not P.sprinting
+    step({forward = 0}); step({forward = 1, forwardPressed = true})
+    local double = P.sprinting
+    reset()
+    step({forward = 1, sprintDown = true})
+    local ctrl = P.sprinting
+    reset(); Hud.food = 6
+    step({forward = 1, sprintDown = true})
+    local hungry = not P.sprinting
+    reset(); Hud.food = 20; Hud.exhaustion = 0; P.yaw = 0
+    P.sprinting = true
+    P.update({forward = 1, strafe = 0, jump = true, sprintDown = true}, 0.0001)
+    local boost = P.vel.z < -3.5 and Hud.exhaustion >= 0.8 - 1e-6
+    local Act = require "interact"
+    local gravel = B.byName.gravel.id
+    local flint = Act.harvestDrop(gravel, 0.05) == B.byName.flint.id and Act.harvestDrop(gravel, 0.5) == gravel
+    P.pos.x, P.pos.y, P.pos.z, P.yaw = save.x, save.y, save.z, save.yaw
+    Hud.food, Hud.exhaustion, P.flying, P.onGround = save.food, save.ex, save.fly, save.ground
+    P.vel.x, P.vel.y, P.vel.z, P.sprinting = save.vx, save.vy, save.vz, false
+    local ok = single and double and ctrl and hungry and boost and flint
+    return string.format("SPRINTCHECK: %s одно_нажатие=%s двойное=%s ctrl=%s голод=%s разбег=%s кремень=%s",
+        ok and "PASS" or "FAIL", tostring(single), tostring(double), tostring(ctrl), tostring(hungry),
+        tostring(boost), tostring(flint))
 end
 
 return P

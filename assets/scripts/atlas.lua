@@ -30,6 +30,7 @@ A.ICON = 128
 A.ICON_COLS = 16
 A.blockTiles = {}          -- [id] = {top=, bottom=, side=, front=} номера плиток
 A.icon = {}                -- [id] = номер иконки (с нуля)
+A.frameIcons = {}          -- [id] = {[кадр] = номер иконки} — у предметов с кадрами
 A.destroyTile = {}         -- стадии трещин 0..9 -> плитка
 
 -- Цвет растительности: серые трава и листва набора окрашиваются им.
@@ -141,10 +142,11 @@ local function cubeIcon(icons, slot, faces, box)
 end
 
 -- Плоская иконка: картинка предмета или растения во всю клетку.
-local function flatIcon(icons, slot, src, tint)
+local function flatIcon(icons, slot, src, tint, frame)
     local S = A.ICON
     local ox, oy = (slot % A.ICON_COLS) * S, (slot // A.ICON_COLS) * S
-    local sy0 = src.height - src.width
+    -- Кадр frame полосы (0 — верхний; строки холста — снизу вверх).
+    local sy0 = src.height - src.width * ((frame or 0) + 1)
     for py = 0, S - 1 do
         for px = 0, S - 1 do
             local c = src.get(px * src.width // S, sy0 + py * src.width // S)
@@ -161,6 +163,7 @@ function A.build()
     atlas.fill(function() return Vec4(0, 0, 0, 0) end)
 
     local count = #B.list + #B.itemList
+    for _, it in ipairs(B.itemList) do count = count + (it.frames or 0) end
     local rows = (count + A.ICON_COLS - 1) // A.ICON_COLS
     local icons = texture(A.ICONS, A.ICON * A.ICON_COLS, A.ICON * rows)
     icons.nearest = true
@@ -200,6 +203,16 @@ function A.build()
         local s0 = slot
         jobs[#jobs + 1] = function() flatIcon(icons, s0, src) end
         slot = slot + 1
+        -- Кадры полосы (компас, часы) — свои ячейки листа.
+        if it.frames then
+            A.frameIcons[it.id] = {}
+            for f = 0, it.frames - 1 do
+                local sf = slot
+                A.frameIcons[it.id][f] = sf
+                jobs[#jobs + 1] = function() flatIcon(icons, sf, src, nil, f) end
+                slot = slot + 1
+            end
+        end
     end
     for i = 0, 9 do A.destroyTile[i] = tileFor(atlas, "destroy_stage_" .. i) end
     atlas.apply()
@@ -228,8 +241,9 @@ end
 
 -- Прямоугольник иконки в листе — в пикселях от ЛЕВОГО ВЕРХНЕГО угла
 -- картинки (так спрайт задаёт интерфейс), а холст считает строки снизу.
-function A.iconRect(id)
+function A.iconRect(id, frame)
     local slot = A.icon[id]
+    if frame and A.frameIcons[id] and A.frameIcons[id][frame] then slot = A.frameIcons[id][frame] end
     if not slot then return nil end
     local S = A.ICON
     local x = (slot % A.ICON_COLS) * S

@@ -132,7 +132,9 @@ local items = {
     {id = 269, name = "glass_bottle",    title = "Glass Bottle",     tex = "potion_bottle_empty"},
     {id = 286, name = "potion",          title = "Water Bottle",     tex = "water_bottle", drink = true, stack = 1},
     {id = 287, name = "paper",           title = "Paper",            tex = "paper"},
-    {id = 288, name = "compass",         title = "Compass",          tex = "compass"},
+    -- Компас и часы — полосы кадров (frames), кадр — по стрелке (needle.lua).
+    {id = 288, name = "compass",         title = "Compass",          tex = "compass", frames = 32},
+    {id = 298, name = "clock",           title = "Clock",            tex = "clock", frames = 64},
     {id = 289, name = "empty_map",       title = "Empty Map",        tex = "map_empty"},
     {id = 294, name = "wheat_seeds",     title = "Seeds",            tex = "seeds_wheat"},
     -- Костная мука (dye 15): ускоряет рост саженца (ItemDye.applyBonemeal).

@@ -450,7 +450,7 @@ function Avatar.update(dt, P, visible, heldId)
             want = j >= 18 and B.byName.bow_pulling_2.id or (j > 13 and B.byName.bow_pulling_1.id
                 or (j > 0 and B.byName.bow_pulling_0.id or held))
         end
-        if heldKey ~= want then heldKey = want; Hand.setItemMesh(heldObj, want) end
+        if heldKey ~= Hand.meshKey(want) then heldKey = Hand.meshKey(want); Hand.setItemMesh(heldObj, want) end
         M.applyTo(heldObj, heldItemMatrix(a, held, action))
     end
 end
@@ -523,8 +523,8 @@ function Avatar.updatePreview(P, heldId)
         previewHeld.Transform.Scale = Vec3(0.0001, 0.0001, 0.0001)
         previewHeldKey = nil
     else
-        if previewHeldKey ~= held then
-            previewHeldKey = held
+        if previewHeldKey ~= require("hand").meshKey(held) then
+            previewHeldKey = require("hand").meshKey(held)
             require("hand").setItemMesh(previewHeld, held)
             previewHeld:GetRenderer().Layer = ""
         end
