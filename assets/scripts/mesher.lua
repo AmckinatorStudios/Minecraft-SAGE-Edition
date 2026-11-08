@@ -445,6 +445,8 @@ function M.build(cx, sy, cz)
                         emitCross(solid, x, y, z, v, tiles.side)
                     elseif kind == 10 then
                         emitCrops(solid, x, y, z, v, tiles)
+                    elseif kind == 11 then
+                        -- Сундук — модель (TileEntityChestRenderer), не меш участка.
                     elseif kind == 5 then
                         emitTorch(solid, x, y, z, v, tiles.side)
                     elseif kind == 7 then
@@ -545,7 +547,7 @@ function M.single(id, meta, tile, wx, wy, wz)
     elseif kind == 6 then
         local full = wx and require("door").fullMeta(wx, wy, wz) or (meta or 0)
         emitDoor(b, 0, 0, 0, full, nil, tile, function() return ZERO_LT end)
-    elseif kind ~= 0 and kind ~= 4 then
+    elseif kind ~= 0 and kind ~= 4 and kind ~= 11 then
         local inset = B.byId[id].inset
         for fi = 1, 6 do
             local f = FACES[fi]

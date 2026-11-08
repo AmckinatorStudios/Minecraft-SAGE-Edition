@@ -22,7 +22,6 @@ Pig.list = {}
 local TICK = 1 / 20
 local acc = 0
 local rnd = math.random
-local SND = "assets/sounds/mob/pig/"
 
 Pig.MAX_HEALTH = 10
 Pig.SPEED = 0.25
@@ -152,7 +151,7 @@ local function move(p, dx, dy, dz)
             p.nextStep = math.floor(p.stepDist) + 1
             local below = W.get(math.floor(p.x), math.floor(p.y - 0.2), math.floor(p.z))
             if below ~= 0 then
-                PlaySound3D(SND .. "step" .. rnd(5) .. ".ogg", Vec3(p.x, p.y, p.z), 0.15, 1.0, "neutral")
+                require("sounds").event("mob.pig.step", p.x, p.y, p.z, 0.15, 1.0)
             end
         end
     end
@@ -236,7 +235,7 @@ function Pig.damage(p, amount, src, kind)
             p.revenge, p.revengeTimer = src, p.ticks
         end
         if p.health > 0 then
-            PlaySound3D(SND .. "say" .. rnd(3) .. ".ogg", Vec3(p.x, p.y, p.z), 1.0, Pig.pitch(p), "neutral")
+            require("sounds").event("mob.pig.say", p.x, p.y, p.z, 1.0, Pig.pitch(p))
         end
     end
     if p.health <= 0 then Pig.die(p, src) end
@@ -262,7 +261,7 @@ function Pig.die(p, src)
     if p.dead then return end
     p.dead = true
     p.health = 0
-    PlaySound3D(SND .. "death.ogg", Vec3(p.x, p.y, p.z), 1.0, Pig.pitch(p), "neutral")
+    require("sounds").event("mob.pig.death", p.x, p.y, p.z, 1.0, Pig.pitch(p))
     if p.age >= 0 then
         local n = rnd(3)
         local id = p.burning and B.byName.porkchop_cooked.id or B.byName.porkchop_raw.id
@@ -328,7 +327,7 @@ local function tick(p, P)
     -- Звук жизни (onEntityUpdate): rand(1000) < счётчик — хрюк и −80.
     if rnd(0, 999) < p.livingSound then
         p.livingSound = -80
-        PlaySound3D(SND .. "say" .. rnd(3) .. ".ogg", Vec3(p.x, p.y, p.z), 1.0, Pig.pitch(p), "neutral")
+        require("sounds").event("mob.pig.say", p.x, p.y, p.z, 1.0, Pig.pitch(p))
     else
         p.livingSound = p.livingSound + 1
     end

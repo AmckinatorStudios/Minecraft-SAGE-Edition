@@ -92,6 +92,25 @@ shape("wheat_crop", {
     collision = function() return NONE end,
 })
 
+-- Сундук (BlockChest.setBlockBoundsBasedOnState): 1/16 от краёв, высота
+-- 14/16; со стороны пары — до края клетки (пара — одна коробка).
+local function chestBox(_, x, y, z)
+    local b = {1 / 16, 0, 1 / 16, 15 / 16, 14 / 16, 15 / 16}
+    if not x then return b end
+    local W = require "world"
+    local id = B.byName.chest.id
+    if W.get(x, y, z - 1) == id then b[3] = 0 end
+    if W.get(x, y, z + 1) == id then b[6] = 1 end
+    if W.get(x - 1, y, z) == id then b[1] = 0 end
+    if W.get(x + 1, y, z) == id then b[4] = 1 end
+    return b
+end
+shape("chest", {
+    selected = chestBox,
+    collision = function(meta, x, y, z) return {chestBox(meta, x, y, z)} end,
+    render = chestBox,
+})
+
 -- Факел (BlockTorch): столкновения нет, выбор — по ориентации (torch.lua).
 shape("torch", {
     selected = function(meta) return require("torch").bounds(meta) end,

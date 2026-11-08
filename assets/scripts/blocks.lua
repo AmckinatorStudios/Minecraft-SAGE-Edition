@@ -114,6 +114,9 @@ local defs = {
     -- четыре плоскости «решёткой» (renderBlockCrops); столкновения нет.
     {id = 74, name = "wheat_crop",   title = "Crops", tex = "wheat_stage_7", draw = "crops", hard = 0, solid = false, opacityLight = 0, drop = "none", hidden = true,
      stages = {"wheat_stage_0", "wheat_stage_1", "wheat_stage_2", "wheat_stage_3", "wheat_stage_4", "wheat_stage_5", "wheat_stage_6", "wheat_stage_7"}},
+    -- Сундук (BlockChest): рисуется моделью (chest.lua, chestmodel.lua), а не
+    -- мешем участка; метаданные — сторона лица 2..5; коробка 14/16 × 14/16.
+    {id = 75, name = "chest",        title = "Chest", tex = "planks_oak", draw = "chest", hard = 2.5, tool = "axe", opacityLight = 0, chestFaces = true, itemBox = {0, 0, 0, 1, 0.875, 1}},
     {id = 69, name = "dark_oak_planks", title = "Dark Oak Wood Planks", tex = "planks_big_oak", hard = 2.0, tool = "axe"},
     {id = 47, name = "lit_furnace",   facing = "furnace",  title = "Furnace",              top = "furnace_top", side = "furnace_side", front = "furnace_front_on", bottom = "furnace_top", hard = 3.5, tool = "pickaxe", need = 1, light = 13, drop = "furnace"},
 }
@@ -208,7 +211,7 @@ B.absorb = {}      -- сколько свет теряет, проходя ск�
 B.facing = {}     -- [id] = true — лицевая сторона по метаданным (печь, тыква)
 B.faceTile = {}    -- [id] = {верх, низ, север, юг, запад, восток} — номера плиток атласа
 
-local KIND = {solid = 1, cutout = 2, cross = 3, liquid = 4, torch = 5, door = 6, ladder = 7, trapdoor = 8, farmland = 9, crops = 10}
+local KIND = {solid = 1, cutout = 2, cross = 3, liquid = 4, torch = 5, door = 6, ladder = 7, trapdoor = 8, farmland = 9, crops = 10, chest = 11}
 
 for i = 0, 1023 do
     B.opaque[i] = false

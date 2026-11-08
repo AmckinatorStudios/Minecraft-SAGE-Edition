@@ -186,6 +186,8 @@ local function breakBlock(t)
     Snd.dig(id, t.x, t.y, t.z)
     -- Содержимое печи — на землю, как в Minecraft.
     if require("furnace").isFurnace(id) then require("furnace").broken(t.x, t.y, t.z) end
+    -- Сундук (BlockChest.breakBlock): содержимое высыпается, хранилище удаляется.
+    if require("chest").isChest(id) then require("chest").broken(t.x, t.y, t.z) end
     Act.setBlock(t.x, t.y, t.z, 0)
     -- Дверь: вторая половина уходит следом, предмет — один, из нижней клетки.
     local dropX, dropY, dropZ = t.x, t.y, t.z
@@ -239,6 +241,7 @@ end
 local function activates(t)
     if not t or IsActionDown("Sneak") then return false end
     return require("furnace").isFurnace(t.id) or t.id == B.byName.crafting_table.id or Door.isDoor(t.id)
+        or require("chest").isChest(t.id)
         or require("trapdoor").isTrapdoor(t.id)
 end
 
@@ -249,6 +252,12 @@ local function place(t)
     end
     if t.id == B.byName.crafting_table.id and activates(t) then
         Act.openTable = true
+        return
+    end
+    -- Сундук (onBlockActivated): окно, если сверху не глухой куб; иначе
+    -- ничего (и блок на сундук не ставится — ПКМ ушёл на сундук).
+    if require("chest").isChest(t.id) and activates(t) then
+        require("chest").open(t.x, t.y, t.z)
         return
     end
     -- Дверь (onBlockActivated): ПКМ по любой половине — открыть/закрыть всю.
@@ -313,6 +322,13 @@ local function place(t)
         -- Печь, тыква — лицом к игроку (onBlockPlacedBy).
         meta = B.placeMeta(held.id, P.yaw)
     end
+    -- Сундук: не больше одного соседа-сундука без своей пары; сторона — к
+    -- игроку и общая с парой.
+    local chestPair
+    if require("chest").isChest(held.id) then
+        if not require("chest").canPlace(x, y, z) then return end
+        meta, chestPair = require("chest").placeMeta(x, y, z, P.yaw)
+    end
     -- Внутрь игрока — нельзя, но мешает только НАСТОЯЩАЯ коробка столкновения
     -- блока с его метаданными (canPlaceEntityOnSide): лестница — пластина у
     -- стены, факел и растение — ничего. Раньше проверка шла до расчёта
@@ -322,6 +338,7 @@ local function place(t)
         Act.stats.placed = Act.stats.placed + 1
         Snd.place(held.id, x, y, z)
         Plants.onPlace(held.id, x, y, z)
+        if require("chest").isChest(held.id) then require("chest").placed(x, y, z, meta, chestPair, Act.setBlock) end
         Inv.useOne()
         Anim.swingItem()
         settle(x, y - 1, z)

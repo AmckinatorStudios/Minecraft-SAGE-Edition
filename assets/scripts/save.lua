@@ -32,7 +32,7 @@ function S.load()
     if data.gen ~= S.GEN then
         log("SAGE Craft: save is from an older world generation — rebuilding the world, inventory kept")
         data.edits, data.player, data.seed, data.furnaces = {}, nil, nil, nil
-        data.pigs, data.pigChunks, data.crops = nil, nil, nil
+        data.pigs, data.pigChunks, data.crops, data.chests = nil, nil, nil, nil
     end
     S.data = data
     return data
@@ -60,6 +60,7 @@ function S.write()
         maps = require("map").serialize(),
         plants = require("plants").save(),
         crops = require("crops").save(),
+        chests = require("chest").serialize(),
         pigs = require("pig").serialize(),
         pigChunks = require("pig").saveChunks(),
         player = {x = P.pos.x, y = P.pos.y, z = P.pos.z, yaw = P.yaw, pitch = P.pitch,
