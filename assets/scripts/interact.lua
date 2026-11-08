@@ -23,6 +23,7 @@ local Inv = require "inventory"
 local C = require "chunks"
 local Anim = require "anim"
 local Bo = require "bounds"
+local Door = require "door"
 
 local Act = {}
 
@@ -100,7 +101,7 @@ local function showCrack(stage, t)
     if key ~= crackKey then
         crackKey = key
         local m = mesh()
-        m.arrays(require("mesher").single(t.id, t.meta or 0, A.destroyTile[stage]))
+        m.arrays(require("mesher").single(t.id, t.meta or 0, A.destroyTile[stage], t.x, t.y, t.z))
         m.apply(crack)
         SetMaterial(crack, "assets/materials/crack.sagemat")
     end
@@ -181,6 +182,9 @@ local function breakBlock(t)
     -- Содержимое печи — на землю, как в Minecraft.
     if require("furnace").isFurnace(id) then require("furnace").broken(t.x, t.y, t.z) end
     Act.setBlock(t.x, t.y, t.z, 0)
+    -- Дверь: вторая половина уходит следом, предмет — один, из нижней клетки.
+    local dropX, dropY, dropZ = t.x, t.y, t.z
+    if Door.isDoor(id) then dropX, dropY, dropZ = Door.onBreak(Act.setBlock, t.x, t.y, t.z, t.meta or W.meta(t.x, t.y, t.z)) end
     Plants.onBreak(id, t.x, t.y, t.z)
     -- Растение над сломанным блоком без опоры ломается само (checkAndDropBlock)
     -- и роняет то же, что при поломке рукой.
@@ -192,6 +196,8 @@ local function breakBlock(t)
     end
     -- Факелы, державшиеся за этот блок, падают предметом.
     Torch.checkAround(t.x, t.y, t.z)
+    -- Дверь, стоявшая на этом блоке, выпадает предметом.
+    Door.checkSupport(Act.setBlock, t.x, t.y, t.z)
     -- Соседняя вода затекает в дыру (одна клетка — без настоящего течения).
     for _, d in ipairs({{1,0,0},{-1,0,0},{0,0,1},{0,0,-1},{0,1,0}}) do
         if W.get(t.x + d[1], t.y + d[2], t.z + d[3]) == 11 then Act.setBlock(t.x, t.y, t.z, 11); break end
@@ -204,7 +210,7 @@ local function breakBlock(t)
         Plants.spill(special, t.x, t.y, t.z)
     elseif ok then
         local drop = B.dropOf(id)
-        if drop then Drops.spawn(drop, B.dropCount(id), t.x + 0.5, t.y + 0.5, t.z + 0.5) end
+        if drop then Drops.spawn(drop, B.dropCount(id), dropX + 0.5, dropY + 0.5, dropZ + 0.5) end
         local xp = B.xpOf(id)
         if xp > 0 then require("hud").addXp(xp) end
         local d = B.byId[id]
@@ -219,7 +225,7 @@ end
 -- Блок, который открывается по ПКМ (печь, верстак), — с Shift нет.
 local function activates(t)
     if not t or IsActionDown("Sneak") then return false end
-    return require("furnace").isFurnace(t.id) or t.id == B.byName.crafting_table.id
+    return require("furnace").isFurnace(t.id) or t.id == B.byName.crafting_table.id or Door.isDoor(t.id)
 end
 
 local function place(t)
@@ -231,9 +237,25 @@ local function place(t)
         Act.openTable = true
         return
     end
+    -- Дверь (onBlockActivated): ПКМ по любой половине — открыть/закрыть всю.
+    if Door.isDoor(t.id) and activates(t) then
+        Door.toggle(Act.setBlock, t.x, t.y, t.z)
+        Anim.swingItem()
+        return
+    end
     local held = Inv.current()
     if not held then return end
     local d = B.byId[held.id]
+    -- Предмет «дверь» (ItemDoor): только на верх блока, две половины сразу.
+    if d and d.places == "door_wood" then
+        if t.ny ~= 1 then return end
+        if Door.place(Act.setBlock, t.x, t.y + 1, t.z, P.yaw) then
+            Act.stats.placed = Act.stats.placed + 1
+            Inv.useOne()
+            Anim.swingItem()
+        end
+        return
+    end
     if not d or not d.isBlock then return end
     local x, y, z = t.x + t.nx, t.y + t.ny, t.z + t.nz
     -- В траву ставится поверх (трава заменяется: isReplaceable — только у
@@ -362,7 +384,9 @@ function Act.update(dt, actions)
     if WasActionPressed("Pick") and target then
         for i = 1, 9 do
             local s = Inv.slots[i]
-            if s and s.id == target.id then Inv.select(i); return end
+            -- Дверь в мире — блок, в руке — предмет (Block.getItem).
+            local want = B.byId[target.id] and B.byId[target.id].item and B.byName[B.byId[target.id].item].id or target.id
+            if s and s.id == want then Inv.select(i); return end
         end
     end
     -- Q — один предмет из выбранной ячейки, Ctrl+Q — всю стопку

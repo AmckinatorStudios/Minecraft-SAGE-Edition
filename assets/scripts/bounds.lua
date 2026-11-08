@@ -11,7 +11,8 @@
 --                         трещины и рождаются частицы удара.
 --
 -- Коробка — {minX, minY, minZ, maxX, maxY, maxZ} в долях клетки (0..1, может
--- выходить за клетку). Все три считаются по метаданным при каждом вызове:
+-- выходить за клетку). Все три считаются по метаданным (и по клетке x, y, z —
+-- двери нужна соседняя половина) при каждом вызове:
 -- поменялось состояние блока — поменялись и границы, кэша, который надо
 -- сбрасывать, нет. Новая форма — запись в SHAPES, а не ветка в физике,
 -- прицеле и рамке по отдельности.
@@ -52,6 +53,18 @@ shape("cactus", {
     render = function() return {CI, 0, CI, 1 - CI, 1, 1 - CI} end,
 })
 
+-- Дверь (BlockDoor): одна коробка полотна 3/16 по состоянию обеих половин —
+-- и столкновение, и выбор, и геометрия (door.lua).
+local function doorBox(_, x, y, z)
+    if not x then return FULL end
+    local D = require "door"
+    return D.box(D.fullMeta(x, y, z))
+end
+shape("door_wood", {
+    selected = doorBox,
+    collision = function(meta, x, y, z) return {doorBox(meta, x, y, z)} end,
+})
+
 -- Факел (BlockTorch): столкновения нет, выбор — по ориентации (torch.lua).
 shape("torch", {
     selected = function(meta) return require("torch").bounds(meta) end,
@@ -61,28 +74,28 @@ shape("torch", {
 local function kind(id) return B.drawKind[id] end
 
 -- Коробка выбора; nil — блок не выбирается (воздух, жидкость).
-function Bo.selected(id, meta)
+function Bo.selected(id, meta, x, y, z)
     if id == 0 or kind(id) == 4 then return nil end
     local s = SHAPES[id]
-    if s and s.selected then return s.selected(meta or 0) end
+    if s and s.selected then return s.selected(meta or 0, x, y, z) end
     return FULL
 end
 
 -- Коробки столкновения (список; пустой — сквозь блок проходят).
-function Bo.collision(id, meta)
+function Bo.collision(id, meta, x, y, z)
     if id == 0 then return NONE end
     local s = SHAPES[id]
-    if s and s.collision then return s.collision(meta or 0) end
+    if s and s.collision then return s.collision(meta or 0, x, y, z) end
     if not B.solid[id] then return NONE end
     return {FULL}
 end
 
 -- Границы геометрии: трещины, частицы удара. У растений и факела — их коробка
 -- выбора (setBlockBoundsBasedOnState у оригинала задаёт одно и то же).
-function Bo.render(id, meta)
+function Bo.render(id, meta, x, y, z)
     local s = SHAPES[id]
-    if s and s.render then return s.render(meta or 0) end
-    return Bo.selected(id, meta) or FULL
+    if s and s.render then return s.render(meta or 0, x, y, z) end
+    return Bo.selected(id, meta, x, y, z) or FULL
 end
 
 -- Полный куб столкновения без особой формы — быстрый путь физики.
@@ -96,7 +109,7 @@ function Bo.overlaps(id, meta, cx, cy, cz, x0, y0, z0, x1, y1, z1)
     if Bo.isFullCollision(id) then
         return x1 > cx and x0 < cx + 1 and y1 > cy and y0 < cy + 1 and z1 > cz and z0 < cz + 1
     end
-    for _, b in ipairs(Bo.collision(id, meta)) do
+    for _, b in ipairs(Bo.collision(id, meta, cx, cy, cz)) do
         if x1 > cx + b[1] and x0 < cx + b[4] and y1 > cy + b[2] and y0 < cy + b[5]
             and z1 > cz + b[3] and z0 < cz + b[6] then return true end
     end

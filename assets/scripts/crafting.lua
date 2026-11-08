@@ -42,6 +42,7 @@ for _, w in ipairs({"spruce", "jungle", "acacia", "dark_oak"}) do shapeless(w ..
 shaped("shears", 1, {" I", "I "}, {I = "iron_ingot"})
 shaped("stick", 4, {"P", "P"}, {P = PLANKS})
 shaped("crafting_table", 1, {"PP", "PP"}, {P = PLANKS})
+shaped("wooden_door", 1, {"PP", "PP", "PP"}, {P = PLANKS})
 shaped("torch", 4, {"C", "S"}, {C = "coal", S = "stick"})
 shaped("furnace", 1, {"CCC", "C C", "CCC"}, {C = "cobblestone"})
 shaped("sandstone", 1, {"ss", "ss"}, {s = "sand"})

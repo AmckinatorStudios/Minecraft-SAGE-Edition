@@ -296,6 +296,61 @@ local function emitTorch(b, x, y, z, v, tile)
               full, {0, 0, -1}, lt, tile)
 end
 
+-- Дверь — RenderBlocks.renderBlockDoor 1.7.10: шесть граней коробки полотна
+-- (door.lua: 3/16 у стороны клетки по состоянию обеих половин). Развёртка —
+-- по границам коробки, как у renderFace*: верх и низ — полоска нижней
+-- картинки, бока — u по своей оси (у «обратных» граней — в обратную сторону),
+-- v = 16 − y·16; зеркальная картинка (IconFlipped) — u → 16 − u. Бока
+-- верхней половины — верхняя картинка. Свет грани на границе клетки — из
+-- соседней клетки, внутри — из своей; оттенок стороны — по нормали.
+-- Сторона оригинала 0..5 → грань FACES (её соседняя клетка).
+local DOOR_FACE = {[0] = 2, [1] = 1, [2] = 6, [3] = 5, [4] = 4, [5] = 3}
+local function doorLT(v)
+    local s, l = cellLight(v)
+    return {s, l, s, l, s, l, s, l}
+end
+local function emitDoor(b, x, y, z, full, tiles, override, lightOf)
+    local D = require "door"
+    local bx = D.box(full)
+    local x0, y0, z0, x1, y1, z1 = bx[1], bx[2], bx[3], bx[4], bx[5], bx[6]
+    local top = (full & 8) ~= 0
+    local P = 16
+    -- Грань: углы (в долях клетки) и (U, V) оригинала в пикселях 0..16.
+    local faces = {
+        [0] = {{0, -1, 0}, {{x0, y0, z1}, {x0, y0, z0}, {x1, y0, z0}, {x1, y0, z1}},
+               {{x0 * P, z1 * P}, {x0 * P, z0 * P}, {x1 * P, z0 * P}, {x1 * P, z1 * P}}, y0 <= 0},
+        [1] = {{0, 1, 0}, {{x1, y1, z1}, {x1, y1, z0}, {x0, y1, z0}, {x0, y1, z1}},
+               {{x1 * P, z1 * P}, {x1 * P, z0 * P}, {x0 * P, z0 * P}, {x0 * P, z1 * P}}, y1 >= 1},
+        [2] = {{0, 0, -1}, {{x0, y1, z0}, {x1, y1, z0}, {x1, y0, z0}, {x0, y0, z0}},
+               {{x1 * P, P - y1 * P}, {x0 * P, P - y1 * P}, {x0 * P, P - y0 * P}, {x1 * P, P - y0 * P}}, z0 <= 0},
+        [3] = {{0, 0, 1}, {{x0, y1, z1}, {x0, y0, z1}, {x1, y0, z1}, {x1, y1, z1}},
+               {{x0 * P, P - y1 * P}, {x0 * P, P - y0 * P}, {x1 * P, P - y0 * P}, {x1 * P, P - y1 * P}}, z1 >= 1},
+        [4] = {{-1, 0, 0}, {{x0, y1, z1}, {x0, y1, z0}, {x0, y0, z0}, {x0, y0, z1}},
+               {{z1 * P, P - y1 * P}, {z0 * P, P - y1 * P}, {z0 * P, P - y0 * P}, {z1 * P, P - y0 * P}}, x0 <= 0},
+        [5] = {{1, 0, 0}, {{x1, y0, z1}, {x1, y0, z0}, {x1, y1, z0}, {x1, y1, z1}},
+               {{z0 * P, P - y0 * P}, {z1 * P, P - y0 * P}, {z1 * P, P - y1 * P}, {z0 * P, P - y1 * P}}, x1 >= 1},
+    }
+    for side = 0, 5 do
+        local f = faces[side]
+        local tile, flip
+        if override then
+            tile, flip = override, false
+        elseif side <= 1 then
+            tile, flip = tiles.side, false
+        else
+            tile, flip = top and tiles.upper or tiles.side, D.flipped(full, side)
+        end
+        local uvs = {}
+        for k = 1, 4 do
+            local u, vv = f[3][k][1], f[3][k][2]
+            if flip then u = P - u end
+            uvs[k] = {u / P, 1 - vv / P}
+        end
+        addQuad(b, x, y, z, f[2], f[1], uvs, lightOf(side, f[4]), tile, false)
+    end
+end
+M.emitDoor = emitDoor
+
 -- Меш секции: две пачки — глухое+вырез (один материал с отбрасыванием по
 -- альфе) и жидкость (полупрозрачный материал).
 function M.build(cx, sy, cz)
@@ -315,6 +370,17 @@ function M.build(cx, sy, cz)
                         emitCross(solid, x, y, z, v, tiles.side)
                     elseif kind == 5 then
                         emitTorch(solid, x, y, z, v, tiles.side)
+                    elseif kind == 6 then
+                        -- Дверь рисуется, только если на месте вторая половина.
+                        local wi = rowBase + x + 1
+                        local m = (v >> W.META_SHIFT) & 15
+                        local otherV = win[wi + FACES[(m & 8) ~= 0 and 2 or 1].dn]
+                        if (otherV & ID_MASK) == id then
+                            local full = require("door").fullMetaOf(m, (otherV >> W.META_SHIFT) & 15)
+                            emitDoor(solid, x, y, z, full, tiles, nil, function(side, border)
+                                return doorLT(border and win[wi + FACES[DOOR_FACE[side]].dn] or v)
+                            end)
+                        end
                     elseif kind ~= 0 then
                         local b = kind == 4 and liquid or solid
                         local inset = B.byId[id].inset
@@ -361,7 +427,7 @@ end
 -- Bounds: крест у растений, плоскости у факела, сужение у кактуса), все шесть
 -- граней куба (renderAllFaces). Возвращает пачку для mesh.arrays.
 local ZERO_LT = {0, 0, 0, 0, 0, 0, 0, 0}
-function M.single(id, meta, tile)
+function M.single(id, meta, tile, wx, wy, wz)
     local b = batch()
     local kind = drawKind[id]
     local v = id | ((meta or 0) << W.META_SHIFT)
@@ -369,6 +435,9 @@ function M.single(id, meta, tile)
         emitCross(b, 0, 0, 0, v, tile)
     elseif kind == 5 then
         emitTorch(b, 0, 0, 0, v, tile)
+    elseif kind == 6 then
+        local full = wx and require("door").fullMeta(wx, wy, wz) or (meta or 0)
+        emitDoor(b, 0, 0, 0, full, nil, tile, function() return ZERO_LT end)
     elseif kind ~= 0 and kind ~= 4 then
         local inset = B.byId[id].inset
         for fi = 1, 6 do

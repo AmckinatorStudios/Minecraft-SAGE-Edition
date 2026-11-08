@@ -216,7 +216,7 @@ function P.raycast(maxDist)
         local id = W.get(x, y, z)
         if id ~= 0 then
             local meta = W.meta(x, y, z)
-            local box = Bounds.selected(id, meta)
+            local box = Bounds.selected(id, meta, x, y, z)
             if box == Bounds.FULL then
                 return {x = x, y = y, z = z, id = id, meta = meta, nx = nx, ny = ny, nz = nz, dist = t, box = box}
             elseif box then
