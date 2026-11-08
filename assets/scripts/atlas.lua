@@ -185,10 +185,16 @@ function A.build()
         end
         -- Вторая картинка блока (верхняя половина двери).
         if d.upper then t.upper = tileFor(atlas, d.upper) end
+        -- Влажная грядка — вторая картинка верха; пшеница — картинка стадии.
+        if d.wet then t.wet = tileFor(atlas, d.wet) end
+        if d.stages then
+            t.stages = {}
+            for i, nm in ipairs(d.stages) do t.stages[i] = tileFor(atlas, nm) end
+        end
         A.blockTiles[d.id] = t
         A.icon[d.id] = slot
         local s0 = slot
-        if d.draw == "cross" or d.draw == "torch" or d.draw == "ladder" then
+        if d.draw == "cross" or d.draw == "torch" or d.draw == "ladder" or d.draw == "crops" then
             jobs[#jobs + 1] = function() flatIcon(icons, s0, sources[faceSrc.side[1]], faceSrc.side[2]) end
         else
             jobs[#jobs + 1] = function()

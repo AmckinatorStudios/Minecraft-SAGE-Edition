@@ -80,6 +80,11 @@ for _, t in ipairs(TIERS) do
     shaped(t.prefix .. "_shovel", 1, {"M", "S", "S"}, {M = t.mat, S = "stick"})
     shaped(t.prefix .. "_sword", 1, {"M", "M", "S"}, {M = t.mat, S = "stick"})
 end
+-- Мотыги (CraftingManager 1.7.10): «MM / S / S» — и в зеркальном виде; у
+-- мотыги есть и золотая.
+for _, t in ipairs({TIERS[1], TIERS[2], TIERS[3], {prefix = "gold", mat = {"gold_ingot"}}, TIERS[4]}) do
+    shaped(t.prefix .. "_hoe", 1, {"MM", " S", " S"}, {M = t.mat, S = "stick"})
+end
 
 -- Переплавка в печи: что положили сверху -> что выйдет справа.
 R.SMELT = {}

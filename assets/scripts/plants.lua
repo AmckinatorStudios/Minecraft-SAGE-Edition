@@ -263,6 +263,8 @@ local function happy(x, y, z, maxY)
     end
 end
 
+P.happy = happy
+
 -- Костная мука по блоку (x, y, z): true — мука потрачена.
 function P.boneMeal(x, y, z)
     if not B.isSapling[W.get(x, y, z)] then return false end

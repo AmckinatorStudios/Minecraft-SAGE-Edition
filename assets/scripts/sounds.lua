@@ -27,7 +27,7 @@ local VARIANTS = {
 local KIND = {
     grass = "grass", leaves = "grass", birch_leaves = "grass", tallgrass = "grass",
     rose = "grass", dandelion = "grass",
-    dirt = "gravel", gravel = "gravel", clay = "gravel",
+    dirt = "gravel", gravel = "gravel", clay = "gravel", farmland = "gravel", wheat_crop = "grass",
     sand = "sand",
     snow = "snow",
     planks = "wood", log = "wood", birch_log = "wood", birch_planks = "wood",
@@ -128,6 +128,13 @@ function S.land(id, x, y, z)
         PlaySound3D(file("step", kind), Vec3(x, y, z), 0.5, pitch * 0.75, "neutral")
         S.count.land = (S.count.land or 0) + 1
     end
+end
+
+-- Вспашка мотыгой (ItemHoe.onItemUse): шаг материала грядки (гравий),
+-- громкость (1 + 1)/2, тон ×0.8, из центра клетки.
+function S.till(x, y, z)
+    PlaySound3D(file("step", "gravel"), at(x, y, z), (1 + 1) / 2, 0.8, "block")
+    S.count.till = (S.count.till or 0) + 1
 end
 
 -- Сколько вариантов у материала — для проверки, что файлы на месте.
