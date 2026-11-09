@@ -81,82 +81,6 @@ local function tintOf(d, name)
     return name, d.name:find("birch") and BIRCH or (d.name:find("spruce") and PINE or FOLIAGE)
 end
 
--- Выборка картинки грани для иконки: u, v — доли 0..1 (v снизу вверх).
-local function sample(name, tint, u, v)
-    local src = sources[name]
-    -- Кадр — верхний квадрат w×w картинки любого размера (16 у набора 1.7.10,
-    -- 32 у прежнего): раньше шаг считался от 32, и картинка 16×16 давала
-    -- пустую иконку.
-    local w = src.width
-    local px = math.min(w - 1, math.floor(u * w))
-    local py = math.min(w - 1, math.floor(v * w))
-    local c = src.get(px, src.height - w + py)
-    if tint then return c.x * tint[1], c.y * tint[2], c.z * tint[3], c.w end
-    return c.x, c.y, c.z, c.w
-end
-
--- Изометрическая иконка куба: верх, правый бок (+X) и левый (+Z), с тем же
--- затемнением сторон, что и в мире (шейдер участка).
--- box — коробка предмета (setBlockBoundsForItemRender: люк — плита по
--- высоте 0.406..0.594); без неё — полный куб.
-local function cubeIcon(icons, slot, faces, box)
-    local by0, by1 = box and box[2] or 0, box and box[5] or 1
-    local S = A.ICON
-    local ox, oy = (slot % A.ICON_COLS) * S, (slot // A.ICON_COLS) * S
-    local s = S * 0.47
-    local k = 0.866 * s
-    local cxp, base = S / 2, S * 0.04
-    for py = 0, S - 1 do
-        for px = 0, S - 1 do
-            local fx, fy = px + 0.5, py + 0.5
-            local a = (fx - cxp) / k
-            local r, g, b, al, shade = 0, 0, 0, 0, 1
-            -- Верх: Y = 1.
-            -- Верх коробки ниже верха куба на (1 − by1)·s пикселей.
-            local bsum = 2 - (fy + (1 - by1) * s - base - s) / (0.5 * s)
-            local X, Z = (a + bsum) / 2, (bsum - a) / 2
-            if X >= 0 and X <= 1 and Z >= 0 and Z <= 1 then
-                r, g, b, al = sample(faces.top[1], faces.top[2], X, 1 - Z)
-            else
-                local Y, u, face
-                if a >= 0 then
-                    local z = 1 - a
-                    Y = (fy - base - (1 - z) * 0.5 * s) / s
-                    u, face, shade = 1 - z, faces.right, 0.6
-                else
-                    local x = a + 1
-                    Y = (fy - base - (1 - x) * 0.5 * s) / s
-                    u, face, shade = x, faces.left, 0.8
-                end
-                if Y >= by0 and Y <= by1 and u >= 0 and u <= 1 then
-                    r, g, b, al = sample(face[1], face[2], u, Y)
-                end
-            end
-            if al > 0.5 then
-                icons.set(ox + px, oy + py, Vec4(r * shade, g * shade, b * shade, 1))
-            else
-                icons.set(ox + px, oy + py, Vec4(0, 0, 0, 0))
-            end
-        end
-    end
-end
-
--- Плоская иконка: картинка предмета или растения во всю клетку.
-local function flatIcon(icons, slot, src, tint, frame)
-    local S = A.ICON
-    local ox, oy = (slot % A.ICON_COLS) * S, (slot // A.ICON_COLS) * S
-    -- Кадр frame полосы (0 — верхний; строки холста — снизу вверх).
-    local sy0 = src.height - src.width * ((frame or 0) + 1)
-    for py = 0, S - 1 do
-        for px = 0, S - 1 do
-            local c = src.get(px * src.width // S, sy0 + py * src.width // S)
-            if tint then c = Vec4(c.x * tint[1], c.y * tint[2], c.z * tint[3], c.w) end
-            if c.w < 0.1 then c = Vec4(0, 0, 0, 0) end
-            icons.set(ox + px, oy + py, c)
-        end
-    end
-end
-
 -- Грани сундука для иконки, руки и выпавшего предмета: у 1.7.10 предмет
 -- рисуется моделью (ChestItemRenderHelper), а не кубом из плиток блока,
 -- поэтому плитки собираются из той же развёртки normal.png (64×64): верх —
@@ -240,19 +164,19 @@ function A.build()
         A.icon[d.id] = slot
         local s0 = slot
         if d.draw == "cross" or d.draw == "torch" or d.draw == "ladder" or d.draw == "crops" then
-            jobs[#jobs + 1] = function() flatIcon(icons, s0, sources[faceSrc.side[1]], faceSrc.side[2]) end
+            jobs[#jobs + 1] = {slot = s0, kind = "flat", src = faceSrc.side[1], tint = faceSrc.side[2]}
         else
-            jobs[#jobs + 1] = function()
-                cubeIcon(icons, s0, {top = faceSrc.top, right = faceSrc.side, left = faceSrc.front}, d.itemBox)
-            end
+            jobs[#jobs + 1] = {slot = s0, kind = "cube", box = d.itemBox,
+                               faces = {top = faceSrc.top, right = faceSrc.side, left = faceSrc.front}}
         end
         slot = slot + 1
     end
     for _, it in ipairs(B.itemList) do
-        local src = texture.load("assets/textures/items/" .. it.tex .. ".png", "item_" .. it.name)
+        local srcName = "item_" .. it.name
+        sources[srcName] = sources[srcName] or texture.load("assets/textures/items/" .. it.tex .. ".png", srcName)
         A.icon[it.id] = slot
         local s0 = slot
-        jobs[#jobs + 1] = function() flatIcon(icons, s0, src) end
+        jobs[#jobs + 1] = {slot = s0, kind = "flat", src = srcName}
         slot = slot + 1
         -- Кадры полосы (компас, часы) — свои ячейки листа.
         if it.frames then
@@ -260,7 +184,7 @@ function A.build()
             for f = 0, it.frames - 1 do
                 local sf = slot
                 A.frameIcons[it.id][f] = sf
-                jobs[#jobs + 1] = function() flatIcon(icons, sf, src, nil, f) end
+                jobs[#jobs + 1] = {slot = sf, kind = "flat", src = srcName, frame = f}
                 slot = slot + 1
             end
         end
@@ -273,20 +197,80 @@ function A.build()
     A.iconsReady = false
 end
 
--- Иконки 128×128 считаются попиксельно — все сразу это секунды в одном
--- вызове скрипта (и предел его времени). Поэтому по нескольку за кадр
--- (A.stepIcons из OnUpdate): лист выгружается после каждой порции, иконки
--- появляются по мере готовности. true — все готовы.
-function A.stepIcons(n)
+-- Иконки 128×128 считает iconjob.lua — в фоновых потоках движка (tasks),
+-- по задаче на иконку; главный поток только ставит задачи и кладёт готовые
+-- пиксели в лист одним texture.write. Без задач — здесь же, по бюджету
+-- времени. Лист уходит в видеокарту не каждый кадр, а раз в 0.25 с и в
+-- конце. Прежде иконка считалась попиксельно на главном потоке (get/set на
+-- каждый пиксель) — ~300 мс на иконку: меню и первые секунды в мире
+-- дёргались. true — все готовы.
+local IJ = require "iconjob"
+local pixelCache = {}      -- имя картинки -> {px, w, h} (texture.read)
+local inFlight = {}        -- номер задачи -> слот
+local nInFlight = 0
+local lastApply = 0
+
+local function pixels(name)
+    local p = pixelCache[name]
+    if not p then
+        local src = sources[name]
+        p = {px = src.read(0, 0, src.width, src.height), w = src.width, h = src.height}
+        pixelCache[name] = p
+    end
+    return p
+end
+
+-- Задача с пикселями вместо имён картинок — то, что уходит в поток.
+local function payload(j)
+    if j.kind == "flat" then return {kind = "flat", src = pixels(j.src), tint = j.tint, frame = j.frame} end
+    local f = j.faces
+    return {kind = "cube", box = j.box, faces = {
+        top = {pixels(f.top[1]), f.top[2]}, right = {pixels(f.right[1]), f.right[2]},
+        left = {pixels(f.left[1]), f.left[2]}}}
+end
+
+local function put(slot, px)
+    local S = A.ICON
+    A.iconCanvas.write((slot % A.ICON_COLS) * S, (slot // A.ICON_COLS) * S, S, S, px)
+end
+
+local function useTasks() return tasks ~= nil and tasks.run ~= nil and not LaunchFlag("syncgen") end
+
+function A.stepIcons(budgetMs)
     local jobs = A.iconJobs
     if not jobs or A.iconsReady then return true end
-    for _ = 1, n or 4 do
-        local j = table.remove(jobs, 1)
-        if not j then break end
-        j()
+    local clock = Time.clock
+    local t0 = clock()
+    local limit = (budgetMs or 2) / 1000
+    if useTasks() then
+        -- Готовые — в лист.
+        for id, slot in pairs(inFlight) do
+            local ok, px = tasks.result(id)
+            if ok ~= nil then
+                inFlight[id] = nil
+                nInFlight = nInFlight - 1
+                if ok then put(slot, px) else logError("icon " .. slot .. ": " .. tostring(px)) end
+            end
+        end
+        -- Новые — пока есть место у воркеров и время кадра.
+        local cap = math.max(2, (tasks.workers() or 1) * 2)
+        while nInFlight < cap and #jobs > 0 and clock() - t0 < limit do
+            local j = table.remove(jobs, 1)
+            inFlight[tasks.run("iconjob", "build", A.ICON, payload(j))] = j.slot
+            nInFlight = nInFlight + 1
+        end
+    else
+        repeat
+            local j = table.remove(jobs, 1)
+            if not j then break end
+            put(j.slot, IJ.build(A.ICON, payload(j)))
+        until clock() - t0 >= limit
     end
-    A.iconCanvas.apply()
-    if #jobs == 0 then A.iconsReady = true end
+    if #jobs == 0 and nInFlight == 0 then A.iconsReady = true end
+    if A.iconsReady or t0 - lastApply >= 0.25 then
+        A.iconCanvas.apply()
+        lastApply = t0
+    end
     return A.iconsReady
 end
 

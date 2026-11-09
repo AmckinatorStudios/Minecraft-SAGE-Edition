@@ -283,15 +283,34 @@ local function keysOf(t) local out = {}; for k in pairs(t) do out[#out + 1] = k 
 -- Обход — по снимку ключей: опадание и рост дерева сами добавляют и убирают
 -- клетки этих таблиц, а новый ключ посреди обхода pairs ломает next
 -- («invalid key to 'next'» — игра падала после рубки дерева).
-local function tick()
-    for _, k in ipairs(keysOf(check)) do
-        if math.random() < CHANCE then
-            local x, y, z = unkey(k)
-            if W.chunk(x // 16, z // 16) then P.decayTick(x, y, z) end
-        end
+-- Выбор клеток тика — без копии всего набора: прежде каждый тик (20 раз в
+-- секунду) строился массив ВСЕХ отмеченных клеток, и чем больше деревьев
+-- срублено за игру, тем больше мусора на кадр. Теперь в список попадают
+-- только выпавшие по шансу; обрабатываются после обхода (обработка меняет
+-- набор, а менять таблицу во время pairs нельзя).
+local picked = {}
+local function pick(set)
+    local n = 0
+    local rnd = math.random
+    for k in pairs(set) do
+        if rnd() < CHANCE then n = n + 1; picked[n] = k end
     end
-    for _, k in ipairs(keysOf(saplings)) do
-        if saplings[k] and math.random() < CHANCE then
+    return n
+end
+
+local function tick()
+    local n = pick(check)
+    for i = 1, n do
+        local k = picked[i]
+        picked[i] = nil
+        local x, y, z = unkey(k)
+        if W.chunk(x // 16, z // 16) then P.decayTick(x, y, z) end
+    end
+    n = pick(saplings)
+    for i = 1, n do
+        local k = picked[i]
+        picked[i] = nil
+        if saplings[k] then
             local x, y, z = unkey(k)
             if W.chunk(x // 16, z // 16) then P.saplingTick(x, y, z) end
         end

@@ -37,6 +37,7 @@ local Prof   = require "profile"
 
 local playerObj, cameraObj
 local started = false
+local soakT, soakC
 local deferredChecks = nil     -- --gencheck: проверки, что идут по кадру
 local loading = false
 local worldOpen = false        -- мир выбран и строится/идёт (до этого — только меню)
@@ -445,7 +446,7 @@ function OnUpdate(entity, dt)
         end
     end
     -- Иконки предметов — порциями (atlas.lua: A.stepIcons).
-    A.stepIcons(4)
+    Prof.run("icons", A.stepIcons, 2)
     -- Отложенные самопроверки (--gencheck): по одной за кадр.
     if deferredChecks and #deferredChecks > 0 and worldOpen and not loading then
         local fn = table.remove(deferredChecks, 1)
@@ -468,8 +469,9 @@ function OnUpdate(entity, dt)
 
     -- Титульный экран и меню без мира: мира ещё нет, генерация не идёт.
     if not worldOpen then
-        Menu.update(dt)
-        Music.update(dt, true)
+        Prof.run("menu", Menu.update, dt)
+        Prof.run("music", Music.update, dt, true)
+        Prof.frameEnd(dt)
         return
     end
 
@@ -505,12 +507,29 @@ function OnUpdate(entity, dt)
     if loading then
         -- Мир вокруг спавна строится до того, как игрок упадёт в пустоту.
         local busy = C.update(P.pos.x, P.pos.z, 40)
-        local need = (2 * C.radius + 1) * (2 * C.radius + 1)
+        -- В игру — как только построены участки вокруг игрока (радиус 2,
+        -- 5×5): остальное догружается уже в игре, по бюджету кадра. Раньше
+        -- экран загрузки ждал весь радиус обзора (~200 участков, свет и меши)
+        -- — вход в мир шёл секунды. Проверки и снимки ждут весь мир: им
+        -- нужен готовый, одинаковый от запуска к запуску.
+        local quick = 2
+        local full = LaunchFlag("gencheck") or LaunchFlag("autopilot") or (LaunchArg("shotat") or "") ~= ""
+        local need = full and (2 * C.radius + 1) * (2 * C.radius + 1) or (2 * quick + 1) * (2 * quick + 1)
         local have = 0
-        for _ in pairs(W.chunks) do have = have + 1 end
+        if full then
+            for _ in pairs(W.chunks) do have = have + 1 end
+        else
+            local pcx, pcz = math.floor(P.pos.x) // 16, math.floor(P.pos.z) // 16
+            for dz = -quick, quick do
+                for dx = -quick, quick do
+                    local c = W.chunk(pcx + dx, pcz + dz)
+                    if c and c.built then have = have + 1 end
+                end
+            end
+        end
         Menu.loading("Building terrain", math.min(1, have / math.max(1, need)))
         Menu.update(dt)
-        if not busy then
+        if not busy or (not full and C.readyAround(P.pos.x, P.pos.z, quick)) then
             loading = false
             -- Время из параметра — с момента входа в мир: загрузка его не сдвигает.
             Sky.setTime(tonumber(LaunchArg("time") or ""))
@@ -774,6 +793,17 @@ function OnUpdate(entity, dt)
         P.flying = true
         P.pos.x = P.pos.x + 10 * dt
         P.pos.y = math.max(P.pos.y, W.surface(math.floor(P.pos.x), math.floor(P.pos.z)) + 6)
+    end
+    -- Долгий прогон (--soak=1): игрок ходит по кругу радиусом 40 блоков
+    -- (4.3 блока/с, как шаг), сутки идут — с --profile=1 журнал показывает,
+    -- что растёт за время игры (объекты, меши, память).
+    if LaunchFlag("soak") then
+        soakT = (soakT or 0) + dt
+        soakC = soakC or {P.pos.x, P.pos.z}
+        local a = soakT * 4.3 / 40
+        P.flying = true
+        P.pos.x, P.pos.z = soakC[1] + math.cos(a) * 40, soakC[2] + math.sin(a) * 40
+        P.pos.y = W.surface(math.floor(P.pos.x), math.floor(P.pos.z)) + 3
     end
     if useFor then
         useFor = useFor - dt
