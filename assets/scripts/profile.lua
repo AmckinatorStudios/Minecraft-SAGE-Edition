@@ -121,10 +121,23 @@ function Prof.lines(n)
     return out
 end
 
+-- Счётчики созданного скриптами: объектов сцены и мешей (создано − удалено
+-- объектов; мешей — сколько раз собрано). Рост за время игры — утечка.
+Prof.spawned, Prof.destroyed, Prof.meshes = 0, 0, 0
+do
+    local spawn, destroy, newMesh = SpawnObject, DestroyObject, mesh
+    if spawn then SpawnObject = function(...) Prof.spawned = Prof.spawned + 1; return spawn(...) end end
+    if destroy then DestroyObject = function(...) Prof.destroyed = Prof.destroyed + 1; return destroy(...) end end
+    if newMesh then mesh = function(...) Prof.meshes = Prof.meshes + 1; return newMesh(...) end end
+end
+
 function Prof.report(n)
     local lines = Prof.lines(n)
     local mem = collectgarbage("count") / 1024
-    return string.format("PROFILE: кадр %.2f мс (пик %.2f), Lua %.1f МБ | ", Prof.frameAvg, Prof.framePeak, mem)
+    local engine = ""
+    if profile and profile.memory_mb then engine = string.format(", процесс %.0f МБ", profile.memory_mb()) end
+    return string.format("PROFILE: кадр %.2f мс (пик %.2f), Lua %.1f МБ%s, объектов +%d −%d, мешей %d | ",
+        Prof.frameAvg, Prof.framePeak, mem, engine, Prof.spawned, Prof.destroyed, Prof.meshes)
         .. table.concat(lines, " | ")
 end
 

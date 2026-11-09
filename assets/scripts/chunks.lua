@@ -294,6 +294,19 @@ function C.update(px, pz, budget)
     return busy
 end
 
+-- Участки в радиусе r (в участках) вокруг (px, pz) сгенерированы, освещены и
+-- построены — игроку есть где стоять и что видеть; остальное догрузится в игре.
+function C.readyAround(px, pz, r)
+    local pcx, pcz = math.floor(px) // 16, math.floor(pz) // 16
+    for dz = -r, r do
+        for dx = -r, r do
+            local c = W.chunk(pcx + dx, pcz + dz)
+            if not c or not c.built then return false end
+        end
+    end
+    return true
+end
+
 function C.clear()
     C._settled = nil
     -- Задачи старого мира досчитаются, но их результат не нужен: номера — в
