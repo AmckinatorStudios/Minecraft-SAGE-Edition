@@ -27,6 +27,7 @@ local META_MASK = 15 << META_SHIFT
 
 W.chunks = {}      -- [ключ участка] = участок
 W.dirty = {}       -- [ключ секции] = true — меш секции нужно пересобрать
+W.colDirty = {}    -- [ключ секции] = true — сменился блок: пересобрать коллайдер (colliders.lua)
 
 local function ckey(cx, cz) return (cx + 32768) * 65536 + (cz + 32768) end
 W.ckey = ckey
@@ -98,9 +99,24 @@ function W.setRaw(x, y, z, v)
     return true
 end
 
+-- Блок или его форма (метаданные: дверь, люк) сменились — коллайдер секции и
+-- соседних (у границы: грань куба зависит от соседа) устарел. Свет коллайдер
+-- не трогает, поэтому пометка — здесь, а не в markDirty.
+local function colMark(x, y, z)
+    local cx, cz, sy = x // 16, z // 16, y >> 4
+    local lx, ly, lz = x & 15, y & 15, z & 15
+    local cd = W.colDirty
+    cd[skey(cx, sy, cz)] = true
+    if lx == 0 then cd[skey(cx - 1, sy, cz)] = true elseif lx == 15 then cd[skey(cx + 1, sy, cz)] = true end
+    if lz == 0 then cd[skey(cx, sy, cz - 1)] = true elseif lz == 15 then cd[skey(cx, sy, cz + 1)] = true end
+    if ly == 0 and sy > 0 then cd[skey(cx, sy - 1, cz)] = true
+    elseif ly == 15 and sy < W.SECTIONS - 1 then cd[skey(cx, sy + 1, cz)] = true end
+end
+
 function W.setId(x, y, z, id)
     local v = W.raw(x, y, z)
     if v == nil then return false end
+    colMark(x, y, z)
     -- Новый блок — с чистыми метаданными (ориентация старого ему не нужна).
     return W.setRaw(x, y, z, (v & ~(ID_MASK | META_MASK)) | id)
 end
@@ -115,6 +131,7 @@ end
 function W.setMeta(x, y, z, m)
     local v = W.raw(x, y, z)
     if v == nil then return false end
+    colMark(x, y, z)
     return W.setRaw(x, y, z, (v & ~META_MASK) | ((m & 15) << META_SHIFT))
 end
 

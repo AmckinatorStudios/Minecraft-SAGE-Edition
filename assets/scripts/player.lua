@@ -275,12 +275,43 @@ function P.lookDir()
     return -math.sin(yr) * math.cos(pr), math.sin(pr), -math.cos(yr) * math.cos(pr)
 end
 
--- Луч по клеткам (шаги от грани к грани, Amanatides–Woo): первая клетка, в
--- которую можно попасть (не воздух и не жидкость), и грань, через которую
--- луч в неё вошёл.
+-- Луч прицела — ЛУЧОМ ФИЗИКИ ДВИЖКА (Raycast) по коллайдерам блоков
+-- (colliders.lua: полные кубы и коробки выбора неполных блоков; жидкости в
+-- них нет — луч идёт сквозь воду). Клетка — по точке попадания, сдвинутой
+-- внутрь на долю нормали; грань — нормаль. Коллайдер секции ещё не собран
+-- (первые кадры, только что правленая секция) — цели нет до его сборки.
 function P.raycast(maxDist)
     local ox, oy, oz = P.eye()
     local dx, dy, dz = P.lookDir()
+    return P.raycastFrom(ox, oy, oz, dx, dy, dz, maxDist)
+end
+
+local Col = require "colliders"
+function P.raycastFrom(ox, oy, oz, dx, dy, dz, maxDist)
+    local hit = Raycast(Vec3(ox, oy, oz), Vec3(dx, dy, dz), maxDist, Col.TARGET)
+    if not hit then return nil end
+    local n, p = hit.normal, hit.point
+    local function axis(v) return v > 0.5 and 1 or (v < -0.5 and -1 or 0) end
+    local nx, ny, nz = axis(n.x), axis(n.y), axis(n.z)
+    local x = math.floor(p.x - nx * 0.001)
+    local y = math.floor(p.y - ny * 0.001)
+    local z = math.floor(p.z - nz * 0.001)
+    local id = W.get(x, y, z)
+    if id == 0 then return nil end          -- блок убран, коллайдер пересоберётся
+    local meta = W.meta(x, y, z)
+    local box = Bounds.selected(id, meta, x, y, z)
+    if not box then return nil end
+    return {x = x, y = y, z = z, id = id, meta = meta, nx = nx, ny = ny, nz = nz, dist = hit.distance, box = box}
+end
+
+-- Прежний луч — обход клеток (Amanatides–Woo): первая клетка, в которую можно
+-- попасть (не воздух и не жидкость), и грань входа. Остался ЭТАЛОНОМ для
+-- самопроверки луча движка (RAYCHECK): оба обязаны называть одну клетку.
+function P.raycastGrid(maxDist, ox, oy, oz, dx, dy, dz)
+    if not ox then
+        ox, oy, oz = P.eye()
+        dx, dy, dz = P.lookDir()
+    end
     local x, y, z = math.floor(ox), math.floor(oy), math.floor(oz)
     local sx = dx > 0 and 1 or -1
     local sy = dy > 0 and 1 or -1
