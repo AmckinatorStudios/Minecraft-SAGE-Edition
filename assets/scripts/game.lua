@@ -34,6 +34,7 @@ local Mat    = require "mat"
 local Pano   = require "panorama"
 local Worlds = require "worlds"
 local Prof   = require "profile"
+local Col    = require "colliders"
 
 local playerObj, cameraObj
 local started = false
@@ -341,6 +342,7 @@ local function startGame()
                 function() return require("cropcheck").selfCheck(P) end,
                 function() return require("chestcheck").selfCheck(P) end,
                 function() return require("hurtcheck").selfCheck(P) end,
+                function() return Col.selfCheck(P) end,
             }
             local fx, fy, fz = 4, W.surface(4, 4) + 1, 4
             Act.setBlock(fx, fy, fz, B.byName.furnace.id)
@@ -529,7 +531,10 @@ function OnUpdate(entity, dt)
         end
         Menu.loading("Building terrain", math.min(1, have / math.max(1, need)))
         Menu.update(dt)
-        if not busy or (not full and C.readyAround(P.pos.x, P.pos.z, quick)) then
+        -- Коллайдеры вокруг игрока — до входа: иначе первые кадры луч прицела
+        -- не видит блоков (их тела ещё не собраны).
+        local colReady = C.readyAround(P.pos.x, P.pos.z, 1) and Col.update(P.pos.x, P.pos.y, P.pos.z, 8)
+        if colReady and (not busy or (not full and C.readyAround(P.pos.x, P.pos.z, quick))) then
             loading = false
             -- Время из параметра — с момента входа в мир: загрузка его не сдвигает.
             Sky.setTime(tonumber(LaunchArg("time") or ""))
@@ -917,6 +922,8 @@ function OnUpdate(entity, dt)
 
     require("hurt").update(dt)
     Prof.run("chunks", C.update, P.pos.x, P.pos.z, C.budgetMs)
+    -- Блоки рядом с игроком — в физику движка (луч прицела, удары частиц).
+    Prof.run("colliders", Col.update, P.pos.x, P.pos.y, P.pos.z, 2)
 
     if not Inv.screenOpen and not chatting then Prof.run("interact", Act.update, dt, Auto.active and Auto.actions() or nil) end
     Prof.run("drops", Drops.update, dt)

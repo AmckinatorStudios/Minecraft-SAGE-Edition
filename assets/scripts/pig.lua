@@ -75,6 +75,7 @@ local function remove(i)
     local p = Pig.list[i]
     if p.model then PM.destroy(p.model) end
     if p.shadow then require("shadows").destroy(p.shadow) end
+    if p.hitbox then Pig.byHitbox[p.hitbox.Id] = nil; DestroyObject(p.hitbox); p.hitbox = nil end
     table.remove(Pig.list, i)
 end
 Pig.remove = remove
@@ -477,6 +478,27 @@ local function render(p, t, cam)
     end
 end
 
+-- Хитбокс для луча прицела — тело ФИЗИКИ ДВИЖКА (кинематическая коробка в
+-- слое MOB): удар и кормление ищет Raycast движка, а не свой перебор свиней.
+-- Коробка — тело свиньи + 0.1 со всех сторон (collisionBorderSize 1.7.10).
+Pig.byHitbox = {}
+local function placeHitbox(p)
+    if p.dead then
+        if p.hitbox then Pig.byHitbox[p.hitbox.Id] = nil; DestroyObject(p.hitbox); p.hitbox = nil end
+        return
+    end
+    local w, h = Pig.size(p)
+    if not p.hitbox or p.hitboxChild ~= (p.age < 0) then
+        if p.hitbox then Pig.byHitbox[p.hitbox.Id] = nil; DestroyObject(p.hitbox) end
+        p.hitbox = SpawnObject("Pig Hitbox")
+        p.hitboxChild = p.age < 0
+        _G.physics.add_body(p.hitbox, {type = "kinematic", shape = "box", size = Vec3(w + 0.2, h + 0.2, w + 0.2),
+                                    center = Vec3(0, h / 2, 0), layer = require("colliders").MOB})
+        Pig.byHitbox[p.hitbox.Id] = p
+    end
+    p.hitbox.Transform.Position = Vec3(p.x, p.y, p.z)
+end
+
 function Pig.update(dt, P)
     acc = acc + dt
     local n = 0
@@ -506,41 +528,28 @@ function Pig.update(dt, P)
                 require("shadows").destroy(p.shadow); p.shadow = nil
                 p.shadowKey = nil
             end
+            if p.hitbox then Pig.byHitbox[p.hitbox.Id] = nil; DestroyObject(p.hitbox); p.hitbox = nil end
         else
             if not p.model then
                 p.model = PM.create()
                 p.shadow = require("shadows").new("Pig Shadow")
             end
             render(p, p.ticks == 0 and 1 or t, {cx, cy, cz})
+            placeHitbox(p)
         end
     end
 end
 
 -- --- Игрок: удар и кормление ------------------------------------------------
 
--- Луч (o + d·t) и коробки свиней (+0.1 — collisionBorderSize): ближайшая.
+-- Луч прицела по свиньям — Raycast ДВИЖКА по их хитбоксам (слой MOB):
+-- ближайшая свинья и расстояние до неё.
 function Pig.raycast(ox, oy, oz, dx, dy, dz, maxDist)
-    local best, bestT
-    for _, p in ipairs(Pig.list) do
-        if not p.dead then
-            local w, h = Pig.size(p)
-            local box = {p.x - w / 2 - 0.1, p.y - 0.1, p.z - w / 2 - 0.1, p.x + w / 2 + 0.1, p.y + h + 0.1, p.z + w / 2 + 0.1}
-            local tmin, tmax = 0, maxDist
-            local O, D = {ox, oy, oz}, {dx, dy, dz}
-            local hit = true
-            for a = 1, 3 do
-                if math.abs(D[a]) < 1e-9 then
-                    if O[a] < box[a] or O[a] > box[a + 3] then hit = false end
-                else
-                    local t1, t2 = (box[a] - O[a]) / D[a], (box[a + 3] - O[a]) / D[a]
-                    if t1 > t2 then t1, t2 = t2, t1 end
-                    tmin, tmax = math.max(tmin, t1), math.min(tmax, t2)
-                end
-            end
-            if hit and tmin <= tmax and (not bestT or tmin < bestT) then best, bestT = p, tmin end
-        end
-    end
-    return best, bestT
+    local hit = Raycast(Vec3(ox, oy, oz), Vec3(dx, dy, dz), maxDist, require("colliders").MOB)
+    if not hit or not hit.object then return nil end
+    local p = Pig.byHitbox[hit.object.Id]
+    if not p or p.dead then return nil end
+    return p, hit.distance
 end
 
 -- Сила удара (SharedMonsterAttributes.attackDamage): рука 1; меч 4 + материал,

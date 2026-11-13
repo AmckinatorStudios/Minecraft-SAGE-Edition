@@ -44,13 +44,13 @@ local function smokeStrip()
 end
 
 local function base()
-    local e = ParticleEffect()
+    local e = ParticleEffect.new()
     e.RateOverTime = 0
     e.MaxParticles = 8192
     e.Space = "world"
     e.Shape = "point"
-    e.StartSpeed = ParticleRange(0, 0)
-    e.StartRotation = ParticleRange(0, 0)
+    e.StartSpeed = ParticleRange.new(0, 0)
+    e.StartRotation = ParticleRange.new(0, 0)
     e.Filtering = "nearest"
     e.Blend = "alpha"
     e.UseForces = true

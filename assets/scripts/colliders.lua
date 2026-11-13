@@ -239,4 +239,43 @@ function Col.clear()
     secs, count = {}, 0
 end
 
+-- Самопроверка (--gencheck, строка RAYCHECK): луч движка по коллайдерам и
+-- прежний обход клеток (эталон, player.raycastGrid) из глаз игрока в 300
+-- случайных направлений называют одну и ту же клетку и грань. nil — коллайдеры
+-- вокруг ещё собираются (проверка повторится в следующем кадре).
+local settle = 0
+function Col.selfCheck(P)
+    if not Col.update(P.pos.x, P.pos.y, P.pos.z, 8) then settle = 0; return nil end
+    -- Тела появляются в физике на её следующем шаге — два кадра на это.
+    settle = settle + 1
+    if settle < 3 then return nil end
+    local ox, oy, oz = P.eye()
+    local rnd = math.random
+    local same, total, missBoth, diff = 0, 0, 0, nil
+    for _ = 1, 300 do
+        local dx, dy, dz = rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1
+        local l = math.sqrt(dx * dx + dy * dy + dz * dz)
+        if l > 0.1 then
+            dx, dy, dz = dx / l, dy / l, dz / l
+            total = total + 1
+            local a = P.raycastFrom(ox, oy, oz, dx, dy, dz, 5)
+            local b = P.raycastGrid(5, ox, oy, oz, dx, dy, dz)
+            if not a and not b then
+                same, missBoth = same + 1, missBoth + 1
+            elseif a and b and a.x == b.x and a.y == b.y and a.z == b.z
+                and a.nx == b.nx and a.ny == b.ny and a.nz == b.nz then
+                same = same + 1
+            elseif not diff then
+                diff = string.format("движок=%s сетка=%s",
+                    a and (a.x .. "," .. a.y .. "," .. a.z .. " n" .. a.nx .. a.ny .. a.nz) or "нет",
+                    b and (b.x .. "," .. b.y .. "," .. b.z .. " n" .. b.nx .. b.ny .. b.nz) or "нет")
+            end
+        end
+    end
+    -- Допуск — лучи точно по ребру/углу клетки: там два ответа одинаково верны.
+    local ok = same >= total - 2 and missBoth < total
+    return string.format("RAYCHECK: %s совпало=%d/%d мимо_обоих=%d секций=%d%s", ok and "PASS" or "FAIL",
+        same, total, missBoth, count, diff and (" первое_расхождение: " .. diff) or "")
+end
+
 return Col

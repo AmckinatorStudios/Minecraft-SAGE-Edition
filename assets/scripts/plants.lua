@@ -319,23 +319,6 @@ function P.update(dt)
         n = n + 1
         tick()
     end
-    -- Искры: движение ×0.99 за тик, размер — по времени жизни.
-    local i = 1
-    while i <= #particles do
-        local p = particles[i]
-        p.life = p.life - dt * 20
-        if p.life <= 0 then
-            DestroyObject(p.obj)
-            table.remove(particles, i)
-        else
-            local k = dt * 20
-            p.x, p.y, p.z = p.x + p.vx * k, p.y + p.vy * k, p.z + p.vz * k
-            p.vx, p.vy, p.vz = p.vx * 0.99 ^ k, p.vy * 0.99 ^ k, p.vz * 0.99 ^ k
-            p.obj.Transform.Position = Vec3(p.x, p.y, p.z)
-            p.obj.Transform.Scale = Vec3(p.size, p.size, p.size)
-            i = i + 1
-        end
-    end
 end
 
 -- --- Сохранение -------------------------------------------------------------
