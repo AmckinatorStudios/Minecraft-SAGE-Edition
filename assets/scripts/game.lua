@@ -551,6 +551,29 @@ function OnUpdate(entity, dt)
                     Act.setBlock(x, y, z, B.byName.torch.id)
                 end
             end
+            -- Для снимков воды: пруд перед игроком — песчаное дно ступенями
+            -- от 1 до 4 блоков, камни на дне, берег на уровне игрока.
+            if LaunchFlag("waterdemo") then
+                local dx, _, dz = P.lookDir()
+                local l = math.sqrt(dx * dx + dz * dz)
+                dx, dz = dx / math.max(l, 1e-3), dz / math.max(l, 1e-3)
+                local cx, cz = math.floor(P.pos.x + dx * 9), math.floor(P.pos.z + dz * 9)
+                local top = math.floor(P.pos.y) - 1
+                local water, sand, stone = B.byName.water.id, B.byName.sand.id, B.byName.stone.id
+                for x = cx - 7, cx + 7 do
+                    for z = cz - 7, cz + 7 do
+                        local r = math.sqrt((x - cx) ^ 2 + (z - cz) ^ 2)
+                        if r <= 7 then
+                            local depth = math.max(1, math.min(4, math.floor((7.5 - r) * 0.6)))
+                            for y = top + 4, top + 1, -1 do
+                                if W.get(x, y, z) ~= 0 then Act.setBlock(x, y, z, 0) end
+                            end
+                            Act.setBlock(x, top - depth, z, ((x * 7 + z * 13) % 11 == 0) and stone or sand)
+                            for y = top - depth + 1, top do Act.setBlock(x, y, z, water) end
+                        end
+                    end
+                end
+            end
             if LaunchFlag("openinv") then Inv.toggleScreen(LaunchFlag("opentable") and 3 or 2) end
             -- Для снимков: рецепт кирки в сетке верстака и трещина нужной стадии.
             if LaunchFlag("craftdemo") then
