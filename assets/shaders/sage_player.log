@@ -1,0 +1,177 @@
+[22:46:03.611] [INFO ] [Player] SAGE Player v0.5.0 запускается...
+[22:46:03.655] [INFO ] [Window] Окно создано: 1280x720, контекст OpenGL 3.3 получен
+[22:46:03.655] [INFO ] [Engine] Обработчик падений: установлен
+[22:46:03.655] [INFO ] [Engine] Процессор: Intel(R) Xeon(R) Processor @ 2.10GHz, потоков 4; инструкции: SSE4.2+ AVX+ AVX2+ FMA+ BMI1+ LZCNT+
+[22:46:03.655] [INFO ] [Engine] Запуск: окно готово, поднимаю графическое устройство
+[22:46:03.656] [INFO ] [RHI] Графический бэкенд: OpenGL 4.5 (Core Profile) Mesa 25.2.8-0ubuntu0.24.04.4
+[22:46:03.656] [INFO ] [RHI] Видеокарта: llvmpipe (LLVM 20.1.2, 256 bits) (Mesa)
+[22:46:03.656] [INFO ] [RHI] Лимиты: текстурных юнитов фрагмента 32, всего 192, uniform-компонент 16384, размер текстуры 16384
+[22:46:03.656] [INFO ] [JobSystem] Пул задач: 3 фоновых воркеров (+главный поток = 4-кратный параллелизм)
+[22:46:03.656] [INFO ] [Engine] SAGE Engine 0.5.0 — подсистем: 26
+[22:46:03.656] [DEBUG] [Engine]   v1  Core — Application/Layer/Window, главный цикл и тайминг
+[22:46:03.656] [DEBUG] [Engine]   v1  Jobs — пул рабочих потоков: параллельные отсечение и подготовка кадра
+[22:46:03.656] [DEBUG] [Engine]   v1  RHI — абстракция графики (бэкенды: OpenGL 3.3, Vulkan, Null)
+[22:46:03.656] [DEBUG] [Engine]   v1  ECS / Scene — сущности+компоненты (entt), иерархия, мировые матрицы
+[22:46:03.656] [DEBUG] [Engine]   v1  Serialization — сцены/материалы/конфиг в JSON (.sage/.sagemat/sage.cfg)
+[22:46:03.656] [DEBUG] [Engine]   v1  Resources — кэш мешей/моделей/материалов/текстур
+[22:46:03.656] [DEBUG] [Engine]   v1  Assets — база ассетов, импорт (glTF/FBX/OBJ/Blend) и пакет игры (.sagepak)
+[22:46:03.656] [DEBUG] [Engine]   v1  Rendering — инстансный батч, фрустум-отсечение, PBR (Cook-Torrance)
+[22:46:03.656] [DEBUG] [Engine]   v1  Shadows — карта теней направленного солнца
+[22:46:03.656] [DEBUG] [Engine]   v1  Post-processing — SSAO + Bloom + тон-маппинг ACES + виньетка
+[22:46:03.656] [DEBUG] [Engine]   v1  Lighting — полусферический ambient, солнце, точечные, прожекторы
+[22:46:03.656] [DEBUG] [Engine]   v1  GI — запечённое глобальное освещение: лайтмапы и объём световых проб
+[22:46:03.656] [DEBUG] [Engine]   v1  Materials — metallic-roughness, normal/AO-карты (.sagemat)
+[22:46:03.656] [DEBUG] [Engine]   v1  Skybox — процедурный градиентный скайбокс + туман
+[22:46:03.656] [DEBUG] [Engine]   v1  Particles — инстансные billboard-частицы (залпы и струи)
+[22:46:03.656] [DEBUG] [Engine]   v1  Animation — скелетная анимация (скины glTF и FBX, палитра костей)
+[22:46:03.656] [DEBUG] [Engine]   v1  Physics — PhysicsWorld: встроенный движок / Jolt / Null
+[22:46:03.656] [DEBUG] [Engine]   v1  Audio — miniaudio: 2D/3D звук, музыка, группы громкости
+[22:46:03.656] [DEBUG] [Engine]   v1  Vars — публичные переменные объектов и ссылки, пережившие переименование
+[22:46:03.656] [DEBUG] [Engine]   v1  Scripting — Lua (sol2): доступ к системам/компонентам/сообщениям
+[22:46:03.656] [DEBUG] [Engine]   v1  Network — UDP-хост и клиенты: репликация состояния, Lua-API Net.*
+[22:46:03.656] [DEBUG] [Engine]   v1  UI — SDF-виджеты, ECS UIElement, редактор интерфейса
+[22:46:03.656] [DEBUG] [Engine]   v1  Fonts / Text — TrueType (stb_truetype), Unicode/кириллица
+[22:46:03.656] [DEBUG] [Engine]   v2  Input — устройства -> действия -> события; контексты, геймпад, ремаппинг
+[22:46:03.656] [DEBUG] [Engine]   v1  Events — шина событий: именная и типизированная, правила «когда-если-то»
+[22:46:03.656] [DEBUG] [Engine]   v1  Config — EngineConfig + пресеты качества (Low..Ultra)
+[22:46:03.656] [INFO ] [Engine] Запуск: движок готов, передаю управление слоям
+[22:46:03.656] [INFO ] [Engine] Запуск слоя 'Player'
+[22:46:03.668] [DEBUG] [Shader] Скомпилирован: assets/shaders/lit.vert + assets/shaders/lit.frag
+[22:46:03.669] [DEBUG] [Shader] Скомпилирован: assets/shaders/shadow_depth.vert + assets/shaders/shadow_depth.frag
+[22:46:03.713] [INFO ] [Assets] База ассетов: 406 файлов (новых 0, переехавших 0) в .
+[22:46:03.716] [INFO ] [Scene] Сцена обновлена с формата 5 до 18
+[22:46:03.741] [INFO ] [Audio] Аудио инициализировано (2 канала, 48000 Гц)
+[22:46:03.741] [INFO ] [Player] Параметры запуска игры: --nomenu=1 --nosave=1 --time=6000 --weather=clear --pitch=-30 --yaw=200 --waterdemo=1 --shotat=14 --shotname=water4 --quit=1
+[22:46:03.742] [INFO ] [Physics] PhysicsScene: бэкенд Jolt, тел 0, соединений 0
+[22:46:03.775] [INFO ] [Player] Скриптов привязано: 1
+[22:46:03.775] [INFO ] [Player] PLAYER: started 'SAGE Craft', scene main.sage (3 entities, 0 physics bodies on Jolt)
+[22:46:03.775] [INFO ] [Engine] Слой 'Player' запущен
+[22:46:04.307] [INFO ] [Texture] Текстура загружена: assets/ui/panorama/panorama_0.png (256x256)
+[22:46:04.310] [INFO ] [Texture] Текстура загружена: assets/ui/panorama/panorama_1.png (256x256)
+[22:46:04.312] [INFO ] [Texture] Текстура загружена: assets/ui/panorama/panorama_2.png (256x256)
+[22:46:04.315] [INFO ] [Texture] Текстура загружена: assets/ui/panorama/panorama_3.png (256x256)
+[22:46:04.316] [INFO ] [Texture] Текстура загружена: assets/ui/panorama/panorama_4.png (256x256)
+[22:46:04.318] [INFO ] [Texture] Текстура загружена: assets/ui/panorama/panorama_5.png (256x256)
+[22:46:04.354] [DEBUG] [Shader] Скомпилирован: assets/shaders/chunk.vert + assets/shaders/chunk.frag
+[22:46:04.355] [INFO ] [Resources] Шейдер собран: assets/shaders/chunk.vert + assets/shaders/chunk.frag
+[22:46:04.358] [DEBUG] [Shader] Скомпилирован: assets/shaders/sky.vert + assets/shaders/sky.frag
+[22:46:04.358] [INFO ] [Resources] Шейдер собран: assets/shaders/sky.vert + assets/shaders/sky.frag
+[22:46:04.359] [DEBUG] [Shader] Скомпилирован: assets/shaders/glow.vert + assets/shaders/glow.frag
+[22:46:04.359] [INFO ] [Resources] Шейдер собран: assets/shaders/glow.vert + assets/shaders/glow.frag
+[22:46:04.359] [DEBUG] [Shader] Скомпилирован: assets/shaders/celestial.vert + assets/shaders/celestial.frag
+[22:46:04.359] [INFO ] [Resources] Шейдер собран: assets/shaders/celestial.vert + assets/shaders/celestial.frag
+[22:46:04.367] [DEBUG] [Shader] Скомпилирован: assets/shaders/water.vert + assets/shaders/water.frag
+[22:46:04.367] [INFO ] [Resources] Шейдер собран: assets/shaders/water.vert + assets/shaders/water.frag
+[22:46:04.367] [DEBUG] [Shader] Скомпилирован: assets/shaders/chunk.vert + assets/shaders/crack.frag
+[22:46:04.367] [INFO ] [Resources] Шейдер собран: assets/shaders/chunk.vert + assets/shaders/crack.frag
+[22:46:04.368] [DEBUG] [Shader] Скомпилирован: assets/shaders/clouds.vert + assets/shaders/clouds.frag
+[22:46:04.368] [INFO ] [Resources] Шейдер собран: assets/shaders/clouds.vert + assets/shaders/clouds.frag
+[22:46:04.389] [INFO ] [Lua] Skins: 2 (own skins folder: /root/.local/share/SAGE_Craft/skins)
+[22:46:04.390] [INFO ] [Lua] SAGE Craft: opening world 'World' (world)
+[22:46:04.401] [INFO ] [Anim] SkinnedModel из кэша: assets/models/player.gltf (костей 10, submesh 3, клипов 0)
+[22:46:04.471] [DEBUG] [Shader] Скомпилирован из исходников: RenderBatchLit
+[22:46:04.544] [DEBUG] [Shader] Скомпилирован из исходников: SkinnedModel
+[22:46:04.561] [INFO ] [Texture] Текстура загружена: assets/textures/environment/clouds.png (256x256)
+[22:46:04.585] [DEBUG] [Shader] Скомпилирован из исходников: PostFX.Tonemap
+[22:46:04.596] [DEBUG] [Shader] Скомпилирован из исходников: PostFX.Copy
+[22:46:04.606] [INFO ] [Frame] Состав кадра: 3 из 4 проходов (отброшено 0, выключено 1)
+Кадр: объявлено 4, выполняется 3, отброшено 0, выключено 1
+  1. Отражения: окружение (цвет: загрузить, глубина: загрузить)
+       пишет  EnvCube
+  2. Тени: глубина (цвет: загрузить, глубина: загрузить)
+       пишет  ShadowMap
+  3. Сцена: освещение, тени, отражения (цвет: очистить, глубина: загрузить)
+       читает ShadowMap
+       читает EnvCube
+       пишет  Screen
+
+[22:46:04.607] [DEBUG] [Shader] Скомпилирован из исходников: UIRenderer
+[22:46:04.617] [INFO ] [Font] Загружен шрифт /home/user/SAGE-Engine/build/runtime/assets/fonts/sage-default.ttf (48px, глифов 471)
+[22:46:04.618] [INFO ] [Font] Загружен шрифт-картинка assets/fonts/ascii.png (ячейка 8x8, символов 247)
+[22:46:04.749] [INFO ] [Texture] Текстура загружена: assets/ui/options_background.png (32x32)
+[22:46:18.878] [INFO ] [Lua] SAGE Craft: world ready, 197 chunks (generation 0.00 s, light 2.07 s, meshes 3.21 s)
+[22:46:18.970] [INFO ] [Texture] Текстура загружена: assets/ui/icons.png (512x512)
+[22:46:18.974] [INFO ] [Texture] Текстура загружена: assets/ui/widgets.png (512x512)
+[22:46:19.053] [DEBUG] [Shader] Скомпилирован: assets/shaders/shadow.vert + assets/shaders/shadow.frag
+[22:46:19.054] [INFO ] [Resources] Шейдер собран: assets/shaders/shadow.vert + assets/shaders/shadow.frag
+[22:46:19.071] [INFO ] [Texture] Текстура загружена: assets/textures/entity/pig/pig.png (64x32)
+[22:46:19.181] [INFO ] [Texture] Текстура загружена: assets/textures/misc/shadow.png (64x64)
+[22:46:19.183] [INFO ] [Texture] Текстура загружена: assets/textures/particle/particles.png (128x128)
+[22:46:19.185] [DEBUG] [Shader] Скомпилирован из исходников: Particles
+[22:46:19.704] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say2.ogg', громкость 1, позиционный
+[22:46:20.499] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say3.ogg', громкость 1, позиционный
+[22:46:21.057] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say1.ogg', громкость 1, позиционный
+[22:46:21.349] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say3.ogg', громкость 1, позиционный
+[22:46:21.434] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say1.ogg', громкость 1, позиционный
+[22:46:21.789] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say2.ogg', громкость 1, позиционный
+[22:46:22.061] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say2.ogg', громкость 1, позиционный
+[22:46:22.378] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say1.ogg', громкость 1, позиционный
+[22:46:22.630] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say2.ogg', громкость 1, позиционный
+[22:46:22.722] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say1.ogg', громкость 1, позиционный
+[22:46:23.260] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say2.ogg', громкость 1, позиционный
+[22:46:23.261] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say2.ogg', громкость 1, позиционный
+[22:46:23.262] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say3.ogg', громкость 1, позиционный
+[22:46:23.736] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/step5.ogg', громкость 0.15, позиционный
+[22:46:23.834] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say2.ogg', громкость 1, позиционный
+[22:46:23.835] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/step2.ogg', громкость 0.15, позиционный
+[22:46:23.835] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say2.ogg', громкость 1, позиционный
+[22:46:24.217] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say2.ogg', громкость 1, позиционный
+[22:46:24.532] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say2.ogg', громкость 1, позиционный
+[22:46:24.909] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/step1.ogg', громкость 0.15, позиционный
+[22:46:25.088] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say2.ogg', громкость 1, позиционный
+[22:46:25.429] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/step3.ogg', громкость 0.15, позиционный
+[22:46:25.430] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say2.ogg', громкость 1, позиционный
+[22:46:25.569] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say2.ogg', громкость 1, позиционный
+[22:46:25.837] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say3.ogg', громкость 1, позиционный
+[22:46:26.301] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say2.ogg', громкость 1, позиционный
+[22:46:27.818] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/step5.ogg', громкость 0.15, позиционный
+[22:46:27.819] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/step5.ogg', громкость 0.15, позиционный
+[22:46:29.130] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/step4.ogg', громкость 0.15, позиционный
+[22:46:29.826] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say2.ogg', громкость 1, позиционный
+[22:46:30.352] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say2.ogg', громкость 1, позиционный
+[22:46:30.353] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/step2.ogg', громкость 0.15, позиционный
+[22:46:31.276] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say3.ogg', громкость 1, позиционный
+[22:46:31.745] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/step5.ogg', громкость 0.15, позиционный
+[22:46:31.837] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say3.ogg', громкость 1, позиционный
+[22:46:31.839] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say2.ogg', громкость 1, позиционный
+[22:46:32.427] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say1.ogg', громкость 1, позиционный
+[22:46:32.527] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/step3.ogg', громкость 0.15, позиционный
+[22:46:32.991] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/step4.ogg', громкость 0.15, позиционный
+[22:46:33.461] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say1.ogg', громкость 1, позиционный
+[22:46:34.788] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say3.ogg', громкость 1, позиционный
+[22:46:35.475] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say3.ogg', громкость 1, позиционный
+[22:46:35.476] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say3.ogg', громкость 1, позиционный
+[22:46:35.640] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/step3.ogg', громкость 0.15, позиционный
+[22:46:35.733] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say1.ogg', громкость 1, позиционный
+[22:46:35.831] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say1.ogg', громкость 1, позиционный
+[22:46:36.694] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say1.ogg', громкость 1, позиционный
+[22:46:36.877] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/step4.ogg', громкость 0.15, позиционный
+[22:46:37.154] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say3.ogg', громкость 1, позиционный
+[22:46:37.928] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say3.ogg', громкость 1, позиционный
+[22:46:38.016] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say3.ogg', громкость 1, позиционный
+[22:46:38.309] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say1.ogg', громкость 1, позиционный
+[22:46:38.723] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say2.ogg', громкость 1, позиционный
+[22:46:38.821] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/step3.ogg', громкость 0.15, позиционный
+[22:46:38.823] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say1.ogg', громкость 1, позиционный
+[22:46:39.126] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say3.ogg', громкость 1, позиционный
+[22:46:39.326] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say3.ogg', громкость 1, позиционный
+[22:46:40.674] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say3.ogg', громкость 1, позиционный
+[22:46:41.027] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say1.ogg', громкость 1, позиционный
+[22:46:41.191] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say3.ogg', громкость 1, позиционный
+[22:46:43.147] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/step1.ogg', громкость 0.15, позиционный
+[22:46:43.226] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say1.ogg', громкость 1, позиционный
+[22:46:43.563] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say3.ogg', громкость 1, позиционный
+[22:46:43.945] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say3.ogg', громкость 1, позиционный
+[22:46:44.555] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say2.ogg', громкость 1, позиционный
+[22:46:44.751] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/step2.ogg', громкость 0.15, позиционный
+[22:46:44.847] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say3.ogg', громкость 1, позиционный
+[22:46:45.441] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say1.ogg', громкость 1, позиционный
+[22:46:45.877] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say3.ogg', громкость 1, позиционный
+[22:46:46.418] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/step2.ogg', громкость 0.15, позиционный
+[22:46:47.497] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say3.ogg', громкость 1, позиционный
+[22:46:47.764] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say3.ogg', громкость 1, позиционный
+[22:46:48.341] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/step5.ogg', громкость 0.15, позиционный
+[22:46:48.342] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say2.ogg', громкость 1, позиционный
+[22:46:48.436] [DEBUG] [Audio] Звук запущен: 'assets/sounds/mob/pig/say3.ogg', громкость 1, позиционный
+[22:46:48.661] [INFO ] [Screenshot] Скриншот сохранён: /root/.local/share/SAGE_Craft/screenshots/water4.png
+[22:46:48.917] [INFO ] [Engine] Завершение работы

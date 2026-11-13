@@ -75,6 +75,7 @@ local function remove(i)
     local p = Pig.list[i]
     if p.model then PM.destroy(p.model) end
     if p.shadow then require("shadows").destroy(p.shadow) end
+    if p.hitbox then Pig.byHitbox[p.hitbox.Id] = nil; DestroyObject(p.hitbox); p.hitbox = nil end
     table.remove(Pig.list, i)
 end
 Pig.remove = remove
@@ -409,35 +410,20 @@ end
 
 -- --- Частицы: сердечки любви и облачко смерти (particles.png) -----------------
 
-local fx = {}
-local fxMeshes = {}
-local function fxQuad(i)
-    if fxMeshes[i] then return fxMeshes[i] end
-    local u0, v0 = (i % 16) / 16, 1 - ((i // 16) + 1) / 16
-    local m = mesh()
-    m.arrays{position = {-1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1},
-             uv = {u0, v0, u0 + 1 / 16, v0, u0 + 1 / 16, v0 + 1 / 16, u0, v0 + 1 / 16}, index = {1, 2, 3, 1, 3, 4}}
-    fxMeshes[i] = m
-    return m
-end
+-- Частицы движка (pfx.lua, виды «heart» и «explode»).
 local function spawnFx(kind, x, y, z, vx, vy, vz)
-    local o = SpawnObject(kind == "heart" and "Heart" or "Explode")
-    local e = {obj = o, kind = kind, x = x, y = y, z = z, vx = vx, vy = vy, vz = vz, age = 0}
+    local Pf = require "pfx"
     if kind == "heart" then
-        -- EntityHeartFX: значок 80, масштаб ×0.75·2, живёт 16 тиков, всплывает.
-        e.life, e.scale, e.frame = 16, (rnd() * 0.5 + 0.5) * 2 * 0.75 * 0.1, 80
-        fxQuad(80).apply(o)
-        SetMaterial(o, "assets/materials/particle_flame.sagemat")
+        -- EntityHeartFX: значок 80, масштаб ×0.75·2, живёт 16 тиков.
+        Pf.spawn("heart", {{x = x, y = y, z = z, vx = vx, vy = vy, vz = vz, life = 16,
+                            size = (rnd() * 0.5 + 0.5) * 2 * 0.75 * 0.1 * 2}})
     else
         -- EntityExplodeFX: дымка 7…0, серая 0.7–1, 16/(rand·0.8 + 0.2) + 2 тиков.
-        e.life = math.floor(16 / (rnd() * 0.8 + 0.2)) + 2
-        e.scale, e.frame = (rnd() * 0.5 + 0.5) * 2 * 0.1, 7
-        e.gray = rnd() * 0.3 + 0.7
-        fxQuad(7).apply(o)
-        SetMaterial(o, "assets/materials/particle_smoke.sagemat")
-        o:GetRenderer().Color = Vec3(e.gray, e.gray, e.gray)
+        local g = rnd() * 0.3 + 0.7
+        Pf.spawn("explode", {{x = x, y = y, z = z, vx = vx, vy = vy, vz = vz,
+                              life = math.floor(16 / (rnd() * 0.8 + 0.2)) + 2,
+                              size = (rnd() * 0.5 + 0.5) * 2 * 0.1 * 2, r = g, g = g, b = g}})
     end
-    fx[#fx + 1] = e
 end
 
 function Pig.heart(p)
@@ -452,35 +438,6 @@ function Pig.poof(p)
     local g = function() return (rnd() + rnd() + rnd() - 1.5) * 0.02 end
     for _ = 1, 20 do
         spawnFx("explode", p.x + (rnd() * w * 2 - w), p.y + rnd() * h, p.z + (rnd() * w * 2 - w), g(), g(), g())
-    end
-end
-
-local function fxTick()
-    local i = 1
-    while i <= #fx do
-        local e = fx[i]
-        e.age = e.age + 1
-        if e.age >= e.life then
-            DestroyObject(e.obj)
-            table.remove(fx, i)
-        else
-            if e.kind == "heart" then
-                e.x, e.y, e.z = e.x + e.vx, e.y + e.vy, e.z + e.vz
-                e.vx, e.vy, e.vz = e.vx * 0.86, e.vy * 0.86, e.vz * 0.86
-            else
-                e.vy = e.vy + 0.004
-                e.x, e.y, e.z = e.x + e.vx, e.y + e.vy, e.z + e.vz
-                e.vx, e.vy, e.vz = e.vx * 0.9, e.vy * 0.9, e.vz * 0.9
-                local f = 7 - math.floor(e.age * 8 / e.life)
-                if f ~= e.frame and f >= 0 then
-                    e.frame = f
-                    fxQuad(f).apply(e.obj)
-                    SetMaterial(e.obj, "assets/materials/particle_smoke.sagemat")
-                    e.obj:GetRenderer().Color = Vec3(e.gray, e.gray, e.gray)
-                end
-            end
-            i = i + 1
-        end
     end
 end
 
@@ -521,6 +478,27 @@ local function render(p, t, cam)
     end
 end
 
+-- Хитбокс для луча прицела — тело ФИЗИКИ ДВИЖКА (кинематическая коробка в
+-- слое MOB): удар и кормление ищет Raycast движка, а не свой перебор свиней.
+-- Коробка — тело свиньи + 0.1 со всех сторон (collisionBorderSize 1.7.10).
+Pig.byHitbox = {}
+local function placeHitbox(p)
+    if p.dead then
+        if p.hitbox then Pig.byHitbox[p.hitbox.Id] = nil; DestroyObject(p.hitbox); p.hitbox = nil end
+        return
+    end
+    local w, h = Pig.size(p)
+    if not p.hitbox or p.hitboxChild ~= (p.age < 0) then
+        if p.hitbox then Pig.byHitbox[p.hitbox.Id] = nil; DestroyObject(p.hitbox) end
+        p.hitbox = SpawnObject("Pig Hitbox")
+        p.hitboxChild = p.age < 0
+        _G.physics.add_body(p.hitbox, {type = "kinematic", shape = "box", size = Vec3(w + 0.2, h + 0.2, w + 0.2),
+                                    center = Vec3(0, h / 2, 0), layer = require("colliders").MOB})
+        Pig.byHitbox[p.hitbox.Id] = p
+    end
+    p.hitbox.Transform.Position = Vec3(p.x, p.y, p.z)
+end
+
 function Pig.update(dt, P)
     acc = acc + dt
     local n = 0
@@ -535,7 +513,6 @@ function Pig.update(dt, P)
             if p.frozen or tick(p, P) then i = i + 1 else remove(i) end
         end
         pushApart(P)
-        fxTick()
     end
     if n == 5 then acc = 0 end
     local t = acc / TICK
@@ -551,45 +528,28 @@ function Pig.update(dt, P)
                 require("shadows").destroy(p.shadow); p.shadow = nil
                 p.shadowKey = nil
             end
+            if p.hitbox then Pig.byHitbox[p.hitbox.Id] = nil; DestroyObject(p.hitbox); p.hitbox = nil end
         else
             if not p.model then
                 p.model = PM.create()
                 p.shadow = require("shadows").new("Pig Shadow")
             end
             render(p, p.ticks == 0 and 1 or t, {cx, cy, cz})
+            placeHitbox(p)
         end
-    end
-    for _, e in ipairs(fx) do
-        e.obj.Transform.Position = Vec3(e.x, e.y, e.z)
-        e.obj.Transform.Scale = Vec3(e.scale, e.scale, e.scale)
     end
 end
 
 -- --- Игрок: удар и кормление ------------------------------------------------
 
--- Луч (o + d·t) и коробки свиней (+0.1 — collisionBorderSize): ближайшая.
+-- Луч прицела по свиньям — Raycast ДВИЖКА по их хитбоксам (слой MOB):
+-- ближайшая свинья и расстояние до неё.
 function Pig.raycast(ox, oy, oz, dx, dy, dz, maxDist)
-    local best, bestT
-    for _, p in ipairs(Pig.list) do
-        if not p.dead then
-            local w, h = Pig.size(p)
-            local box = {p.x - w / 2 - 0.1, p.y - 0.1, p.z - w / 2 - 0.1, p.x + w / 2 + 0.1, p.y + h + 0.1, p.z + w / 2 + 0.1}
-            local tmin, tmax = 0, maxDist
-            local O, D = {ox, oy, oz}, {dx, dy, dz}
-            local hit = true
-            for a = 1, 3 do
-                if math.abs(D[a]) < 1e-9 then
-                    if O[a] < box[a] or O[a] > box[a + 3] then hit = false end
-                else
-                    local t1, t2 = (box[a] - O[a]) / D[a], (box[a + 3] - O[a]) / D[a]
-                    if t1 > t2 then t1, t2 = t2, t1 end
-                    tmin, tmax = math.max(tmin, t1), math.min(tmax, t2)
-                end
-            end
-            if hit and tmin <= tmax and (not bestT or tmin < bestT) then best, bestT = p, tmin end
-        end
-    end
-    return best, bestT
+    local hit = Raycast(Vec3(ox, oy, oz), Vec3(dx, dy, dz), maxDist, require("colliders").MOB)
+    if not hit or not hit.object then return nil end
+    local p = Pig.byHitbox[hit.object.Id]
+    if not p or p.dead then return nil end
+    return p, hit.distance
 end
 
 -- Сила удара (SharedMonsterAttributes.attackDamage): рука 1; меч 4 + материал,
@@ -650,8 +610,6 @@ end
 
 function Pig.clear()
     while #Pig.list > 0 do remove(#Pig.list) end
-    for _, e in ipairs(fx) do DestroyObject(e.obj) end
-    fx = {}
 end
 
 function Pig.load(data)

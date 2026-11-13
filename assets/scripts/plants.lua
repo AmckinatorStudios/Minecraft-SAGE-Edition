@@ -244,23 +244,17 @@ end
 
 -- --- Костная мука --------------------------------------------------------------
 
-local particles = {}
-local HAPPY = "assets/materials/happy.sagemat"
-
--- ItemDye.func_150918_a: 15 искр в клетке, скорость — гаусс·0.02.
+-- ItemDye.func_150918_a: 15 искр в клетке, скорость — гаусс·0.02. Искры —
+-- частицы движка (pfx.lua, вид «happy»).
 local function happy(x, y, z, maxY)
-    for _ = 1, 15 do
-        local o = SpawnObject("Bonemeal Spark")
-        local m = mesh()
-        m.arrays{position = {-1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1}, uv = {0, 0, 1, 0, 1, 1, 0, 1},
-                 index = {1, 2, 3, 1, 3, 4}}
-        m.apply(o)
-        SetMaterial(o, HAPPY)
-        local function g() local u, v = math.random(), math.random(); return math.sqrt(-2 * math.log(u + 1e-9)) * math.cos(2 * math.pi * v) end
-        particles[#particles + 1] = {obj = o, x = x + math.random(), y = y + math.random() * maxY, z = z + math.random(),
-                                     vx = g() * 0.02, vy = g() * 0.02, vz = g() * 0.02,
-                                     life = 20 / (math.random() * 0.8 + 0.2), size = 0.1 * (math.random() * 0.5 + 0.5) * 0.75}
+    local function g() local u, v = math.random(), math.random(); return math.sqrt(-2 * math.log(u + 1e-9)) * math.cos(2 * math.pi * v) end
+    local list = {}
+    for i = 1, 15 do
+        list[i] = {x = x + math.random(), y = y + math.random() * maxY, z = z + math.random(),
+                   vx = g() * 0.02, vy = g() * 0.02, vz = g() * 0.02,
+                   life = 20 / (math.random() * 0.8 + 0.2), size = 0.1 * (math.random() * 0.5 + 0.5) * 0.75 * 2}
     end
+    require("pfx").spawn("happy", list)
 end
 
 P.happy = happy
@@ -324,23 +318,6 @@ function P.update(dt)
         acc = acc - 0.05
         n = n + 1
         tick()
-    end
-    -- Искры: движение ×0.99 за тик, размер — по времени жизни.
-    local i = 1
-    while i <= #particles do
-        local p = particles[i]
-        p.life = p.life - dt * 20
-        if p.life <= 0 then
-            DestroyObject(p.obj)
-            table.remove(particles, i)
-        else
-            local k = dt * 20
-            p.x, p.y, p.z = p.x + p.vx * k, p.y + p.vy * k, p.z + p.vz * k
-            p.vx, p.vy, p.vz = p.vx * 0.99 ^ k, p.vy * 0.99 ^ k, p.vz * 0.99 ^ k
-            p.obj.Transform.Position = Vec3(p.x, p.y, p.z)
-            p.obj.Transform.Scale = Vec3(p.size, p.size, p.size)
-            i = i + 1
-        end
     end
 end
 

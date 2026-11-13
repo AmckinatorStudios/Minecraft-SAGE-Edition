@@ -34,6 +34,7 @@ local Mat    = require "mat"
 local Pano   = require "panorama"
 local Worlds = require "worlds"
 local Prof   = require "profile"
+local Col    = require "colliders"
 
 local playerObj, cameraObj
 local started = false
@@ -341,6 +342,7 @@ local function startGame()
                 function() return require("cropcheck").selfCheck(P) end,
                 function() return require("chestcheck").selfCheck(P) end,
                 function() return require("hurtcheck").selfCheck(P) end,
+                function() return Col.selfCheck(P) end,
             }
             local fx, fy, fz = 4, W.surface(4, 4) + 1, 4
             Act.setBlock(fx, fy, fz, B.byName.furnace.id)
@@ -529,7 +531,10 @@ function OnUpdate(entity, dt)
         end
         Menu.loading("Building terrain", math.min(1, have / math.max(1, need)))
         Menu.update(dt)
-        if not busy or (not full and C.readyAround(P.pos.x, P.pos.z, quick)) then
+        -- Коллайдеры вокруг игрока — до входа: иначе первые кадры луч прицела
+        -- не видит блоков (их тела ещё не собраны).
+        local colReady = C.readyAround(P.pos.x, P.pos.z, 1) and Col.update(P.pos.x, P.pos.y, P.pos.z, 8)
+        if colReady and (not busy or (not full and C.readyAround(P.pos.x, P.pos.z, quick))) then
             loading = false
             -- Время из параметра — с момента входа в мир: загрузка его не сдвигает.
             Sky.setTime(tonumber(LaunchArg("time") or ""))
@@ -544,6 +549,29 @@ function OnUpdate(entity, dt)
                     local x, z = math.floor(P.pos.x) + d[1], math.floor(P.pos.z) + d[2]
                     local y = W.surface(x, z) + 1
                     Act.setBlock(x, y, z, B.byName.torch.id)
+                end
+            end
+            -- Для снимков воды: пруд перед игроком — песчаное дно ступенями
+            -- от 1 до 4 блоков, камни на дне, берег на уровне игрока.
+            if LaunchFlag("waterdemo") then
+                local dx, _, dz = P.lookDir()
+                local l = math.sqrt(dx * dx + dz * dz)
+                dx, dz = dx / math.max(l, 1e-3), dz / math.max(l, 1e-3)
+                local cx, cz = math.floor(P.pos.x + dx * 9), math.floor(P.pos.z + dz * 9)
+                local top = math.floor(P.pos.y) - 1
+                local water, sand, stone = B.byName.water.id, B.byName.sand.id, B.byName.stone.id
+                for x = cx - 7, cx + 7 do
+                    for z = cz - 7, cz + 7 do
+                        local r = math.sqrt((x - cx) ^ 2 + (z - cz) ^ 2)
+                        if r <= 7 then
+                            local depth = math.max(1, math.min(4, math.floor((7.5 - r) * 0.6)))
+                            for y = top + 4, top + 1, -1 do
+                                if W.get(x, y, z) ~= 0 then Act.setBlock(x, y, z, 0) end
+                            end
+                            Act.setBlock(x, top - depth, z, ((x * 7 + z * 13) % 11 == 0) and stone or sand)
+                            for y = top - depth + 1, top do Act.setBlock(x, y, z, water) end
+                        end
+                    end
                 end
             end
             if LaunchFlag("openinv") then Inv.toggleScreen(LaunchFlag("opentable") and 3 or 2) end
@@ -917,6 +945,8 @@ function OnUpdate(entity, dt)
 
     require("hurt").update(dt)
     Prof.run("chunks", C.update, P.pos.x, P.pos.z, C.budgetMs)
+    -- Блоки рядом с игроком — в физику движка (луч прицела, удары частиц).
+    Prof.run("colliders", Col.update, P.pos.x, P.pos.y, P.pos.z, 2)
 
     if not Inv.screenOpen and not chatting then Prof.run("interact", Act.update, dt, Auto.active and Auto.actions() or nil) end
     Prof.run("drops", Drops.update, dt)

@@ -379,6 +379,13 @@ function Sky.update(dt, P)
         SetMaterialParam(m, "uFogStart", far * 0.25)
         SetMaterialParam(m, "uFogEnd", far)
     end
+    -- Вода (water.frag) отражает небо и ловит солнце: цвет зенита (линейный),
+    -- направление на солнце — по углу небесной сферы (после полудня — запад,
+    -- −X), сила — яркость солнца без дождя.
+    local th = angle * PI * 2
+    SetMaterialParam(MAT_WATER, "uSkyColor", v3(lin(sr), lin(sg), lin(sb)))
+    SetMaterialParam(MAT_WATER, "uSunDir", Vec3(-sin(th), cos(th), 0.12))
+    SetMaterialParam(MAT_WATER, "uSunStrength", Sky.sunBright * (1 - rain * 0.85))
     SetMaterialParam(MAT_CLOUD, "uFogColor", v3(fr, fg, fb))
     SetMaterialParam(MAT_CLOUD, "uFogStart", far * 0.25)
     SetMaterialParam(MAT_CLOUD, "uFogEnd", far)

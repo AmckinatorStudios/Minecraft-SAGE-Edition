@@ -308,6 +308,7 @@ function C.readyAround(px, pz, r)
 end
 
 function C.clear()
+    require("colliders").clear()
     C._settled = nil
     -- Задачи старого мира досчитаются, но их результат не нужен: номера — в
     -- сироты, их забирают и выбрасывают (иначе копии копились бы в движке).

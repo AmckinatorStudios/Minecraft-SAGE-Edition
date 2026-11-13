@@ -83,49 +83,28 @@ end
 
 -- --- Частицы ---------------------------------------------------------------
 
-local parts = {}
-local MAT_FLAME, MAT_SMOKE = "assets/materials/particle_flame.sagemat", "assets/materials/particle_smoke.sagemat"
-local meshes = {}
-
--- Квадрат с кусочком листа частиц: индекс i (сетка 16×16, 8 пикселей).
-local function quad(i)
-    if meshes[i] then return meshes[i] end
-    local u0, v0 = (i % 16) / 16, 1 - ((i // 16) + 1) / 16
-    local u1, v1 = u0 + 1 / 16, v0 + 1 / 16
-    local m = mesh()
-    m.arrays{position = {-1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1}, uv = {u0, v0, u1, v0, u1, v1, u0, v1},
-             index = {1, 2, 3, 1, 3, 4}}
-    meshes[i] = m
-    return m
-end
+-- Огонёк и дым — частицы движка (pfx.lua, виды «flame» и «smoke»): полёт,
+-- кадры дыма и таяние огня считает система частиц, здесь — числа рождения.
+local Pf = require "pfx"
 
 local function spawn(kind, x, y, z)
-    local o = SpawnObject(kind == "flame" and "Torch Flame" or "Torch Smoke")
-    local p = {obj = o, kind = kind, x = x, y = y, z = z, age = 0}
     local r = math.random
     if kind == "flame" then
         -- EntityFlameFX: скорость почти ноль, 8/(r·0.8+0.2)+4 тиков, тает.
-        p.vx, p.vy, p.vz = (r() * 2 - 1) * 0.01 * 0.2, (r() * 2 - 1) * 0.01 * 0.2, (r() * 2 - 1) * 0.01 * 0.2
-        p.life = math.floor(8 / (r() * 0.8 + 0.2)) + 4
-        p.scale = (r() * 0.5 + 0.5) * 2 * 0.1
-        p.frame = 48
-        quad(48).apply(o)
-        SetMaterial(o, MAT_FLAME)
+        Pf.spawn("flame", {{x = x, y = y, z = z,
+            vx = (r() * 2 - 1) * 0.01 * 0.2, vy = (r() * 2 - 1) * 0.01 * 0.2, vz = (r() * 2 - 1) * 0.01 * 0.2,
+            life = math.floor(8 / (r() * 0.8 + 0.2)) + 4,
+            size = (r() * 0.5 + 0.5) * 2 * 0.1 * 2}})
     else
-        -- EntitySmokeFX: всплывает (+0.004 за тик), кадры 7..0, серый.
-        p.vx, p.vy, p.vz = (r() * 2 - 1) * 0.1 * 0.1, (r() * 2 - 1) * 0.1 * 0.1, (r() * 2 - 1) * 0.1 * 0.1
-        p.life = math.floor(8 / (r() * 0.8 + 0.2))
-        p.scale = (r() * 0.5 + 0.5) * 2 * 0.1 * 0.75
-        p.frame = 7
-        quad(7).apply(o)
-        SetMaterial(o, MAT_SMOKE)
-        -- Серый дым: particleRed = G = B = rand·0.3 (цвет — после меша:
-        -- отрисовщик появляется вместе с ним).
+        -- EntitySmokeFX: всплывает (+0.004 за тик), кадры 7..0, серый
+        -- (particleRed = G = B = rand·0.3).
         local g = r() * 0.3
-        p.gray = g
-        o:GetRenderer().Color = Vec3(g, g, g)
+        Pf.spawn("smoke", {{x = x, y = y, z = z,
+            vx = (r() * 2 - 1) * 0.1 * 0.1, vy = (r() * 2 - 1) * 0.1 * 0.1, vz = (r() * 2 - 1) * 0.1 * 0.1,
+            life = math.floor(8 / (r() * 0.8 + 0.2)),
+            size = (r() * 0.5 + 0.5) * 2 * 0.1 * 0.75 * 2,
+            r = g, g = g, b = g}})
     end
-    parts[#parts + 1] = p
 end
 
 -- randomDisplayTick факела в (x, y, z).
@@ -158,49 +137,11 @@ function T.update(dt, P)
                 if W.get(x, y, z) == id then display(x, y, z) end
             end
         end
-        for _, p in ipairs(parts) do
-            p.age = p.age + 1
-            if p.kind == "smoke" then p.vy = p.vy + 0.004 end
-            p.x, p.y, p.z = p.x + p.vx, p.y + p.vy, p.z + p.vz
-            if p.kind == "smoke" then
-                p.vx, p.vy, p.vz = p.vx * 0.96, p.vy * 0.96, p.vz * 0.96
-                local f = 7 - math.floor(p.age * 8 / math.max(1, p.life))
-                if f < 0 then f = 0 end
-                if f ~= p.frame then
-                    p.frame = f
-                    quad(f).apply(p.obj)
-                    SetMaterial(p.obj, MAT_SMOKE)
-                    p.obj:GetRenderer().Color = Vec3(p.gray, p.gray, p.gray)
-                end
-            else
-                p.vx, p.vy, p.vz = p.vx * 0.96, p.vy * 0.96, p.vz * 0.96
-            end
-        end
-    end
-    local i = 1
-    while i <= #parts do
-        local p = parts[i]
-        if p.age >= p.life then
-            DestroyObject(p.obj)
-            table.remove(parts, i)
-        else
-            local s = p.scale
-            if p.kind == "flame" then
-                -- Огонь уменьшается к концу жизни: 1 − (возраст/жизнь)²·0.5.
-                local f = p.age / p.life
-                s = s * (1 - f * f * 0.5)
-            else
-                s = s * math.min(1, p.age / p.life * 32)
-            end
-            p.obj.Transform.Position = Vec3(p.x, p.y, p.z)
-            p.obj.Transform.Scale = Vec3(s, s, s)
-            i = i + 1
-        end
     end
 end
 
 -- Сколько частиц сейчас (для проверок).
-function T.count() return #parts end
+function T.count() return Pf.count("flame") + Pf.count("smoke") end
 T.display = display
 
 -- Самопроверка (--gencheck, строка TORCHCHECK): ориентация по грани,
